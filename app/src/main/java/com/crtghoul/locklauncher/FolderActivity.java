@@ -108,6 +108,7 @@ public class FolderActivity extends Activity {
                 view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                 String[] opts = {
                         "🚀 Launch",
+                        "✏️ Rename App",
                         "📌 Pin to Home screen",
                         "ℹ️ App Info",
                         "🗑️ Remove from folder"
@@ -121,17 +122,41 @@ public class FolderActivity extends Activity {
                                     finish();
                                     break;
                                 case 1:
+                                    EditText input = new EditText(FolderActivity.this);
+                                    input.setText(child.label);
+                                    if (child.label != null) input.setSelection(child.label.length());
+                                    new AlertDialog.Builder(FolderActivity.this)
+                                            .setTitle("Rename App")
+                                            .setView(input)
+                                            .setPositiveButton("Save", (rd, rw) -> {
+                                                String newName = input.getText().toString().trim();
+                                                if (!newName.isEmpty()) {
+                                                    child.label = newName;
+                                                    if (child.isApp() && child.pkg != null) {
+                                                        String key = AppPickerActivity.getCustomLabelKey(child.pkg, child.profileSerial);
+                                                        getSharedPreferences("dock", Context.MODE_PRIVATE)
+                                                                .edit().putString(key, newName).apply();
+                                                    }
+                                                    saveAndSync();
+                                                    adapter.notifyDataSetChanged();
+                                                    Toast.makeText(FolderActivity.this, "Renamed to " + newName, Toast.LENGTH_SHORT).show();
+                                                }
+                                            })
+                                            .setNegativeButton("Cancel", null)
+                                            .show();
+                                    break;
+                                case 2:
                                     boolean pinned = IconUtil.pinShortcutToHomeScreen(FolderActivity.this, child);
                                     Toast.makeText(FolderActivity.this, pinned ? "Pinned " + child.label : "Pinning not supported", Toast.LENGTH_SHORT).show();
                                     break;
-                                case 2:
+                                case 3:
                                     try {
                                         Intent info = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                                         info.setData(Uri.parse("package:" + child.pkg));
                                         startActivity(info);
                                     } catch (Exception ignored) {}
                                     break;
-                                case 3:
+                                case 4:
                                     folderShortcut.folderItems.remove(position);
                                     saveAndSync();
                                     adapter.notifyDataSetChanged();
@@ -226,12 +251,14 @@ public class FolderActivity extends Activity {
         if (requestCode == REQUEST_PICK_APP && resultCode == RESULT_OK && data != null) {
             ArrayList<String> pkgs = data.getStringArrayListExtra(AppPickerActivity.EXTRA_PACKAGES);
             ArrayList<String> labels = data.getStringArrayListExtra(AppPickerActivity.EXTRA_LABELS);
+            long[] serials = data.getLongArrayExtra(AppPickerActivity.EXTRA_PROFILE_SERIALS);
             if (pkgs != null && labels != null && folderShortcut != null) {
                 if (folderShortcut.folderItems == null) folderShortcut.folderItems = new ArrayList<>();
                 for (int i = 0; i < pkgs.size(); i++) {
                     String pkg = pkgs.get(i);
                     String lbl = i < labels.size() ? labels.get(i) : pkg;
-                    folderShortcut.folderItems.add(new Shortcut(Shortcut.TYPE_APP, pkg, "", lbl, 0));
+                    long sSerial = (serials != null && i < serials.length) ? serials[i] : 0;
+                    folderShortcut.folderItems.add(new Shortcut(Shortcut.TYPE_APP, pkg, "", lbl, sSerial));
                 }
                 saveAndSync();
                 if (adapter != null) adapter.notifyDataSetChanged();

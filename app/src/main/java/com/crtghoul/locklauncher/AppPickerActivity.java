@@ -58,10 +58,23 @@ public class AppPickerActivity extends Activity {
     public static final String EXTRA_LABEL = "label";   // legacy single
     public static final String EXTRA_PACKAGES = "pkgs"; // multi-select
     public static final String EXTRA_LABELS = "labels"; // multi-select
+    public static final String EXTRA_PROFILE_SERIALS = "profile_serials"; // multi-select clone serials
     public static final String EXTRA_DRAWER_MODE = "drawer_mode";
 
+    public static String getCustomLabelKey(String pkg, long profileSerial) {
+        if (pkg == null) return "";
+        if (profileSerial > 0) {
+            return "custom_label_" + pkg + "_u" + profileSerial;
+        }
+        return "custom_label_" + pkg;
+    }
+
+    public static String itemKey(String pkg, long profileSerial) {
+        return (pkg == null ? "" : pkg) + "#" + profileSerial;
+    }
+
     private final List<AppEntry> all = new ArrayList<>();
-    private final Map<String, String> selected = new LinkedHashMap<>(); // pkg -> label
+    private final Map<String, AppEntry> selected = new LinkedHashMap<>(); // itemKey -> AppEntry
     private AppAdapter adapter;
     private Button addButton;
     private View scrollSearchActions;
@@ -120,7 +133,7 @@ public class AppPickerActivity extends Activity {
                         e.isClone = isCloneOrWork;
                         e.isSystem = (info.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) != 0;
                         String rawLabel = info.getLabel().toString();
-                        String customLabel = prefs.getString("custom_label_" + pkg, null);
+                        String customLabel = prefs.getString(getCustomLabelKey(pkg, pSerial), null);
                         if (customLabel != null && !customLabel.trim().isEmpty()) {
                             e.label = customLabel;
                         } else {
@@ -148,7 +161,7 @@ public class AppPickerActivity extends Activity {
                 if (isDrawerMode && hidden.contains(pkg)) continue;
                 AppEntry e = new AppEntry();
                 e.pkg = pkg;
-                String customLabel = prefs.getString("custom_label_" + pkg, null);
+                String customLabel = prefs.getString(getCustomLabelKey(pkg, 0), null);
                 e.label = (customLabel != null && !customLabel.trim().isEmpty()) ? customLabel : ri.loadLabel(pm).toString();
                 e.icon = ri.loadIcon(pm);
                 e.isSystem = (ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
@@ -281,7 +294,34 @@ public class AppPickerActivity extends Activity {
                                                 String n = input.getText().toString().trim();
                                                 if (!n.isEmpty()) {
                                                     e.label = n;
-                                                    prefs.edit().putString("custom_label_" + e.pkg, n).apply();
+                                                    String key = getCustomLabelKey(e.pkg, e.profileSerial);
+                                                    prefs.edit().putString(key, n).apply();
+
+                                                    // Update existing shortcuts matching this exact clone serial only
+                                                    for (int profIdx = 0; profIdx < ShortcutStore.PROFILES; profIdx++) {
+                                                        List<Shortcut> pShortcuts = ShortcutStore.load(AppPickerActivity.this, profIdx);
+                                                        boolean changed = false;
+                                                        for (Shortcut s : pShortcuts) {
+                                                            if (s.isApp() && e.pkg.equals(s.pkg) && s.profileSerial == e.profileSerial) {
+                                                                s.label = n;
+                                                                changed = true;
+                                                            }
+                                                            if (s.isFolder() && s.folderItems != null) {
+                                                                for (Shortcut fi : s.folderItems) {
+                                                                    if (fi.isApp() && e.pkg.equals(fi.pkg) && fi.profileSerial == e.profileSerial) {
+                                                                        fi.label = n;
+                                                                        changed = true;
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        if (changed) {
+                                                            ShortcutStore.save(AppPickerActivity.this, profIdx, pShortcuts);
+                                                        }
+                                                    }
+                                                    BaseDockWidget.refreshAll(AppPickerActivity.this);
+                                                    DockService.refresh(AppPickerActivity.this);
+
                                                     adapter.applyFilter();
                                                     Toast.makeText(this, "Renamed to " + n, Toast.LENGTH_SHORT).show();
                                                 }
@@ -315,10 +355,11 @@ public class AppPickerActivity extends Activity {
         } else {
             list.setOnItemClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
-                if (selected.containsKey(e.pkg)) {
-                    selected.remove(e.pkg);
+                String k = itemKey(e.pkg, e.profileSerial);
+                if (selected.containsKey(k)) {
+                    selected.remove(k);
                 } else {
-                    selected.put(e.pkg, e.label);
+                    selected.put(k, e);
                 }
                 adapter.notifyDataSetChanged();
                 updateAddButton();
@@ -326,8 +367,18 @@ public class AppPickerActivity extends Activity {
             updateAddButton();
             addButton.setOnClickListener(v -> {
                 Intent r = new Intent();
-                r.putStringArrayListExtra(EXTRA_PACKAGES, new ArrayList<>(selected.keySet()));
-                r.putStringArrayListExtra(EXTRA_LABELS, new ArrayList<>(selected.values()));
+                ArrayList<String> pkgs = new ArrayList<>();
+                ArrayList<String> labels = new ArrayList<>();
+                long[] serials = new long[selected.size()];
+                int idx = 0;
+                for (AppEntry e : selected.values()) {
+                    pkgs.add(e.pkg);
+                    labels.add(e.label);
+                    serials[idx++] = e.profileSerial;
+                }
+                r.putStringArrayListExtra(EXTRA_PACKAGES, pkgs);
+                r.putStringArrayListExtra(EXTRA_LABELS, labels);
+                r.putExtra(EXTRA_PROFILE_SERIALS, serials);
                 setResult(RESULT_OK, r);
                 finish();
             });
@@ -732,7 +783,7 @@ public class AppPickerActivity extends Activity {
             }
 
             if (check != null) {
-                boolean sel = selected.containsKey(e.pkg);
+                boolean sel = selected.containsKey(itemKey(e.pkg, e.profileSerial));
                 check.setVisibility(sel ? View.VISIBLE : View.GONE);
             }
             return v;

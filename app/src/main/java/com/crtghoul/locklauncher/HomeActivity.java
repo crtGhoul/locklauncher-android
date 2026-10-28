@@ -934,6 +934,11 @@ public class HomeActivity extends Activity {
                             String newName = input.getText().toString().trim();
                             if (!newName.isEmpty()) {
                                 s.label = newName;
+                                if (s.isApp() && s.pkg != null) {
+                                    String key = AppPickerActivity.getCustomLabelKey(s.pkg, s.profileSerial);
+                                    getSharedPreferences("dock", Context.MODE_PRIVATE)
+                                            .edit().putString(key, newName).apply();
+                                }
                                 ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
                                 loadShortcuts();
                                 BaseDockWidget.refreshAll(this);

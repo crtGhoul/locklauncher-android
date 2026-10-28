@@ -1071,13 +1071,16 @@ public class MainActivity extends Activity {
                     AppPickerActivity.EXTRA_PACKAGES);
             ArrayList<String> labels = data.getStringArrayListExtra(
                     AppPickerActivity.EXTRA_LABELS);
+            long[] serials = data.getLongArrayExtra(
+                    AppPickerActivity.EXTRA_PROFILE_SERIALS);
             if (pkgs != null && !pkgs.isEmpty()) {
                 int added = 0;
                 for (int i = 0; i < pkgs.size(); i++) {
                     if (shortcuts.size() >= ShortcutStore.MAX) break;
                     String label = (labels != null && i < labels.size())
                             ? labels.get(i) : pkgs.get(i);
-                    shortcuts.add(new Shortcut(Shortcut.TYPE_APP, pkgs.get(i), "", label));
+                    long sSerial = (serials != null && i < serials.length) ? serials[i] : 0;
+                    shortcuts.add(new Shortcut(Shortcut.TYPE_APP, pkgs.get(i), "", label, sSerial));
                     added++;
                 }
                 persist();
@@ -1376,6 +1379,32 @@ public class MainActivity extends Activity {
         actions.add(() -> {
             boolean ok = IconUtil.fireShortcut(this, s);
             if (!ok) toast("Could not open " + s.label);
+        });
+
+        options.add("✏️ Rename Shortcut");
+        actions.add(() -> {
+            EditText input = new EditText(this);
+            input.setText(s.label);
+            if (s.label != null) input.setSelection(s.label.length());
+            new AlertDialog.Builder(this)
+                    .setTitle("Rename Shortcut")
+                    .setMessage("Enter new display name:")
+                    .setView(input)
+                    .setPositiveButton("Save", (d, w) -> {
+                        String newName = input.getText().toString().trim();
+                        if (!newName.isEmpty()) {
+                            s.label = newName;
+                            if (s.isApp() && s.pkg != null) {
+                                String key = AppPickerActivity.getCustomLabelKey(s.pkg, s.profileSerial);
+                                getSharedPreferences("dock", MODE_PRIVATE)
+                                        .edit().putString(key, newName).apply();
+                            }
+                            persist();
+                            toast("Renamed to " + newName);
+                        }
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
         });
 
         options.add("📌 Pin to Home screen (Main Page)");
