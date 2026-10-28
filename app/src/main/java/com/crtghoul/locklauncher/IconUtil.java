@@ -1,5 +1,6 @@
 package com.crtghoul.locklauncher;
 
+import android.app.ActivityOptions;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -202,9 +203,24 @@ public class IconUtil {
     }
 
     private static Bitmap drawableToBitmap(Drawable d) {
+        if (d == null) return letterIcon("?", -1);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && d instanceof android.graphics.drawable.AdaptiveIconDrawable) {
+            Bitmap b = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(b);
+            d.setBounds(0, 0, SIZE, SIZE);
+            d.draw(c);
+            return b;
+        }
+        // Normalize legacy non-adaptive icons: center at 74% size over a clean squircle tile
         Bitmap b = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(b);
-        d.setBounds(0, 0, SIZE, SIZE);
+        Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bgPaint.setColor(0xEE1E2235);
+        float rad = SIZE * 0.28f;
+        c.drawRoundRect(new RectF(0, 0, SIZE, SIZE), rad, rad, bgPaint);
+
+        int pad = (int) (SIZE * 0.13f);
+        d.setBounds(pad, pad, SIZE - pad, SIZE - pad);
         d.draw(c);
         return b;
     }
@@ -388,18 +404,11 @@ public class IconUtil {
             } catch (Exception ignored) {
             }
 
-            // Standalone app window / Custom Tab mode (independent task card in Recents)
-            Intent appWindow = new Intent(Intent.ACTION_VIEW, uri);
+            // Standalone ad-free native-styled Web App container (independent task card in Recents)
+            Intent appWindow = new Intent(ctx, WebAppActivity.class);
+            appWindow.putExtra(WebAppActivity.EXTRA_URL, url);
+            appWindow.setData(uri);
             appWindow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            Bundle extras = new Bundle();
-            extras.putBinder("android.support.customtabs.extra.SESSION", null);
-            appWindow.putExtras(extras);
-            appWindow.putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", 0xFF0D0F1D);
-            appWindow.putExtra("android.support.customtabs.extra.ENABLE_URLBAR_HIDING", true);
-            appWindow.putExtra("android.support.customtabs.extra.TITLE_VISIBILITY", 1);
-            appWindow.putExtra("android.support.customtabs.extra.SHARE_STATE", 2);
-            appWindow.putExtra("androidx.browser.customtabs.extra.SHARE_STATE", 2);
-            appWindow.putExtra("androidx.browser.customtabs.extra.COLOR_SCHEME", 2);
             return appWindow;
         } catch (Exception e) {
             return null;
@@ -493,7 +502,20 @@ public class IconUtil {
 
     /** Fires a shortcut from a live View (the island overlay or home screen). True if launched. */
     public static boolean fireShortcut(Context ctx, Shortcut s) {
+        return fireShortcut(ctx, s, null);
+    }
+
+    public static boolean fireShortcut(Context ctx, Shortcut s, View sourceView) {
         try {
+            Bundle opts = null;
+            if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                try {
+                    opts = ActivityOptions.makeScaleUpAnimation(
+                            sourceView, 0, 0, sourceView.getWidth(), sourceView.getHeight()).toBundle();
+                } catch (Exception ignored) {
+                }
+            }
+
             if (s.isFolder()) {
                 return false; // Folders are handled by opening dialog in HomeActivity
             }
@@ -506,7 +528,7 @@ public class IconUtil {
                         if (uh != null) {
                             List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
                             if (!acts.isEmpty()) {
-                                la.startMainActivity(acts.get(0).getComponentName(), uh, null, null);
+                                la.startMainActivity(acts.get(0).getComponentName(), uh, null, opts);
                                 return true;
                             }
                         }
@@ -529,7 +551,11 @@ public class IconUtil {
             Intent launch = launchIntent(ctx, s);
             if (launch == null) return false;
             try {
-                ctx.startActivity(launch);
+                if (opts != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                    ctx.startActivity(launch, opts);
+                } else {
+                    ctx.startActivity(launch);
+                }
                 return true;
             } catch (Exception e) {
                 // If opening with a specific package failed, fall back to generic browser view

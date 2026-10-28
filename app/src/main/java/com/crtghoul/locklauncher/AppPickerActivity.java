@@ -39,6 +39,7 @@ import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -305,6 +306,14 @@ public class AppPickerActivity extends Activity {
         EditText search = findViewById(R.id.search);
         if (isDrawerMode) {
             search.setHint("Search " + all.size() + " apps, Google, YouTube...");
+            search.requestFocus();
+            search.postDelayed(() -> {
+                android.view.inputmethod.InputMethodManager imm =
+                        (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.showSoftInput(search, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                }
+            }, 120);
         }
 
         search.addTextChangedListener(new TextWatcher() {
@@ -389,7 +398,10 @@ public class AppPickerActivity extends Activity {
                         if (!url.startsWith("http://") && !url.startsWith("https://")) {
                             url = "https://" + url;
                         }
-                        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        Intent i = new Intent(AppPickerActivity.this, WebAppActivity.class);
+                        i.putExtra(WebAppActivity.EXTRA_URL, url);
+                        i.putExtra(WebAppActivity.EXTRA_TITLE, query);
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
                         startActivity(i);
                     });
                 }
@@ -569,7 +581,9 @@ public class AppPickerActivity extends Activity {
 
         void applyFilter() {
             List<AppEntry> filtered = new ArrayList<>();
-            String q = filterQuery.toLowerCase();
+            final String q = filterQuery.trim().toLowerCase();
+            final Map<AppEntry, Integer> scores = new HashMap<>();
+
             for (AppEntry e : all) {
                 if ("clones".equals(currentCategory) && !e.isClone) continue;
                 if ("ai".equals(currentCategory) && !"ai".equals(e.category)) continue;
@@ -579,10 +593,27 @@ public class AppPickerActivity extends Activity {
                 if ("system".equals(currentCategory) && !e.isSystem) continue;
 
                 if (!q.isEmpty()) {
-                    if (!e.label.toLowerCase().contains(q) && !e.pkg.toLowerCase().contains(q)) continue;
+                    int score = FuzzyMatcher.matchScore(e.label, q);
+                    if (score < 0) {
+                        score = FuzzyMatcher.matchScore(e.pkg, q);
+                    }
+                    if (score < 0) continue;
+                    scores.put(e, score);
                 }
                 filtered.add(e);
             }
+
+            if (!q.isEmpty()) {
+                Collections.sort(filtered, (a, b) -> {
+                    int sa = scores.containsKey(a) ? scores.get(a) : 0;
+                    int sb = scores.containsKey(b) ? scores.get(b) : 0;
+                    if (sa != sb) return Integer.compare(sb, sa); // higher score first
+                    return a.label.compareToIgnoreCase(b.label);
+                });
+            } else {
+                Collections.sort(filtered, (a, b) -> a.label.compareToIgnoreCase(b.label));
+            }
+
             shown = filtered;
             notifyDataSetChanged();
         }

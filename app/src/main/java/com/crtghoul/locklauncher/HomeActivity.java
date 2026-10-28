@@ -6,12 +6,20 @@ import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetHostView;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.LauncherApps;
+import android.content.pm.ShortcutInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
+import android.os.UserHandle;
+import android.os.UserManager;
 import android.view.GestureDetector;
+import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -56,6 +64,8 @@ public class HomeActivity extends Activity {
     private AppWidgetHost appWidgetHost;
     private AppWidgetManager appWidgetManager;
     private GestureDetector gestureDetector;
+    private Shortcut lastRemovedShortcut = null;
+    private int lastRemovedIndex = -1;
 
     private final Handler timeHandler = new Handler(Looper.getMainLooper());
     private final Runnable timeRunnable = new Runnable() {
@@ -174,7 +184,19 @@ public class HomeActivity extends Activity {
                     showFolderModal(s);
                     return;
                 }
-                boolean ok = IconUtil.fireShortcut(this, s);
+                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                view.animate()
+                        .scaleX(0.90f).scaleY(0.90f)
+                        .setDuration(60)
+                        .withEndAction(() -> {
+                            view.animate()
+                                    .scaleX(1.0f).scaleY(1.0f)
+                                    .setDuration(130)
+                                    .setInterpolator(new android.view.animation.OvershootInterpolator(2.5f))
+                                    .start();
+                        }).start();
+
+                boolean ok = IconUtil.fireShortcut(this, s, view);
                 if (!ok) {
                     Toast.makeText(this, "Could not open " + s.label, Toast.LENGTH_SHORT).show();
                 }
@@ -191,6 +213,24 @@ public class HomeActivity extends Activity {
 
         loadShortcuts();
         loadWidgets();
+        applyDynamicTheming();
+    }
+
+    private void applyDynamicTheming() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            try {
+                DynamicThemeHelper.ThemeColors theme = DynamicThemeHelper.extractTheme(this);
+                View searchBar = findViewById(R.id.home_search_bar);
+                if (searchBar != null && searchBar.getBackground() != null) {
+                    searchBar.getBackground().setTint(theme.subtleGlassTint);
+                }
+                Button btnAddWeb = findViewById(R.id.btn_quick_add_web);
+                if (btnAddWeb != null && btnAddWeb.getBackground() != null) {
+                    btnAddWeb.getBackground().setTint(theme.primaryAccent);
+                }
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @Override
@@ -211,6 +251,7 @@ public class HomeActivity extends Activity {
         }
         loadShortcuts();
         loadWidgets();
+        applyDynamicTheming();
     }
 
     @Override
@@ -283,48 +324,65 @@ public class HomeActivity extends Activity {
     }
 
     private void showWallpaperMenu() {
-        String[] opts = {
-                "🧩 Add Android Widget",
-                "📁 Create New Folder",
-                "🖼️ Change Wallpaper",
-                "🌐 Add Web App",
-                "➕ Add App / Shortcut",
-                "📱 Search & All Apps",
-                "⚙️ Launcher Settings"
-        };
+        List<String> opts = new ArrayList<>();
+        List<Runnable> acts = new ArrayList<>();
+
+        if (lastRemovedShortcut != null) {
+            final Shortcut toRestore = lastRemovedShortcut;
+            final int restorePos = lastRemovedIndex;
+            opts.add("↩️ Undo: Restore " + toRestore.label);
+            acts.add(() -> {
+                int p = ShortcutStore.activeProfile(this);
+                int pos = Math.min(Math.max(0, restorePos), shortcuts.size());
+                shortcuts.add(pos, toRestore);
+                ShortcutStore.save(this, p, shortcuts);
+                loadShortcuts();
+                Toast.makeText(this, "Restored " + toRestore.label, Toast.LENGTH_SHORT).show();
+                lastRemovedShortcut = null;
+                lastRemovedIndex = -1;
+            });
+        }
+
+        opts.add("🧩 Add Android Widget");
+        acts.add(this::selectWidget);
+
+        opts.add("📁 Create New Folder");
+        acts.add(this::createNewFolderDialog);
+
+        opts.add("🖼️ Change Wallpaper");
+        acts.add(() -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_SET_WALLPAPER));
+            } catch (Exception e) {
+                Toast.makeText(this, "Wallpaper picker not found", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        opts.add("🌐 Add Web App");
+        acts.add(() -> showAddWebAppDialog("", ""));
+
+        opts.add("➕ Add App / Shortcut");
+        acts.add(() -> {
+            Intent addAppIntent = new Intent(this, AppPickerActivity.class);
+            addAppIntent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
+            startActivity(addAppIntent);
+        });
+
+        opts.add("📱 Search & All Apps");
+        acts.add(() -> {
+            Intent drawer = new Intent(this, AppPickerActivity.class);
+            drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
+            startActivity(drawer);
+        });
+
+        opts.add("⚙️ Launcher Settings");
+        acts.add(() -> startActivity(new Intent(this, MainActivity.class)));
+
         new AlertDialog.Builder(this)
                 .setTitle("Home Screen")
-                .setItems(opts, (d, which) -> {
-                    switch (which) {
-                        case 0:
-                            selectWidget();
-                            break;
-                        case 1:
-                            createNewFolderDialog();
-                            break;
-                        case 2:
-                            try {
-                                startActivity(new Intent(Intent.ACTION_SET_WALLPAPER));
-                            } catch (Exception e) {
-                                Toast.makeText(this, "Wallpaper picker not found", Toast.LENGTH_SHORT).show();
-                            }
-                            break;
-                        case 3:
-                            showAddWebAppDialog("", "");
-                            break;
-                        case 4:
-                            Intent addAppIntent = new Intent(this, AppPickerActivity.class);
-                            addAppIntent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
-                            startActivity(addAppIntent);
-                            break;
-                        case 5:
-                            Intent drawer = new Intent(this, AppPickerActivity.class);
-                            drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
-                            startActivity(drawer);
-                            break;
-                        case 6:
-                            startActivity(new Intent(this, MainActivity.class));
-                            break;
+                .setItems(opts.toArray(new String[0]), (d, which) -> {
+                    if (which >= 0 && which < acts.size()) {
+                        acts.get(which).run();
                     }
                 })
                 .show();
@@ -558,6 +616,7 @@ public class HomeActivity extends Activity {
         ShortcutStore.setActiveProfile(this, profileIndex);
         loadShortcuts();
         loadWidgets();
+        applyDynamicTheming();
     }
 
     private void renameProfile(int profileIndex) {
@@ -607,6 +666,66 @@ public class HomeActivity extends Activity {
         } else {
             options.add("🚀 Launch app");
             actions.add(() -> IconUtil.fireShortcut(this, s));
+
+            // Query dynamic app shortcuts published by the target app (API 25+)
+            if (s.isApp() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+                try {
+                    LauncherApps la = (LauncherApps) getSystemService(Context.LAUNCHER_APPS_SERVICE);
+                    UserManager um = (UserManager) getSystemService(Context.USER_SERVICE);
+                    if (la != null && la.hasShortcutHostPermission()) {
+                        UserHandle uh = Process.myUserHandle();
+                        if (s.profileSerial > 0 && um != null) {
+                            UserHandle u = um.getUserForSerialNumber(s.profileSerial);
+                            if (u != null) uh = u;
+                        }
+                        LauncherApps.ShortcutQuery query = new LauncherApps.ShortcutQuery();
+                        query.setPackage(s.pkg);
+                        query.setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC |
+                                LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST |
+                                LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED);
+                        List<ShortcutInfo> pinList = la.getShortcuts(query, uh);
+                        if (pinList != null && !pinList.isEmpty()) {
+                            int count = Math.min(pinList.size(), 4);
+                            for (int i = 0; i < count; i++) {
+                                ShortcutInfo si = pinList.get(i);
+                                CharSequence shortLabel = si.getShortLabel();
+                                if (shortLabel == null) shortLabel = si.getLongLabel();
+                                if (shortLabel == null) continue;
+                                final ShortcutInfo targetSi = si;
+                                options.add("⚡ " + shortLabel);
+                                actions.add(() -> {
+                                    try {
+                                        la.startShortcut(targetSi, null, null);
+                                    } catch (Exception e) {
+                                        Toast.makeText(this, "Could not open shortcut", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            options.add("🔀 Reorder / Move Slot");
+            actions.add(() -> {
+                String[] slotNames = new String[shortcuts.size()];
+                for (int i = 0; i < shortcuts.size(); i++) {
+                    slotNames[i] = "Slot " + (i + 1) + ": " + shortcuts.get(i).label;
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("Swap with which slot?")
+                        .setItems(slotNames, (d, targetIdx) -> {
+                            if (targetIdx != position) {
+                                Shortcut moved = shortcuts.remove(position);
+                                shortcuts.add(targetIdx, moved);
+                                ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                                loadShortcuts();
+                                Toast.makeText(this, "Moved to slot " + (targetIdx + 1), Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .show();
+            });
 
             options.add("📌 Pin to Home screen (Main Page)");
             actions.add(() -> {
@@ -691,10 +810,12 @@ public class HomeActivity extends Activity {
 
         options.add("🗑️ Remove from home");
         actions.add(() -> {
+            lastRemovedShortcut = s;
+            lastRemovedIndex = position;
             shortcuts.remove(position);
             ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
             loadShortcuts();
-            Toast.makeText(this, "Removed " + s.label, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Removed " + s.label + " (Tap wallpaper -> Undo)", Toast.LENGTH_LONG).show();
         });
 
         new AlertDialog.Builder(this)
