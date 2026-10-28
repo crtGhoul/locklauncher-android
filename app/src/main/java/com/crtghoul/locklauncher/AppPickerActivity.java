@@ -117,7 +117,12 @@ public class AppPickerActivity extends Activity {
                         e.isClone = isCloneOrWork;
                         e.isSystem = (info.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) != 0;
                         String rawLabel = info.getLabel().toString();
-                        e.label = isCloneOrWork ? (rawLabel + " (Clone)") : rawLabel;
+                        String customLabel = prefs.getString("custom_label_" + pkg, null);
+                        if (customLabel != null && !customLabel.trim().isEmpty()) {
+                            e.label = customLabel;
+                        } else {
+                            e.label = isCloneOrWork ? (rawLabel + " (Clone)") : rawLabel;
+                        }
                         e.icon = info.getBadgedIcon(getResources().getDisplayMetrics().densityDpi);
 
                         // Classify category
@@ -140,7 +145,8 @@ public class AppPickerActivity extends Activity {
                 if (isDrawerMode && hidden.contains(pkg)) continue;
                 AppEntry e = new AppEntry();
                 e.pkg = pkg;
-                e.label = ri.loadLabel(pm).toString();
+                String customLabel = prefs.getString("custom_label_" + pkg, null);
+                e.label = (customLabel != null && !customLabel.trim().isEmpty()) ? customLabel : ri.loadLabel(pm).toString();
                 e.icon = ri.loadIcon(pm);
                 e.isSystem = (ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
                 e.category = classifyApp(e.pkg, e.label, e.isSystem, false);
@@ -222,6 +228,7 @@ public class AppPickerActivity extends Activity {
                         "📌 Pin to Home screen (Main Page)",
                         "📁 Add to Folder...",
                         "➕ Add to Lock Launcher Dock",
+                        "✏️ Custom Display Name",
                         "ℹ️ App Info",
                         "🚫 Hide from drawer",
                         "🗑️ Uninstall"
@@ -260,11 +267,31 @@ public class AppPickerActivity extends Activity {
                                     }
                                     break;
                                 case 4:
+                                    EditText input = new EditText(this);
+                                    input.setText(e.label);
+                                    if (e.label != null) input.setSelection(e.label.length());
+                                    new AlertDialog.Builder(this)
+                                            .setTitle("Custom Display Name")
+                                            .setMessage("Rename app in drawer and shortcuts:")
+                                            .setView(input)
+                                            .setPositiveButton("Save", (cd, cw) -> {
+                                                String n = input.getText().toString().trim();
+                                                if (!n.isEmpty()) {
+                                                    e.label = n;
+                                                    prefs.edit().putString("custom_label_" + e.pkg, n).apply();
+                                                    adapter.applyFilter();
+                                                    Toast.makeText(this, "Renamed to " + n, Toast.LENGTH_SHORT).show();
+                                                }
+                                            })
+                                            .setNegativeButton("Cancel", null)
+                                            .show();
+                                    break;
+                                case 5:
                                     Intent info = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                                     info.setData(Uri.parse("package:" + e.pkg));
                                     startActivity(info);
                                     break;
-                                case 5:
+                                case 6:
                                     Set<String> curHidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
                                     curHidden.add(e.pkg);
                                     prefs.edit().putStringSet("hidden_apps", curHidden).apply();
@@ -272,7 +299,7 @@ public class AppPickerActivity extends Activity {
                                     adapter.applyFilter();
                                     Toast.makeText(this, e.label + " hidden from drawer", Toast.LENGTH_SHORT).show();
                                     break;
-                                case 6:
+                                case 7:
                                     Intent uninst = new Intent(Intent.ACTION_DELETE);
                                     uninst.setData(Uri.parse("package:" + e.pkg));
                                     startActivity(uninst);

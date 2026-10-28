@@ -392,6 +392,49 @@ public class HomeActivity extends Activity {
 
     private void selectWidget() {
         if (appWidgetHost == null) return;
+        String[] choices = {
+                "✨ Add Lock Launcher App Dock Widget (4x1)",
+                "✨ Add Lock Launcher Full Dock Widget (16-Slot)",
+                "🧩 Browse All Installed Widgets..."
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Add Widget")
+                .setItems(choices, (d, which) -> {
+                    if (which == 0) {
+                        bindInternalWidget(DockWidget4x1.class);
+                    } else if (which == 1) {
+                        bindInternalWidget(DockWidgetProvider.class);
+                    } else {
+                        launchSystemWidgetPicker();
+                    }
+                })
+                .show();
+    }
+
+    private void bindInternalWidget(Class<?> providerClass) {
+        if (appWidgetHost == null || appWidgetManager == null) return;
+        int appWidgetId = appWidgetHost.allocateAppWidgetId();
+        android.content.ComponentName cn = new android.content.ComponentName(this, providerClass);
+        boolean bound = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            bound = appWidgetManager.bindAppWidgetIdIfAllowed(appWidgetId, cn);
+        }
+        if (bound) {
+            int profile = ShortcutStore.activeProfile(this);
+            ShortcutStore.addHomeWidget(this, profile, appWidgetId);
+            loadWidgets();
+            BaseDockWidget.refreshAll(this);
+            Toast.makeText(this, "App Widget added to Home screen", Toast.LENGTH_SHORT).show();
+        } else {
+            Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, cn);
+            startActivityForResult(intent, REQUEST_CREATE_APPWIDGET);
+        }
+    }
+
+    private void launchSystemWidgetPicker() {
+        if (appWidgetHost == null) return;
         int appWidgetId = appWidgetHost.allocateAppWidgetId();
         Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
         pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
@@ -666,6 +709,28 @@ public class HomeActivity extends Activity {
         } else {
             options.add("🚀 Launch app");
             actions.add(() -> IconUtil.fireShortcut(this, s));
+
+            options.add("✏️ Rename App / Custom Label");
+            actions.add(() -> {
+                EditText input = new EditText(this);
+                input.setText(s.label);
+                if (s.label != null) input.setSelection(s.label.length());
+                new AlertDialog.Builder(this)
+                        .setTitle("Rename App")
+                        .setMessage("Enter custom display name:")
+                        .setView(input)
+                        .setPositiveButton("Save", (d, w) -> {
+                            String newName = input.getText().toString().trim();
+                            if (!newName.isEmpty()) {
+                                s.label = newName;
+                                ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                                loadShortcuts();
+                                Toast.makeText(this, "Renamed to " + newName, Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            });
 
             // Query dynamic app shortcuts published by the target app (API 25+)
             if (s.isApp() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
