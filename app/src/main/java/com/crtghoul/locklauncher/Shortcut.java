@@ -23,6 +23,7 @@ public class Shortcut {
     public static final String TYPE_DEEP = "deep";
     public static final String TYPE_PROFILE = "profile";
     public static final String TYPE_FOLDER = "folder";
+    public static final String TYPE_EMPTY = "empty";
 
     public static final String ICON_AUTO = "auto";
     public static final String ICON_LETTER = "letter";
@@ -145,6 +146,14 @@ public class Shortcut {
 
     public boolean isClone() {
         return profileSerial > 0;
+    }
+
+    public boolean isEmpty() {
+        return TYPE_EMPTY.equals(type);
+    }
+
+    public static Shortcut createEmpty() {
+        return new Shortcut(UUID.randomUUID().toString(), TYPE_EMPTY, "", "", "", "", ICON_AUTO, -1, "", 0);
     }
 
     public String typeName() {

@@ -12,7 +12,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.LauncherApps;
+import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -38,6 +42,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -55,6 +60,11 @@ public class HomeActivity extends Activity {
     private static final int APPWIDGET_HOST_ID = 1024;
     private static final int REQUEST_PICK_APPWIDGET = 2001;
     private static final int REQUEST_CREATE_APPWIDGET = 2002;
+    private static final int REQUEST_PICK_APP_FOR_SLOT = 2005;
+    private static final int REQ_PICK_CUSTOM_LOGO = 2006;
+
+    private int pendingSlotIndex = -1;
+    private Shortcut pendingLogoShortcut = null;
 
     private TextView clockView;
     private TextView dateBatteryView;
@@ -187,6 +197,11 @@ public class HomeActivity extends Activity {
         gridView.setOnItemClickListener((parent, view, position, id) -> {
             if (position >= 0 && position < shortcuts.size()) {
                 Shortcut s = shortcuts.get(position);
+                if (s.isEmpty()) {
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                    showAddShortcutDialogForSlot(position);
+                    return;
+                }
                 if (s.isFolder()) {
                     Intent fi = IconUtil.launchIntent(this, s);
                     if (fi != null) {
@@ -217,6 +232,12 @@ public class HomeActivity extends Activity {
 
         gridView.setOnItemLongClickListener((parent, view, position, id) -> {
             if (position >= 0 && position < shortcuts.size()) {
+                Shortcut s = shortcuts.get(position);
+                if (s.isEmpty()) {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                    showAddShortcutDialogForSlot(position);
+                    return true;
+                }
                 showShortcutMenu(position);
                 return true;
             }
@@ -525,7 +546,59 @@ public class HomeActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK) {
+        if (requestCode == REQUEST_PICK_APP_FOR_SLOT && resultCode == RESULT_OK && data != null && pendingSlotIndex >= 0) {
+            ArrayList<String> pkgs = data.getStringArrayListExtra(AppPickerActivity.EXTRA_PACKAGES);
+            ArrayList<String> labels = data.getStringArrayListExtra(AppPickerActivity.EXTRA_LABELS);
+            long[] serials = data.getLongArrayExtra(AppPickerActivity.EXTRA_PROFILE_SERIALS);
+            if (pkgs != null && !pkgs.isEmpty()) {
+                String pkg = pkgs.get(0);
+                String label = labels != null && !labels.isEmpty() ? labels.get(0) : pkg;
+                long serial = serials != null && serials.length > 0 ? serials[0] : 0;
+                Shortcut sc = new Shortcut(Shortcut.TYPE_APP, pkg, "", label, serial);
+                shortcuts.set(pendingSlotIndex, sc);
+
+                int nextSlot = pendingSlotIndex + 1;
+                for (int i = 1; i < pkgs.size(); i++) {
+                    while (nextSlot < shortcuts.size() && !shortcuts.get(nextSlot).isEmpty()) {
+                        nextSlot++;
+                    }
+                    if (nextSlot < shortcuts.size()) {
+                        String p = pkgs.get(i);
+                        String l = i < labels.size() ? labels.get(i) : p;
+                        long s = (serials != null && i < serials.length) ? serials[i] : 0;
+                        shortcuts.set(nextSlot, new Shortcut(Shortcut.TYPE_APP, p, "", l, s));
+                        nextSlot++;
+                    }
+                }
+                ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                loadShortcuts();
+                BaseDockWidget.refreshAll(this);
+                DockService.refresh(this);
+                Toast.makeText(this, "Placed in slot " + (pendingSlotIndex + 1), Toast.LENGTH_SHORT).show();
+            }
+            pendingSlotIndex = -1;
+        } else if (requestCode == REQ_PICK_CUSTOM_LOGO && resultCode == RESULT_OK && data != null && pendingLogoShortcut != null) {
+            try {
+                Uri imageUri = data.getData();
+                if (imageUri != null) {
+                    InputStream is = getContentResolver().openInputStream(imageUri);
+                    Bitmap bmp = BitmapFactory.decodeStream(is);
+                    if (is != null) is.close();
+                    if (bmp != null) {
+                        Bitmap cropped = IconUtil.squareCrop(bmp, 144);
+                        IconUtil.saveCustomIcon(this, pendingLogoShortcut.id, cropped);
+                        IconUtil.clearLruCache();
+                        loadShortcuts();
+                        BaseDockWidget.refreshAll(this);
+                        DockService.refresh(this);
+                        Toast.makeText(this, "Logo updated from image", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "Could not load image", Toast.LENGTH_SHORT).show();
+            }
+            pendingLogoShortcut = null;
+        } else if (resultCode == RESULT_OK) {
             if (requestCode == REQUEST_PICK_APPWIDGET) {
                 configureWidget(data);
             } else if (requestCode == REQUEST_CREATE_APPWIDGET) {
@@ -793,12 +866,22 @@ public class HomeActivity extends Activity {
         int currentProfile = ShortcutStore.activeProfile(this);
         for (int i = 0; i < ShortcutStore.PROFILES; i++) {
             profileTabs[i].setText(ShortcutStore.profileName(this, i));
-            profileTabs[i].setBackgroundResource(i == currentProfile ? R.drawable.btn_accent : R.drawable.btn_ghost);
+            if (i == currentProfile) {
+                profileTabs[i].setBackgroundResource(R.drawable.tab_active_pill);
+                profileTabs[i].setTextColor(0xFFFFFFFF);
+            } else {
+                profileTabs[i].setBackgroundColor(Color.TRANSPARENT);
+                profileTabs[i].setTextColor(0xBBFFFFFF);
+            }
         }
-        shortcuts = ShortcutStore.load(this, currentProfile);
+        shortcuts = ShortcutStore.loadPadded(this, currentProfile);
         adapter.notifyDataSetChanged();
         if (emptyHint != null) {
-            emptyHint.setVisibility(shortcuts.isEmpty() ? View.VISIBLE : View.GONE);
+            boolean allEmpty = true;
+            for (Shortcut sc : shortcuts) {
+                if (!sc.isEmpty()) { allEmpty = false; break; }
+            }
+            emptyHint.setVisibility(allEmpty ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -999,6 +1082,9 @@ public class HomeActivity extends Activity {
             });
 
             if (Shortcut.TYPE_URL.equals(s.type)) {
+                options.add("🎨 Change Web App Logo");
+                actions.add(() -> showWebLogoPickerDialog(s));
+
                 options.add("✏️ Edit Web App");
                 actions.add(() -> showEditWebAppDialog(s));
             }
@@ -1077,9 +1163,11 @@ public class HomeActivity extends Activity {
         actions.add(() -> {
             lastRemovedShortcut = s;
             lastRemovedIndex = position;
-            shortcuts.remove(position);
+            shortcuts.set(position, Shortcut.createEmpty());
             ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
             loadShortcuts();
+            BaseDockWidget.refreshAll(this);
+            DockService.refresh(this);
             Toast.makeText(this, "Removed " + s.label + " (Tap wallpaper -> Undo)", Toast.LENGTH_LONG).show();
         });
 
@@ -1123,20 +1211,217 @@ public class HomeActivity extends Activity {
                     if (n == null || n.isEmpty()) n = "Web App";
 
                     int p = ShortcutStore.activeProfile(this);
-                    if (shortcuts.size() >= ShortcutStore.MAX) {
-                        Toast.makeText(this, "Home screen is full (16 max)", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
                     Shortcut sc = new Shortcut(Shortcut.TYPE_URL, "", u, n);
-                    shortcuts.add(sc);
+
+                    if (pendingSlotIndex >= 0 && pendingSlotIndex < shortcuts.size()) {
+                        shortcuts.set(pendingSlotIndex, sc);
+                        pendingSlotIndex = -1;
+                    } else {
+                        int emptyIdx = -1;
+                        for (int i = 0; i < shortcuts.size(); i++) {
+                            if (shortcuts.get(i).isEmpty()) { emptyIdx = i; break; }
+                        }
+                        if (emptyIdx >= 0) {
+                            shortcuts.set(emptyIdx, sc);
+                        } else if (shortcuts.size() < ShortcutStore.MAX) {
+                            shortcuts.add(sc);
+                        } else {
+                            Toast.makeText(this, "Home screen is full (16 max)", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                    }
+
+                    Bitmap brand = WebLogoHelper.getBuiltinBrandLogo(this, u);
+                    if (brand != null) {
+                        IconUtil.saveCustomIcon(this, sc.id, brand);
+                    } else {
+                        WebLogoHelper.fetchFaviconAsync(this, u, sc.id, (logo) -> loadShortcuts());
+                    }
+
                     ShortcutStore.save(this, p, shortcuts);
                     loadShortcuts();
+                    BaseDockWidget.refreshAll(this);
+                    DockService.refresh(this);
                     if (chkPin != null && chkPin.isChecked()) {
                         IconUtil.pinShortcutToHomeScreen(this, sc);
                     }
                     Toast.makeText(this, n + " added as Web App", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showAddShortcutDialogForSlot(int slotIndex) {
+        pendingSlotIndex = slotIndex;
+        String[] options = {
+                "📱 Add App to Slot " + (slotIndex + 1),
+                "🌐 Add Web App to Slot " + (slotIndex + 1),
+                "📁 Create Folder in Slot " + (slotIndex + 1),
+                "🧹 Pack All Apps to Top (Fill Gaps)"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Slot " + (slotIndex + 1) + " (Empty)")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        Intent pick = new Intent(this, AppPickerActivity.class);
+                        pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, false);
+                        startActivityForResult(pick, REQUEST_PICK_APP_FOR_SLOT);
+                    } else if (which == 1) {
+                        showAddWebAppDialog("", "");
+                    } else if (which == 2) {
+                        EditText input = new EditText(this);
+                        input.setHint("Folder name (e.g. Social, Games)");
+                        new AlertDialog.Builder(this)
+                                .setTitle("New Folder in Slot " + (slotIndex + 1))
+                                .setView(input)
+                                .setPositiveButton("Create", (d, w) -> {
+                                    String name = input.getText().toString().trim();
+                                    if (name.isEmpty()) name = "Folder";
+                                    Shortcut folder = Shortcut.createFolder(name, new ArrayList<>());
+                                    shortcuts.set(slotIndex, folder);
+                                    ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                                    loadShortcuts();
+                                    Toast.makeText(this, "Created folder: " + name, Toast.LENGTH_SHORT).show();
+                                })
+                                .setNegativeButton("Cancel", null)
+                                .show();
+                    } else if (which == 3) {
+                        packShortcutsToTop();
+                    }
+                })
+                .show();
+    }
+
+    private void packShortcutsToTop() {
+        List<Shortcut> nonEmpties = new ArrayList<>();
+        for (Shortcut s : shortcuts) {
+            if (!s.isEmpty()) {
+                nonEmpties.add(s);
+            }
+        }
+        shortcuts.clear();
+        shortcuts.addAll(nonEmpties);
+        while (shortcuts.size() < ShortcutStore.MAX) {
+            shortcuts.add(Shortcut.createEmpty());
+        }
+        ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+        loadShortcuts();
+        BaseDockWidget.refreshAll(this);
+        DockService.refresh(this);
+        Toast.makeText(this, "Packed icons to top", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showWebLogoPickerDialog(Shortcut s) {
+        pendingLogoShortcut = s;
+        String[] opts = {
+                "✨ Auto-Fetch High-Res Favicon from Web",
+                "🎨 Choose from Popular Brand Logos (YouTube, X, Reddit, etc.)",
+                "🖼️ Choose Image from Device Gallery / Photos",
+                "📦 Choose Icon from Installed Icon Pack",
+                "🔤 Reset to Default Letter / Brand Logo"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Web App Logo: " + s.label)
+                .setItems(opts, (dialog, which) -> {
+                    if (which == 0) {
+                        Toast.makeText(this, "Fetching high-res favicon...", Toast.LENGTH_SHORT).show();
+                        WebLogoHelper.fetchFaviconAsync(this, s.url, s.id, (bmp) -> {
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            Toast.makeText(this, "Favicon loaded for " + s.label, Toast.LENGTH_SHORT).show();
+                        });
+                    } else if (which == 1) {
+                        showPresetBrandLogoDialog(s);
+                    } else if (which == 2) {
+                        try {
+                            Intent pick = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                            startActivityForResult(pick, REQ_PICK_CUSTOM_LOGO);
+                        } catch (Exception e) {
+                            Toast.makeText(this, "Cannot open gallery", Toast.LENGTH_SHORT).show();
+                        }
+                    } else if (which == 3) {
+                        showIconPackLogoPicker(s);
+                    } else if (which == 4) {
+                        IconUtil.deleteCustomIcon(this, s.id);
+                        IconUtil.clearLruCache();
+                        loadShortcuts();
+                        BaseDockWidget.refreshAll(this);
+                        DockService.refresh(this);
+                        Toast.makeText(this, "Reset to default logo", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
+    }
+
+    private void showPresetBrandLogoDialog(Shortcut s) {
+        List<WebLogoHelper.PresetLogo> presets = WebLogoHelper.getPresetList();
+        String[] names = new String[presets.size()];
+        for (int i = 0; i < presets.size(); i++) {
+            names[i] = presets.get(i).name;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Select Brand Logo")
+                .setItems(names, (dialog, which) -> {
+                    if (which >= 0 && which < presets.size()) {
+                        WebLogoHelper.PresetLogo preset = presets.get(which);
+                        Bitmap bmp = WebLogoHelper.getBuiltinBrandLogo(this, preset.defaultUrl);
+                        if (bmp != null) {
+                            IconUtil.saveCustomIcon(this, s.id, bmp);
+                            IconUtil.clearLruCache();
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            Toast.makeText(this, "Logo set to " + preset.name, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                })
+                .show();
+    }
+
+    private void showIconPackLogoPicker(Shortcut s) {
+        String activePack = IconPackManager.getActiveIconPack(this);
+        if (activePack == null || activePack.isEmpty()) {
+            Toast.makeText(this, "No icon pack active. Select an icon pack in Settings first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        // Let the user pick from existing apps to copy its themed icon pack design
+        PackageManager pm = getPackageManager();
+        Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+        mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<android.content.pm.ResolveInfo> apps = pm.queryIntentActivities(mainIntent, 0);
+        List<String> appLabels = new ArrayList<>();
+        List<String> appPkgs = new ArrayList<>();
+        List<String> appCls = new ArrayList<>();
+        for (android.content.pm.ResolveInfo ri : apps) {
+            String pkg = ri.activityInfo.packageName;
+            String cls = ri.activityInfo.name;
+            Bitmap icon = IconPackManager.getIcon(this, pkg, cls);
+            if (icon != null) {
+                appLabels.add(ri.loadLabel(pm).toString());
+                appPkgs.add(pkg);
+                appCls.add(cls);
+            }
+        }
+        if (appLabels.isEmpty()) {
+            Toast.makeText(this, "No icons matched in current pack", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Match Icon from " + activePack)
+                .setItems(appLabels.toArray(new String[0]), (dialog, which) -> {
+                    if (which >= 0 && which < appPkgs.size()) {
+                        Bitmap bmp = IconPackManager.getIcon(this, appPkgs.get(which), appCls.get(which));
+                        if (bmp != null) {
+                            IconUtil.saveCustomIcon(this, s.id, bmp);
+                            IconUtil.clearLruCache();
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            Toast.makeText(this, "Icon updated from " + appLabels.get(which), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                })
                 .show();
     }
 
@@ -1160,8 +1445,17 @@ public class HomeActivity extends Activity {
                     }
                     String n = editName.getText().toString().trim();
                     if (n.isEmpty()) n = "Web App";
+                    boolean urlChanged = !u.equalsIgnoreCase(s.url);
                     s.url = u;
                     s.label = n;
+                    if (urlChanged) {
+                        Bitmap brand = WebLogoHelper.getBuiltinBrandLogo(this, u);
+                        if (brand != null) {
+                            IconUtil.saveCustomIcon(this, s.id, brand);
+                        } else {
+                            WebLogoHelper.fetchFaviconAsync(this, u, s.id, (logo) -> loadShortcuts());
+                        }
+                    }
                     int p = ShortcutStore.activeProfile(this);
                     ShortcutStore.save(this, p, shortcuts);
                     loadShortcuts();
@@ -1189,21 +1483,30 @@ public class HomeActivity extends Activity {
             TextView label = v.findViewById(R.id.sc_label);
             TextView badge = v.findViewById(R.id.sc_badge);
 
-            icon.setImageBitmap(IconUtil.iconFor(HomeActivity.this, s));
-            label.setText(s.label);
-            label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
+            if (s.isEmpty()) {
+                icon.setImageResource(R.drawable.slot_empty_target);
+                icon.setAlpha(0.38f);
+                label.setText("");
+                label.setVisibility(View.GONE);
+                if (badge != null) badge.setVisibility(View.GONE);
+            } else {
+                icon.setAlpha(1.0f);
+                icon.setImageBitmap(IconUtil.iconFor(HomeActivity.this, s));
+                label.setText(s.label);
+                label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
 
-            if (badge != null) {
-                if (LockNotificationListenerService.isBadgesEnabled(HomeActivity.this) && s.isApp()) {
-                    int count = LockNotificationListenerService.getCount(s.pkg);
-                    if (count > 0) {
-                        badge.setText(count > 99 ? "99+" : String.valueOf(count));
-                        badge.setVisibility(View.VISIBLE);
+                if (badge != null) {
+                    if (LockNotificationListenerService.isBadgesEnabled(HomeActivity.this) && s.isApp()) {
+                        int count = LockNotificationListenerService.getCount(s.pkg);
+                        if (count > 0) {
+                            badge.setText(count > 99 ? "99+" : String.valueOf(count));
+                            badge.setVisibility(View.VISIBLE);
+                        } else {
+                            badge.setVisibility(View.GONE);
+                        }
                     } else {
                         badge.setVisibility(View.GONE);
                     }
-                } else {
-                    badge.setVisibility(View.GONE);
                 }
             }
 
@@ -1235,12 +1538,16 @@ public class HomeActivity extends Activity {
                             if (target.isFolder() && !source.isFolder()) {
                                 if (target.folderItems == null) target.folderItems = new ArrayList<>();
                                 target.folderItems.add(source);
-                                shortcuts.remove(sourcePos);
+                                shortcuts.set(sourcePos, Shortcut.createEmpty());
                                 Toast.makeText(HomeActivity.this, "Added " + source.label + " to " + target.label, Toast.LENGTH_SHORT).show();
+                            } else if (target.isEmpty()) {
+                                shortcuts.set(itemPos, source);
+                                shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Moved " + source.label + " to slot " + (itemPos + 1), Toast.LENGTH_SHORT).show();
                             } else {
-                                Shortcut moved = shortcuts.remove(sourcePos);
-                                shortcuts.add(itemPos, moved);
-                                Toast.makeText(HomeActivity.this, "Moved " + moved.label + " to slot " + (itemPos + 1), Toast.LENGTH_SHORT).show();
+                                shortcuts.set(itemPos, source);
+                                shortcuts.set(sourcePos, target);
+                                Toast.makeText(HomeActivity.this, "Swapped " + source.label + " with " + target.label, Toast.LENGTH_SHORT).show();
                             }
                             ShortcutStore.save(HomeActivity.this, ShortcutStore.activeProfile(HomeActivity.this), shortcuts);
                             loadShortcuts();

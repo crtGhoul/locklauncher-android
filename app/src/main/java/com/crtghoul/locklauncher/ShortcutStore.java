@@ -102,6 +102,14 @@ public class ShortcutStore {
         return out;
     }
 
+    public static List<Shortcut> loadPadded(Context ctx, int profile) {
+        List<Shortcut> list = load(ctx, profile);
+        while (list.size() < MAX) {
+            list.add(Shortcut.createEmpty());
+        }
+        return list;
+    }
+
     public static void save(Context ctx, List<Shortcut> list) {
         save(ctx, activeProfile(ctx), list);
     }

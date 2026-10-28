@@ -71,6 +71,10 @@ public class IconUtil {
         sIconLru.evictAll();
     }
 
+    public static void clearLruCache() {
+        clearCache();
+    }
+
     public static Bitmap iconFor(Context ctx, Shortcut s) {
         if (s == null) return letterIcon("?", -1);
         String cacheKey = (s.id != null ? s.id : "") + "_" + (s.pkg != null ? s.pkg : "") + "_" + (s.type != null ? s.type : "")
@@ -132,6 +136,15 @@ public class IconUtil {
                     }
                 } catch (Exception e) {
                     b = letterIcon("?", s.iconColor);
+                }
+            } else if (Shortcut.TYPE_URL.equals(s.type)) {
+                Bitmap brand = WebLogoHelper.getBuiltinBrandLogo(ctx, s.url);
+                if (brand != null) {
+                    b = brand;
+                } else {
+                    String label = (s.label == null || s.label.isEmpty()) ? "?" : s.label;
+                    b = letterIcon(label, s.iconColor);
+                    WebLogoHelper.fetchFaviconAsync(ctx, s.url, s.id, null);
                 }
             } else {
                 String label = (s.label == null || s.label.isEmpty()) ? "?" : s.label;
@@ -668,6 +681,10 @@ public class IconUtil {
         for (int i = 0; i < count && i < SLOTS.length; i++) {
             if (i < shortcuts.size()) {
                 Shortcut s = shortcuts.get(i);
+                if (s.isEmpty()) {
+                    rv.setViewVisibility(SLOTS[i], View.INVISIBLE);
+                    continue;
+                }
                 rv.setImageViewBitmap(ICONS[i], iconFor(ctx, s));
                 rv.setTextViewText(LABELS[i], s.label);
                 PendingIntent pi = pendingFor(ctx, s, pendingBase + i);
