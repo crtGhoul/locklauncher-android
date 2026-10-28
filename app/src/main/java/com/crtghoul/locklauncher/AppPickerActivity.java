@@ -681,9 +681,34 @@ public class AppPickerActivity extends Activity {
             ImageView icon = v.findViewById(R.id.app_icon);
             TextView name = v.findViewById(R.id.app_name);
             TextView check = v.findViewById(R.id.app_check);
+            TextView badge = v.findViewById(R.id.app_badge);
+            TextView profileBadge = v.findViewById(R.id.app_badge_profile);
 
             icon.setImageDrawable(e.icon);
             name.setText(e.label);
+
+            if (profileBadge != null) {
+                if (e.isClone) {
+                    profileBadge.setText("Clone / Work");
+                    profileBadge.setVisibility(View.VISIBLE);
+                } else {
+                    profileBadge.setVisibility(View.GONE);
+                }
+            }
+
+            if (badge != null) {
+                if (LockNotificationListenerService.isBadgesEnabled(AppPickerActivity.this)) {
+                    int count = LockNotificationListenerService.getCount(e.pkg);
+                    if (count > 0) {
+                        badge.setText(count > 99 ? "99+" : String.valueOf(count));
+                        badge.setVisibility(View.VISIBLE);
+                    } else {
+                        badge.setVisibility(View.GONE);
+                    }
+                } else {
+                    badge.setVisibility(View.GONE);
+                }
+            }
 
             if (check != null) {
                 boolean sel = selected.containsKey(e.pkg);

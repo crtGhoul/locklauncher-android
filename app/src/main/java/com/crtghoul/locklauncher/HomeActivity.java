@@ -6,8 +6,10 @@ import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetHostView;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.LauncherApps;
 import android.content.pm.ShortcutInfo;
 import android.net.Uri;
@@ -241,10 +243,29 @@ public class HomeActivity extends Activity {
         return super.dispatchTouchEvent(ev);
     }
 
+    private final BroadcastReceiver notificationBadgeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (adapter != null) {
+                adapter.notifyDataSetChanged();
+            }
+            updateLiveHeader();
+        }
+    };
+
     @Override
     protected void onResume() {
         super.onResume();
         timeHandler.post(timeRunnable);
+        try {
+            IntentFilter filter = new IntentFilter(LockNotificationListenerService.ACTION_NOTIFICATIONS_CHANGED);
+            filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(notificationBadgeReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(notificationBadgeReceiver, filter);
+            }
+        } catch (Exception ignored) {}
         // Apply dynamic grid columns
         if (gridView != null) {
             gridView.setNumColumns(ShortcutStore.homeGridColumns(this));
@@ -258,6 +279,9 @@ public class HomeActivity extends Activity {
     protected void onPause() {
         super.onPause();
         timeHandler.removeCallbacks(timeRunnable);
+        try {
+            unregisterReceiver(notificationBadgeReceiver);
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -319,6 +343,52 @@ public class HomeActivity extends Activity {
                 dateBatteryView.setText(date);
             } else if (!battery.isEmpty()) {
                 dateBatteryView.setText(battery);
+            }
+        }
+
+        // 🌟 At a Glance Smart Bar (100% on-device next alarm, calendar, battery)
+        TextView glanceAlarm = findViewById(R.id.glance_alarm);
+        TextView glanceEvent = findViewById(R.id.glance_event);
+        TextView glanceBattery = findViewById(R.id.glance_battery);
+
+        if (glanceAlarm != null) {
+            AtAGlanceHelper.GlanceItem alarm = AtAGlanceHelper.getNextAlarm(this);
+            if (alarm != null) {
+                glanceAlarm.setText(alarm.icon + " " + alarm.title + " (" + alarm.subtitle + ")");
+                glanceAlarm.setVisibility(View.VISIBLE);
+                glanceAlarm.setOnClickListener(v -> {
+                    try { startActivity(alarm.actionIntent); } catch (Exception ignored) {}
+                });
+            } else {
+                glanceAlarm.setVisibility(View.GONE);
+            }
+        }
+
+        if (glanceEvent != null) {
+            AtAGlanceHelper.GlanceItem event = AtAGlanceHelper.getNextCalendarEvent(this);
+            if (event != null) {
+                glanceEvent.setText(event.icon + " " + event.title + " • " + event.subtitle);
+                glanceEvent.setVisibility(View.VISIBLE);
+                glanceEvent.setOnClickListener(v -> {
+                    try { startActivity(event.actionIntent); } catch (Exception ignored) {}
+                });
+            } else {
+                glanceEvent.setVisibility(View.GONE);
+            }
+        }
+
+        if (glanceBattery != null) {
+            AtAGlanceHelper.GlanceItem bat = AtAGlanceHelper.getBatteryStatus(this);
+            if (bat != null && showBattery) {
+                glanceBattery.setText(bat.icon + " " + bat.title + ("Charging".equals(bat.subtitle) ? " ⚡" : ""));
+                glanceBattery.setVisibility(View.VISIBLE);
+                glanceBattery.setOnClickListener(v -> {
+                    if (bat.actionIntent != null) {
+                        try { startActivity(bat.actionIntent); } catch (Exception ignored) {}
+                    }
+                });
+            } else {
+                glanceBattery.setVisibility(View.GONE);
             }
         }
     }
@@ -987,10 +1057,25 @@ public class HomeActivity extends Activity {
             Shortcut s = getItem(pos);
             ImageView icon = v.findViewById(R.id.sc_icon);
             TextView label = v.findViewById(R.id.sc_label);
+            TextView badge = v.findViewById(R.id.sc_badge);
 
             icon.setImageBitmap(IconUtil.iconFor(HomeActivity.this, s));
             label.setText(s.label);
             label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
+
+            if (badge != null) {
+                if (LockNotificationListenerService.isBadgesEnabled(HomeActivity.this) && s.isApp()) {
+                    int count = LockNotificationListenerService.getCount(s.pkg);
+                    if (count > 0) {
+                        badge.setText(count > 99 ? "99+" : String.valueOf(count));
+                        badge.setVisibility(View.VISIBLE);
+                    } else {
+                        badge.setVisibility(View.GONE);
+                    }
+                } else {
+                    badge.setVisibility(View.GONE);
+                }
+            }
             return v;
         }
     }

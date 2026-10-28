@@ -13,10 +13,34 @@
         android:background="@drawable/row_card"
         android:padding="10dp">
 
-        <ImageView
-            android:id="@+id/app_icon"
+        <FrameLayout
             android:layout_width="46dp"
-            android:layout_height="46dp" />
+            android:layout_height="46dp"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <ImageView
+                android:id="@+id/app_icon"
+                android:layout_width="46dp"
+                android:layout_height="46dp" />
+
+            <TextView
+                android:id="@+id/app_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="18dp"
+                android:minWidth="18dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="-2dp"
+                android:layout_marginEnd="-2dp"
+                android:background="@drawable/badge_pill"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </FrameLayout>
 
         <TextView
             android:id="@+id/app_name"
@@ -26,6 +50,15 @@
             android:textColor="@color/text"
             android:textSize="16sp"
             android:paddingStart="12dp" />
+
+        <TextView
+            android:id="@+id/app_badge_profile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#9E9E9E"
+            android:textSize="11sp"
+            android:paddingEnd="8dp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/app_check"

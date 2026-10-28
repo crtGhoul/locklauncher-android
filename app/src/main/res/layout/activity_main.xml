@@ -316,6 +316,56 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
             </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Notification Dots &amp; Numeric Badges"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/switch_notification_badges"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="10dp">
+
+                <Button
+                    android:id="@+id/btn_icon_pack"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="🎨 Icon Pack"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_hidden_apps"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="👁️ Hidden Apps"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
@@ -369,10 +419,20 @@
                 android:orientation="horizontal"
                 android:paddingTop="4dp">
 
-                <Button android:id="@+id/btn_token_battery" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Battery" android:textSize="10sp" android:textColor="#FFFFFF" />
-                <Button android:id="@+id/btn_token_date" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Date" android:textSize="10sp" android:textColor="#FFFFFF" />
-                <Button android:id="@+id/btn_token_time" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Time" android:textSize="10sp" android:textColor="#FFFFFF" />
-                <Button android:id="@+id/btn_token_profile" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:background="@drawable/btn_ghost" android:text="+ Profile" android:textSize="10sp" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_token_battery" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Battery" android:textSize="9sp" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_token_date" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Date" android:textSize="9sp" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_token_time" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Time" android:textSize="9sp" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_token_profile" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:background="@drawable/btn_ghost" android:text="+ Profile" android:textSize="9sp" android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <Button android:id="@+id/btn_token_alarms" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Alarms" android:textSize="9sp" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_token_next" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:background="@drawable/btn_ghost" android:text="+ Next Event" android:textSize="9sp" android:textColor="#FFFFFF" />
             </LinearLayout>
         </LinearLayout>
 

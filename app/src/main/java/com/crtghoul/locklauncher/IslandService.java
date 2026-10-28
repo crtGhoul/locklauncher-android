@@ -1,10 +1,22 @@
 package com.crtghoul.locklauncher;
 
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.media.MediaMetadata;
+import android.media.session.MediaController;
+import android.media.session.MediaSessionManager;
+import android.media.session.PlaybackState;
+import android.os.BatteryManager;
+import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -21,10 +33,11 @@ import android.widget.Toast;
 import java.util.List;
 
 /**
- * Dynamic-Island-style floating bar: a collapsed pill at the top of the
- * screen that expands into the active profile's shortcut grid on tap.
- * Needs "Display over other apps" permission. Best-effort on the lock
- * screen — some OEMs (incl. OxygenOS) restrict overlays there.
+ * Dynamic Floating Island overlay with multiple states:
+ * 1. Idle Dock: 2–6 shortcuts + battery stat
+ * 2. Media Playback: Track title, artist, live play/pause & skip controls
+ * 3. Charging Pulse: Connected wattage/battery indicator
+ * 4. Expanded Card: Full 16-slot profile grid
  */
 public class IslandService extends Service {
     public static final String ACTION_REFRESH =
@@ -36,6 +49,11 @@ public class IslandService extends Service {
     private View islandView;
     private WindowManager.LayoutParams params;
     private boolean expanded = false;
+    private boolean mediaDismissed = false;
+    private String lastChargingMsg = null;
+
+    private Handler mainHandler;
+    private BroadcastReceiver batteryReceiver;
 
     public static boolean isRunning() {
         return running;
@@ -85,6 +103,13 @@ public class IslandService extends Service {
     }
 
     @Override
+    public void onCreate() {
+        super.onCreate();
+        mainHandler = new Handler(Looper.getMainLooper());
+        registerIslandReceivers();
+    }
+
+    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         running = true;
         if (ACTION_REFRESH.equals(intent != null ? intent.getAction() : "")) {
@@ -98,8 +123,55 @@ public class IslandService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        unregisterIslandReceivers();
         removeView();
         super.onDestroy();
+    }
+
+    private void registerIslandReceivers() {
+        try {
+            batteryReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String action = intent != null ? intent.getAction() : null;
+                    if (Intent.ACTION_POWER_CONNECTED.equals(action)) {
+                        triggerChargingPulse();
+                    } else if (LockNotificationListenerService.ACTION_NOTIFICATIONS_CHANGED.equals(action)) {
+                        if (!expanded) {
+                            showCollapsed();
+                        }
+                    }
+                }
+            };
+            IntentFilter f = new IntentFilter();
+            f.addAction(Intent.ACTION_POWER_CONNECTED);
+            f.addAction(LockNotificationListenerService.ACTION_NOTIFICATIONS_CHANGED);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(batteryReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(batteryReceiver, f);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void unregisterIslandReceivers() {
+        if (batteryReceiver != null) {
+            try {
+                unregisterReceiver(batteryReceiver);
+            } catch (Exception ignored) {
+            }
+            batteryReceiver = null;
+        }
+    }
+
+    private void triggerChargingPulse() {
+        lastChargingMsg = "⚡ " + IconUtil.getLiveBatteryInfo(this) + " (Charging)";
+        rebuild();
+        mainHandler.postDelayed(() -> {
+            lastChargingMsg = null;
+            rebuild();
+        }, 4000);
     }
 
     private void removeView() {
@@ -135,9 +207,135 @@ public class IslandService extends Service {
         return (int) (v * getResources().getDisplayMetrics().density);
     }
 
+    private MediaController getActiveMediaController() {
+        if (!LockNotificationListenerService.isPermissionGranted(this)) return null;
+        try {
+            MediaSessionManager mm = (MediaSessionManager) getSystemService(Context.MEDIA_SESSION_SERVICE);
+            if (mm != null) {
+                ComponentName cn = new ComponentName(this, LockNotificationListenerService.class);
+                List<MediaController> list = mm.getActiveSessions(cn);
+                if (list != null) {
+                    for (MediaController mc : list) {
+                        PlaybackState ps = mc.getPlaybackState();
+                        if (ps != null && ps.getState() == PlaybackState.STATE_PLAYING) {
+                            return mc;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     private void showCollapsed() {
         removeView();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+
+        // Check 1: Charging Pulse State
+        if (lastChargingMsg != null) {
+            showChargingPill(lastChargingMsg);
+            return;
+        }
+
+        // Check 2: Media Session State
+        MediaController media = !mediaDismissed ? getActiveMediaController() : null;
+        if (media != null) {
+            showMediaPill(media);
+            return;
+        }
+
+        // Default State: Shortcuts Dock
+        showDockPill();
+    }
+
+    private void showChargingPill(String msg) {
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(Gravity.CENTER_VERTICAL);
+        pill.setBackgroundResource(R.drawable.dock_card);
+        pill.setPadding(dp(16), dp(8), dp(16), dp(8));
+
+        TextView tv = new TextView(this);
+        tv.setText(msg);
+        tv.setTextColor(0xFF00E676); // glowing battery green
+        tv.setTextSize(13);
+        tv.setGravity(Gravity.CENTER);
+        pill.addView(tv);
+
+        attachPillView(pill, null, null);
+    }
+
+    private void showMediaPill(MediaController mc) {
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL);
+        pill.setGravity(Gravity.CENTER_VERTICAL);
+        pill.setBackgroundResource(R.drawable.dock_card);
+        pill.setPadding(dp(14), dp(6), dp(14), dp(6));
+
+        TextView musicIcon = new TextView(this);
+        musicIcon.setText("🎵 ");
+        musicIcon.setTextSize(14);
+        pill.addView(musicIcon);
+
+        MediaMetadata meta = mc.getMetadata();
+        String title = "Now Playing";
+        String artist = "";
+        if (meta != null) {
+            String t = meta.getString(MediaMetadata.METADATA_KEY_TITLE);
+            if (t != null && !t.isEmpty()) title = t;
+            String a = meta.getString(MediaMetadata.METADATA_KEY_ARTIST);
+            if (a != null && !a.isEmpty()) artist = " · " + a;
+        }
+
+        TextView textInfo = new TextView(this);
+        textInfo.setText(title + artist);
+        textInfo.setTextColor(0xFFFFFFFF);
+        textInfo.setTextSize(12);
+        textInfo.setMaxLines(1);
+        textInfo.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        textInfo.setMaxWidth(dp(150));
+        textInfo.setPadding(0, 0, dp(10), 0);
+        pill.addView(textInfo);
+
+        // Play/Pause control
+        TextView btnPlayPause = new TextView(this);
+        btnPlayPause.setText("⏸️");
+        btnPlayPause.setTextSize(15);
+        btnPlayPause.setPadding(dp(4), 0, dp(6), 0);
+        btnPlayPause.setOnClickListener(v -> {
+            try {
+                mc.getTransportControls().pause();
+                rebuild();
+            } catch (Exception ignored) {}
+        });
+        pill.addView(btnPlayPause);
+
+        // Next Track control
+        TextView btnNext = new TextView(this);
+        btnNext.setText("⏭️");
+        btnNext.setTextSize(15);
+        btnNext.setPadding(dp(4), 0, dp(2), 0);
+        btnNext.setOnClickListener(v -> {
+            try {
+                mc.getTransportControls().skipToNext();
+                rebuild();
+            } catch (Exception ignored) {}
+        });
+        pill.addView(btnNext);
+
+        textInfo.setOnClickListener(v -> {
+            try {
+                if (mc.getSessionActivity() != null) {
+                    mc.getSessionActivity().send();
+                }
+            } catch (Exception ignored) {}
+        });
+
+        attachPillView(pill, null, null);
+    }
+
+    private void showDockPill() {
         List<Shortcut> shortcuts = ShortcutStore.load(this);
 
         LinearLayout pill = new LinearLayout(this);
@@ -180,23 +378,25 @@ public class IslandService extends Service {
             pill.addView(t);
         }
 
-        final View pillView = pill;
-        // Direct tap on icon = launches shortcut immediately.
-        // Tap on padding/background = expands grid.
-        // Drag = moves island. Long-press = hides island.
+        attachPillView(pill, iconViews, shownShortcuts);
+    }
 
+    private void attachPillView(LinearLayout pill, ImageView[] iconViews, Shortcut[] shownShortcuts) {
+        final View pillView = pill;
         params = baseParams(WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT);
-        // Restore the dragged position (default: top-center under the status bar).
+
         android.content.SharedPreferences iprefs =
                 getSharedPreferences("dock", MODE_PRIVATE);
         params.x = iprefs.getInt("island_x", 0);
         params.y = iprefs.getInt("island_y", statusBarHeight() + dp(8));
 
-        final android.os.Handler handler = new android.os.Handler(getMainLooper());
+        final Handler handler = new Handler(getMainLooper());
         final Runnable longPress = this::hideIsland;
-        final int[] drag = new int[4]; // startX, startY, downRawX, downRawY
+        final int[] drag = new int[4];
         final boolean[] moved = new boolean[1];
+        final float[] startTouchX = new float[1];
+
         pill.setOnTouchListener((v, e) -> {
             switch (e.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -204,6 +404,7 @@ public class IslandService extends Service {
                     drag[1] = params.y;
                     drag[2] = (int) e.getRawX();
                     drag[3] = (int) e.getRawY();
+                    startTouchX[0] = e.getRawX();
                     moved[0] = false;
                     handler.postDelayed(longPress, 500);
                     return true;
@@ -226,23 +427,33 @@ public class IslandService extends Service {
                 }
                 case MotionEvent.ACTION_UP:
                     handler.removeCallbacks(longPress);
+                    float swipeDeltaX = e.getRawX() - startTouchX[0];
+                    if (Math.abs(swipeDeltaX) > dp(60)) {
+                        // Swipe dismisses media mode or switches to dock
+                        mediaDismissed = !mediaDismissed;
+                        rebuild();
+                        return true;
+                    }
+
                     if (!moved[0]) {
                         int tapX = (int) e.getX();
                         int tapY = (int) e.getY();
                         boolean launched = false;
-                        android.graphics.Rect rect = new android.graphics.Rect();
-                        for (int i = 0; i < iconViews.length; i++) {
-                            if (iconViews[i] != null) {
-                                iconViews[i].getHitRect(rect);
-                                if (rect.contains(tapX, tapY)) {
-                                    v.performClick();
-                                    if (!IconUtil.fireShortcut(IslandService.this, shownShortcuts[i])) {
-                                        Toast.makeText(IslandService.this,
-                                                "Couldn't open " + shownShortcuts[i].label,
-                                                Toast.LENGTH_SHORT).show();
+                        if (iconViews != null && shownShortcuts != null) {
+                            android.graphics.Rect rect = new android.graphics.Rect();
+                            for (int i = 0; i < iconViews.length; i++) {
+                                if (iconViews[i] != null) {
+                                    iconViews[i].getHitRect(rect);
+                                    if (rect.contains(tapX, tapY)) {
+                                        v.performClick();
+                                        if (!IconUtil.fireShortcut(IslandService.this, shownShortcuts[i])) {
+                                            Toast.makeText(IslandService.this,
+                                                    "Couldn't open " + shownShortcuts[i].label,
+                                                    Toast.LENGTH_SHORT).show();
+                                        }
+                                        launched = true;
+                                        break;
                                     }
-                                    launched = true;
-                                    break;
                                 }
                             }
                         }
@@ -263,6 +474,7 @@ public class IslandService extends Service {
             }
             return false;
         });
+
         islandView = pillView;
         expanded = false;
         try {
@@ -281,7 +493,7 @@ public class IslandService extends Service {
 
     private int clampY(int y) {
         int h = getResources().getDisplayMetrics().heightPixels;
-        return Math.max(0, Math.min(h - dp(160), y));
+        return Math.max(statusBarHeight() + dp(4), Math.min(h - dp(160), y));
     }
 
     private void showExpanded() {
@@ -302,7 +514,6 @@ public class IslandService extends Service {
         clp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         clp.topMargin = statusBarHeight() + dp(8);
         card.setLayoutParams(clp);
-        // Don't let taps on the card collapse it.
         card.setOnClickListener(v -> { });
         card.setOnLongClickListener(v -> {
             hideIsland();
@@ -366,7 +577,6 @@ public class IslandService extends Service {
         root.addView(card);
         params = baseParams(WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT);
-        // Expanded state needs touch: clear NOT_FOCUSABLE so the scrim eats taps.
         params.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;

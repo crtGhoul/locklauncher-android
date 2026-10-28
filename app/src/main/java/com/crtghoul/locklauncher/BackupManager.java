@@ -1,6 +1,7 @@
 package com.crtghoul.locklauncher;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
 import org.json.JSONArray;
@@ -14,15 +15,21 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * Offline JSON backup/restore via the Storage Access Framework.
- * One file holds all profiles, settings, and base64 custom icons.
- * Zero permissions, zero network.
+ * Offline JSON backup/restore v2 via the Storage Access Framework.
+ * One file holds all profiles, settings, web apps, icon pack selections,
+ * custom labels, hidden apps, and base64 custom icons.
+ * Zero permissions, zero network. Fully backward compatible with v1 backups.
  */
 public class BackupManager {
-    private static final int SCHEMA = 1;
+    private static final int SCHEMA_V1 = 1;
+    private static final int SCHEMA_V2 = 2;
 
     public static class ImportResult {
         public int slotsRestored;
@@ -32,7 +39,7 @@ public class BackupManager {
     public static boolean exportTo(Context ctx, OutputStream out) {
         try {
             JSONObject root = new JSONObject();
-            root.put("schema", SCHEMA);
+            root.put("schema", SCHEMA_V2);
             root.put("app", "com.crtghoul.locklauncher");
 
             JSONObject settings = new JSONObject();
@@ -50,6 +57,25 @@ public class BackupManager {
             settings.put("home_double_tap_lock", ShortcutStore.isDoubleTapLock(ctx));
             settings.put("home_monochrome_icons", ShortcutStore.isMonochromeIcons(ctx));
             settings.put("search_calculator", ShortcutStore.isSearchCalculator(ctx));
+
+            // Backup v2 extensions
+            settings.put("active_icon_pack", IconPackManager.getActiveIconPack(ctx));
+            settings.put("notification_badges_enabled", LockNotificationListenerService.isBadgesEnabled(ctx));
+
+            SharedPreferences drawerPrefs = ctx.getSharedPreferences("drawer_prefs", Context.MODE_PRIVATE);
+            Set<String> hidden = drawerPrefs.getStringSet("hidden_apps", new HashSet<>());
+            JSONArray hiddenArr = new JSONArray();
+            for (String h : hidden) hiddenArr.put(h);
+            settings.put("hidden_apps", hiddenArr);
+
+            JSONObject customLabels = new JSONObject();
+            for (Map.Entry<String, ?> entry : drawerPrefs.getAll().entrySet()) {
+                if (entry.getKey().startsWith("custom_label_") && entry.getValue() instanceof String) {
+                    customLabels.put(entry.getKey(), (String) entry.getValue());
+                }
+            }
+            settings.put("custom_labels", customLabels);
+
             root.put("settings", settings);
 
             JSONArray profiles = new JSONArray();
@@ -93,7 +119,8 @@ public class BackupManager {
         try {
             String json = readAll(in);
             JSONObject root = new JSONObject(json);
-            if (root.optInt("schema", 0) != SCHEMA) return null;
+            int schema = root.optInt("schema", 0);
+            if (schema < SCHEMA_V1 || schema > SCHEMA_V2) return null;
 
             JSONObject settings = root.optJSONObject("settings");
             if (settings != null) {
@@ -131,6 +158,38 @@ public class BackupManager {
                 if (settings.has("search_calculator")) {
                     ShortcutStore.setSearchCalculator(ctx, settings.optBoolean("search_calculator", true));
                 }
+
+                // V2 settings restore
+                if (settings.has("active_icon_pack")) {
+                    IconPackManager.setActiveIconPack(ctx, settings.optString("active_icon_pack", ""));
+                }
+                if (settings.has("notification_badges_enabled")) {
+                    LockNotificationListenerService.setBadgesEnabled(ctx, settings.optBoolean("notification_badges_enabled", true));
+                }
+
+                SharedPreferences drawerPrefs = ctx.getSharedPreferences("drawer_prefs", Context.MODE_PRIVATE);
+                SharedPreferences.Editor dEdit = drawerPrefs.edit();
+                if (settings.has("hidden_apps")) {
+                    JSONArray hiddenArr = settings.optJSONArray("hidden_apps");
+                    if (hiddenArr != null) {
+                        Set<String> hiddenSet = new HashSet<>();
+                        for (int i = 0; i < hiddenArr.length(); i++) {
+                            hiddenSet.add(hiddenArr.getString(i));
+                        }
+                        dEdit.putStringSet("hidden_apps", hiddenSet);
+                    }
+                }
+                if (settings.has("custom_labels")) {
+                    JSONObject clObj = settings.optJSONObject("custom_labels");
+                    if (clObj != null) {
+                        Iterator<String> it = clObj.keys();
+                        while (it.hasNext()) {
+                            String k = it.next();
+                            dEdit.putString(k, clObj.optString(k));
+                        }
+                    }
+                }
+                dEdit.apply();
             }
 
             PackageManager pm = ctx.getPackageManager();
@@ -162,7 +221,7 @@ public class BackupManager {
 
             JSONObject icons = root.optJSONObject("icons");
             if (icons != null) {
-                java.util.Iterator<String> keys = icons.keys();
+                Iterator<String> keys = icons.keys();
                 while (keys.hasNext()) {
                     String id = keys.next();
                     byte[] png = android.util.Base64.decode(
@@ -198,5 +257,4 @@ public class BackupManager {
         while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
         return new String(bos.toByteArray(), StandardCharsets.UTF_8);
     }
-
 }

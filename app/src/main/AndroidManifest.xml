@@ -10,8 +10,9 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
 
-    <!-- See every launchable app + shortcut-capable apps (no QUERY_ALL_PACKAGES needed) -->
+    <!-- See every launchable app + shortcut-capable apps + icon packs -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -19,6 +20,15 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.CREATE_SHORTCUT" />
+        </intent>
+        <intent>
+            <action android:name="org.adw.launcher.THEMES" />
+        </intent>
+        <intent>
+            <action android:name="com.novalauncher.THEME" />
+        </intent>
+        <intent>
+            <action android:name="com.teslacoilsw.launcher.THEME" />
         </intent>
     </queries>
 
@@ -201,6 +211,16 @@
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".LockNotificationListenerService"
+            android:exported="true"
+            android:label="Lock Launcher Badges"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
     </application>

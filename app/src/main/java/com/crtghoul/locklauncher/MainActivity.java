@@ -6,6 +6,7 @@ import android.app.AlertDialog;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
@@ -36,9 +37,11 @@ import android.widget.Toast;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Config screen: 3 dock profiles x 16 shortcuts (apps, web, call, SMS,
@@ -202,6 +205,36 @@ public class MainActivity extends Activity {
             });
         }
 
+        Switch notifBadgesSwitch = findViewById(R.id.switch_notification_badges);
+        if (notifBadgesSwitch != null) {
+            notifBadgesSwitch.setChecked(LockNotificationListenerService.isBadgesEnabled(this));
+            notifBadgesSwitch.setOnCheckedChangeListener((v, on) -> {
+                LockNotificationListenerService.setBadgesEnabled(this, on);
+                if (on && !LockNotificationListenerService.isPermissionGranted(this)) {
+                    new AlertDialog.Builder(this)
+                            .setTitle("Notification Badges")
+                            .setMessage("To calculate unread dots & badges offline, allow notification access in the next screen.")
+                            .setPositiveButton("Enable", (d, w) -> {
+                                try {
+                                    startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                                } catch (Exception ignored) {}
+                            })
+                            .setNegativeButton("Later", null)
+                            .show();
+                }
+            });
+        }
+
+        Button btnIconPack = findViewById(R.id.btn_icon_pack);
+        if (btnIconPack != null) {
+            btnIconPack.setOnClickListener(v -> showIconPackDialog());
+        }
+
+        Button btnHiddenApps = findViewById(R.id.btn_hidden_apps);
+        if (btnHiddenApps != null) {
+            btnHiddenApps.setOnClickListener(v -> showHiddenAppsDialog());
+        }
+
         SeekBar opacity = findViewById(R.id.seek_opacity);
         opacity.setMax(255);
         opacity.setProgress(ShortcutStore.glassOpacity(this));
@@ -230,6 +263,8 @@ public class MainActivity extends Activity {
             else if (id == R.id.btn_token_date) token = "{date}";
             else if (id == R.id.btn_token_time) token = "{time}";
             else if (id == R.id.btn_token_profile) token = "{profile}";
+            else if (id == R.id.btn_token_alarms) token = "{alarms}";
+            else if (id == R.id.btn_token_next) token = "{next}";
             int start = Math.max(memo.getSelectionStart(), 0);
             int end = Math.max(memo.getSelectionEnd(), 0);
             memo.getText().replace(Math.min(start, end), Math.max(start, end), token, 0, token.length());
@@ -240,6 +275,10 @@ public class MainActivity extends Activity {
         findViewById(R.id.btn_token_date).setOnClickListener(tokenListener);
         findViewById(R.id.btn_token_time).setOnClickListener(tokenListener);
         findViewById(R.id.btn_token_profile).setOnClickListener(tokenListener);
+        View btnAlarms = findViewById(R.id.btn_token_alarms);
+        if (btnAlarms != null) btnAlarms.setOnClickListener(tokenListener);
+        View btnNext = findViewById(R.id.btn_token_next);
+        if (btnNext != null) btnNext.setOnClickListener(tokenListener);
 
         View setHome = findViewById(R.id.btn_set_home);
         if (setHome != null) {
@@ -795,6 +834,81 @@ public class MainActivity extends Activity {
     }
 
     // ---------- dialogs ----------
+
+    private void showIconPackDialog() {
+        List<IconPackManager.IconPackInfo> packs = IconPackManager.getInstalledIconPacks(this);
+        List<String> names = new ArrayList<>();
+        List<String> pkgs = new ArrayList<>();
+
+        names.add("📱 Default System Icons");
+        pkgs.add(IconPackManager.PACK_SYSTEM_DEFAULT);
+
+        names.add("🎨 Material You / Monochrome");
+        pkgs.add(IconPackManager.PACK_MATERIAL_YOU);
+
+        for (IconPackManager.IconPackInfo p : packs) {
+            names.add("📦 " + p.label);
+            pkgs.add(p.packageName);
+        }
+
+        String current = IconPackManager.getActiveIconPack(this);
+        int selectedIdx = 0;
+        for (int i = 0; i < pkgs.size(); i++) {
+            if (pkgs.get(i).equals(current)) {
+                selectedIdx = i;
+                break;
+            }
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Select Icon Pack")
+                .setSingleChoiceItems(names.toArray(new String[0]), selectedIdx, (dialog, which) -> {
+                    String chosen = pkgs.get(which);
+                    IconPackManager.setActiveIconPack(this, chosen);
+                    toast("Applied " + names.get(which));
+                    dialog.dismiss();
+                    if (adapter != null) adapter.notifyDataSetChanged();
+                    DockService.refresh(this);
+                    IslandService.refresh(this);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showHiddenAppsDialog() {
+        SharedPreferences prefs = getSharedPreferences("drawer_prefs", MODE_PRIVATE);
+        Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
+        if (hidden.isEmpty()) {
+            toast("No apps are currently hidden");
+            return;
+        }
+
+        PackageManager pm = getPackageManager();
+        List<String> hiddenPkgs = new ArrayList<>(hidden);
+        List<String> labels = new ArrayList<>();
+        for (String pkg : hiddenPkgs) {
+            try {
+                labels.add(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString());
+            } catch (Exception e) {
+                labels.add(pkg);
+            }
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Hidden Apps (Tap to unhide)")
+                .setItems(labels.toArray(new String[0]), (dialog, which) -> {
+                    String pkg = hiddenPkgs.get(which);
+                    hidden.remove(pkg);
+                    prefs.edit().putStringSet("hidden_apps", hidden).apply();
+                    toast("Unhid " + labels.get(which));
+                })
+                .setPositiveButton("Close", null)
+                .setNeutralButton("Unhide All", (dialog, which) -> {
+                    prefs.edit().putStringSet("hidden_apps", new HashSet<>()).apply();
+                    toast("Unhid all apps");
+                })
+                .show();
+    }
 
     private void showUrlDialog() {
         String[] presetLabels = {

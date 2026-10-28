@@ -98,9 +98,14 @@ public class IconUtil {
                     }
                 }
                 try {
-                    PackageManager pm = ctx.getPackageManager();
-                    Drawable d = pm.getApplicationIcon(s.pkg);
-                    b = drawableToBitmap(d);
+                    Bitmap packIcon = IconPackManager.getIcon(ctx, s.pkg, null);
+                    if (packIcon != null) {
+                        b = packIcon;
+                    } else {
+                        PackageManager pm = ctx.getPackageManager();
+                        Drawable d = pm.getApplicationIcon(s.pkg);
+                        b = drawableToBitmap(d);
+                    }
                 } catch (Exception e) {
                     b = letterIcon("?", s.iconColor);
                 }
@@ -686,6 +691,15 @@ public class IconUtil {
         if (res.contains("{profile}")) {
             res = res.replace("{profile}",
                     ShortcutStore.profileName(ctx, ShortcutStore.activeProfile(ctx)));
+        }
+        if (res.contains("{alarms}")) {
+            AtAGlanceHelper.GlanceItem alarm = AtAGlanceHelper.getNextAlarm(ctx);
+            res = res.replace("{alarms}", alarm != null ? (alarm.icon + " " + alarm.title) : "No alarms");
+        }
+        if (res.contains("{next}")) {
+            AtAGlanceHelper.GlanceItem next = AtAGlanceHelper.getNextCalendarEvent(ctx);
+            if (next == null) next = AtAGlanceHelper.getNextAlarm(ctx);
+            res = res.replace("{next}", next != null ? (next.icon + " " + next.title) : "None");
         }
         return res;
     }
