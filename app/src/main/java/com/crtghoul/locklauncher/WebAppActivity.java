@@ -3,13 +3,16 @@ package com.crtghoul.locklauncher;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -19,6 +22,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.ByteArrayInputStream;
 
@@ -26,6 +31,7 @@ import java.io.ByteArrayInputStream;
  * Standalone Immersive Ad-Free Web App Container.
  * Features:
  * - 100% True Fullscreen: Supports HTML5 video/canvas/game onShowCustomView fullscreen.
+ * - Dedicated Floating ⛶ Fullscreen Toggle for instant distraction-free immersive mode.
  * - Zero Browser Chrome: No address bar, no search bar, no URL input.
  * - Airtight Ad & Tracker Blocking: Network request interceptor + continuous DOM ad-removal.
  * - 120Hz Hardware-Accelerated Rendering on LTPO Displays.
@@ -38,26 +44,28 @@ public class WebAppActivity extends Activity {
     private WebView webView;
     private ProgressBar progressBar;
     private FrameLayout fullscreenContainer;
+    private TextView btnToggleFullscreen;
     private View customView;
     private WebChromeClient.CustomViewCallback customViewCallback;
+    private boolean isImmersiveFullscreen = true;
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         DisplayHelper.enforceHighRefreshRate(this);
 
-        // Edge-to-edge transparent system bars
+        // Window edge-to-edge hardware acceleration
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
             getWindow().setStatusBarColor(0x00000000);
             getWindow().setNavigationBarColor(0x00000000);
         }
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
 
         setContentView(R.layout.activity_web_app);
+
+        // Apply true immersive fullscreen immediately
+        applyFullscreen(true);
 
         String url = getIntent().getStringExtra(EXTRA_URL);
         if (url == null && getIntent().getData() != null) {
@@ -87,6 +95,23 @@ public class WebAppActivity extends Activity {
         progressBar = findViewById(R.id.web_progress);
         webView = findViewById(R.id.web_view);
         fullscreenContainer = findViewById(R.id.fullscreen_custom_view_container);
+        btnToggleFullscreen = findViewById(R.id.btn_toggle_fullscreen);
+
+        if (btnToggleFullscreen != null) {
+            btnToggleFullscreen.setOnClickListener(v -> {
+                isImmersiveFullscreen = !isImmersiveFullscreen;
+                applyFullscreen(isImmersiveFullscreen);
+                btnToggleFullscreen.setText(isImmersiveFullscreen ? "⛶" : "🗗");
+                Toast.makeText(this, isImmersiveFullscreen ? "Immersive Fullscreen" : "Standard View", Toast.LENGTH_SHORT).show();
+            });
+
+            // Fade floating fullscreen button slightly after 4 seconds
+            handler.postDelayed(() -> {
+                if (btnToggleFullscreen != null) {
+                    btnToggleFullscreen.animate().alpha(0.35f).setDuration(500).start();
+                }
+            }, 4000);
+        }
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -134,13 +159,13 @@ public class WebAppActivity extends Activity {
                 customView = view;
                 customViewCallback = callback;
                 webView.setVisibility(View.GONE);
+                if (btnToggleFullscreen != null) btnToggleFullscreen.setVisibility(View.GONE);
                 fullscreenContainer.addView(view, new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT));
                 fullscreenContainer.setVisibility(View.VISIBLE);
 
-                // True sticky immersive fullscreen for video/game playback
-                setImmersiveMode(true);
+                applyFullscreen(true);
             }
 
             @Override
@@ -154,13 +179,25 @@ public class WebAppActivity extends Activity {
                     customViewCallback = null;
                 }
                 webView.setVisibility(View.VISIBLE);
+                if (btnToggleFullscreen != null) btnToggleFullscreen.setVisibility(View.VISIBLE);
 
-                // Restore standard edge-to-edge
-                setImmersiveMode(false);
+                applyFullscreen(isImmersiveFullscreen);
             }
         });
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (request != null && request.getUrl() != null) {
+                    String reqUrl = request.getUrl().toString();
+                    if (AdBlockEngine.isAdUrl(reqUrl)) {
+                        // Block ad redirect / popup url completely
+                        return true;
+                    }
+                }
+                return false;
+            }
+
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 if (request != null && request.getUrl() != null) {
@@ -190,20 +227,32 @@ public class WebAppActivity extends Activity {
         webView.loadUrl(url);
     }
 
-    private void setImmersiveMode(boolean immersive) {
-        if (immersive) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    | View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+    private void applyFullscreen(boolean hideBars) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                if (hideBars) {
+                    controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                } else {
+                    controller.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                }
+            }
         } else {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            if (hideBars) {
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            } else {
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            }
         }
     }
 
@@ -233,6 +282,7 @@ public class WebAppActivity extends Activity {
     protected void onResume() {
         super.onResume();
         DisplayHelper.enforceHighRefreshRate(this);
+        applyFullscreen(isImmersiveFullscreen);
         if (webView != null) webView.onResume();
     }
 

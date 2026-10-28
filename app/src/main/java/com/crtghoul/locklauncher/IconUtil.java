@@ -2,6 +2,7 @@ package com.crtghoul.locklauncher;
 
 import android.app.ActivityOptions;
 import android.app.PendingIntent;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.LauncherActivityInfo;
@@ -379,7 +380,7 @@ public class IconUtil {
                 return i;
             }
             if (Shortcut.TYPE_URL.equals(s.type)) {
-                return buildWebIntent(ctx, s.url);
+                return buildWebIntent(ctx, s.url, s.label);
             }
             return null;
         } catch (Exception e) {
@@ -395,6 +396,10 @@ public class IconUtil {
      *    and separate task card in Recents).
      */
     public static Intent buildWebIntent(Context ctx, String rawUrl) {
+        return buildWebIntent(ctx, rawUrl, "");
+    }
+
+    public static Intent buildWebIntent(Context ctx, String rawUrl, String title) {
         try {
             String url = rawUrl == null ? "" : rawUrl.trim();
             if (url.isEmpty()) return null;
@@ -411,33 +416,16 @@ public class IconUtil {
                 return intent;
             }
 
-            // Check if a dedicated non-browser app is installed that handles this URL
-            try {
-                PackageManager pm = ctx.getPackageManager();
-                Intent queryIntent = new Intent(Intent.ACTION_VIEW, uri);
-                queryIntent.addCategory(Intent.CATEGORY_BROWSABLE);
-                List<android.content.pm.ResolveInfo> handlers =
-                        pm.queryIntentActivities(queryIntent, PackageManager.MATCH_DEFAULT_ONLY);
-                if (handlers != null) {
-                    for (android.content.pm.ResolveInfo ri : handlers) {
-                        if (ri.activityInfo != null && ri.activityInfo.packageName != null) {
-                            String pkg = ri.activityInfo.packageName;
-                            if (!isGenericBrowser(pkg)) {
-                                Intent nativeApp = new Intent(Intent.ACTION_VIEW, uri);
-                                nativeApp.setPackage(pkg);
-                                nativeApp.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                return nativeApp;
-                            }
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-
-            // Standalone ad-free native-styled Web App container (independent task card in Recents)
+            // Standalone ad-free true fullscreen native Web App container
             Intent appWindow = new Intent(ctx, WebAppActivity.class);
+            appWindow.setAction("com.crtghoul.locklauncher.OPEN_WEB_APP");
             appWindow.putExtra(WebAppActivity.EXTRA_URL, url);
+            if (title != null && !title.isEmpty()) {
+                appWindow.putExtra(WebAppActivity.EXTRA_TITLE, title);
+            }
             appWindow.setData(uri);
+            appWindow.setComponent(new ComponentName(ctx, WebAppActivity.class));
+            appWindow.setPackage(ctx.getPackageName());
             appWindow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
             return appWindow;
         } catch (Exception e) {
@@ -451,7 +439,12 @@ public class IconUtil {
             try {
                 android.content.pm.ShortcutManager sm = ctx.getSystemService(android.content.pm.ShortcutManager.class);
                 if (sm != null && sm.isRequestPinShortcutSupported()) {
-                    Intent launch = launchIntent(ctx, s);
+                    Intent launch;
+                    if (Shortcut.TYPE_URL.equals(s.type)) {
+                        launch = buildWebIntent(ctx, s.url, s.label);
+                    } else {
+                        launch = launchIntent(ctx, s);
+                    }
                     if (launch == null) return false;
                     if (launch.getAction() == null) {
                         launch.setAction(Intent.ACTION_VIEW);
@@ -593,15 +586,11 @@ public class IconUtil {
                 }
                 return true;
             } catch (Exception e) {
-                // If opening with a specific package failed, fall back to generic browser view
-                if (Shortcut.TYPE_URL.equals(s.type)) {
-                    try {
-                        Intent fallback = new Intent(Intent.ACTION_VIEW, Uri.parse(s.url));
-                        fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        ctx.startActivity(fallback);
-                        return true;
-                    } catch (Exception ignored) {
-                    }
+                try {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(launch);
+                    return true;
+                } catch (Exception ignored) {
                 }
                 return false;
             }

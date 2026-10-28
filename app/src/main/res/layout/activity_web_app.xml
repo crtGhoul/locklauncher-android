@@ -7,9 +7,11 @@
     <WebView
         android:id="@+id/web_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:overScrollMode="never"
+        android:scrollbars="none" />
 
-    <!-- Fullscreen Video / Media / HTML5 Container -->
+    <!-- Fullscreen Video / HTML5 Custom View Container -->
     <FrameLayout
         android:id="@+id/fullscreen_custom_view_container"
         android:layout_width="match_parent"
@@ -17,7 +19,7 @@
         android:background="#000000"
         android:visibility="gone" />
 
-    <!-- Thin Top Progress Indicator -->
+    <!-- Thin Top Loading Progress Indicator -->
     <ProgressBar
         android:id="@+id/web_progress"
         style="?android:attr/progressBarStyleHorizontal"
@@ -28,5 +30,22 @@
         android:max="100"
         android:progressDrawable="@drawable/btn_accent"
         android:visibility="gone" />
+
+    <!-- Floating Minimalist Fullscreen Toggle Button (Auto-fades) -->
+    <TextView
+        android:id="@+id/btn_toggle_fullscreen"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/dock_card"
+        android:gravity="center"
+        android:text="⛶"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:alpha="0.8"
+        android:elevation="6dp" />
 
 </RelativeLayout>

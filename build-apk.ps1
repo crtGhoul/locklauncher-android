@@ -31,8 +31,8 @@ Write-Host "== aapt2 link =="
   --java $GEN `
   --min-sdk-version 28 `
   --target-sdk-version 34 `
-  --version-code 40 `
-  --version-name "1.70" `
+  --version-code 41 `
+  --version-name "1.75" `
   "$OUT\res.zip"
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
