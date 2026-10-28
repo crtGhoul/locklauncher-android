@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetHostView;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -20,6 +21,7 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.view.DragEvent;
 import android.view.GestureDetector;
 import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
@@ -186,7 +188,12 @@ public class HomeActivity extends Activity {
             if (position >= 0 && position < shortcuts.size()) {
                 Shortcut s = shortcuts.get(position);
                 if (s.isFolder()) {
-                    showFolderModal(s);
+                    Intent fi = IconUtil.launchIntent(this, s);
+                    if (fi != null) {
+                        startActivity(fi);
+                    } else {
+                        showFolderModal(s);
+                    }
                     return;
                 }
                 view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -562,7 +569,9 @@ public class HomeActivity extends Activity {
         int profile = ShortcutStore.activeProfile(this);
         List<Integer> widgetIds = ShortcutStore.homeWidgets(this, profile);
 
-        for (int wId : widgetIds) {
+        for (int i = 0; i < widgetIds.size(); i++) {
+            int wId = widgetIds.get(i);
+            final int widgetIndex = i;
             try {
                 AppWidgetProviderInfo info = appWidgetManager.getAppWidgetInfo(wId);
                 if (info != null) {
@@ -570,30 +579,94 @@ public class HomeActivity extends Activity {
                     hostView.setAppWidget(wId, info);
                     final int currentWidgetId = wId;
                     hostView.setOnLongClickListener(v -> {
-                        new AlertDialog.Builder(this)
-                                .setTitle("Widget")
-                                .setMessage("Remove this widget from the home screen?")
-                                .setPositiveButton("Remove", (d, w) -> {
-                                    ShortcutStore.removeHomeWidget(this, profile, currentWidgetId);
-                                    try {
-                                        appWidgetHost.deleteAppWidgetId(currentWidgetId);
-                                    } catch (Exception ignored) {
-                                    }
+                        v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                        List<String> wOpts = new ArrayList<>();
+                        List<Runnable> wActs = new ArrayList<>();
+
+                        if (widgetIndex > 0) {
+                            wOpts.add("⬆️ Move Widget Up");
+                            wActs.add(() -> {
+                                List<Integer> cur = ShortcutStore.homeWidgets(this, profile);
+                                if (widgetIndex < cur.size()) {
+                                    int item = cur.remove(widgetIndex);
+                                    cur.add(widgetIndex - 1, item);
+                                    ShortcutStore.setHomeWidgets(this, profile, cur);
                                     loadWidgets();
-                                })
-                                .setNegativeButton("Cancel", null)
+                                    Toast.makeText(this, "Moved widget up", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+                        if (widgetIndex < widgetIds.size() - 1) {
+                            wOpts.add("⬇️ Move Widget Down");
+                            wActs.add(() -> {
+                                List<Integer> cur = ShortcutStore.homeWidgets(this, profile);
+                                if (widgetIndex < cur.size()) {
+                                    int item = cur.remove(widgetIndex);
+                                    cur.add(widgetIndex + 1, item);
+                                    ShortcutStore.setHomeWidgets(this, profile, cur);
+                                    loadWidgets();
+                                    Toast.makeText(this, "Moved widget down", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }
+
+                        wOpts.add("📐 Resize Widget Height");
+                        wActs.add(() -> showResizeWidgetDialog(currentWidgetId));
+
+                        wOpts.add("➕ Add Another Widget");
+                        wActs.add(this::selectWidget);
+
+                        wOpts.add("🗑️ Remove Widget");
+                        wActs.add(() -> {
+                            ShortcutStore.removeHomeWidget(this, profile, currentWidgetId);
+                            try {
+                                appWidgetHost.deleteAppWidgetId(currentWidgetId);
+                            } catch (Exception ignored) {
+                            }
+                            loadWidgets();
+                            Toast.makeText(this, "Widget removed", Toast.LENGTH_SHORT).show();
+                        });
+
+                        new AlertDialog.Builder(this)
+                                .setTitle(info.label != null ? info.label : "Widget Controls")
+                                .setItems(wOpts.toArray(new String[0]), (d, which) -> wActs.get(which).run())
                                 .show();
                         return true;
                     });
 
+                    int customHeight = ShortcutStore.widgetHeight(this, wId);
+                    int heightPx = customHeight == -2
+                            ? ViewGroup.LayoutParams.WRAP_CONTENT
+                            : (int) (getResources().getDisplayMetrics().density * customHeight);
+
                     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                            ViewGroup.LayoutParams.MATCH_PARENT, heightPx);
                     lp.bottomMargin = (int) (getResources().getDisplayMetrics().density * 10);
                     widgetsContainer.addView(hostView, lp);
                 }
             } catch (Exception ignored) {
             }
         }
+    }
+
+    private void showResizeWidgetDialog(int widgetId) {
+        String[] heights = {
+                "Wrap Content (Auto)",
+                "Compact (85 dp)",
+                "Standard (140 dp)",
+                "Medium (200 dp)",
+                "Expanded (280 dp)",
+                "Full Height (360 dp)"
+        };
+        int[] values = {-2, 85, 140, 200, 280, 360};
+        new AlertDialog.Builder(this)
+                .setTitle("Resize Widget Height")
+                .setItems(heights, (d, which) -> {
+                    ShortcutStore.setWidgetHeight(this, widgetId, values[which]);
+                    loadWidgets();
+                    Toast.makeText(this, "Widget resized to " + heights[which], Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
     // ---- Folders ----
@@ -758,9 +831,71 @@ public class HomeActivity extends Activity {
         List<String> options = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
 
+        // Moving & slot reordering (Always at top for instant access)
+        if (position > 0) {
+            options.add("⬅️ Move Left (to slot " + position + ")");
+            actions.add(() -> {
+                Shortcut moved = shortcuts.remove(position);
+                shortcuts.add(position - 1, moved);
+                ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                loadShortcuts();
+                BaseDockWidget.refreshAll(this);
+                DockService.refresh(this);
+                Toast.makeText(this, "Moved to slot " + position, Toast.LENGTH_SHORT).show();
+            });
+        }
+        if (position < shortcuts.size() - 1) {
+            options.add("➡️ Move Right (to slot " + (position + 2) + ")");
+            actions.add(() -> {
+                Shortcut moved = shortcuts.remove(position);
+                shortcuts.add(position + 1, moved);
+                ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                loadShortcuts();
+                BaseDockWidget.refreshAll(this);
+                DockService.refresh(this);
+                Toast.makeText(this, "Moved to slot " + (position + 2), Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        options.add("🔀 Pick Slot to Move (1 - " + shortcuts.size() + ")");
+        actions.add(() -> {
+            String[] slotNames = new String[shortcuts.size()];
+            for (int i = 0; i < shortcuts.size(); i++) {
+                slotNames[i] = "Slot " + (i + 1) + ": " + shortcuts.get(i).label;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Move " + s.label + " to which slot?")
+                    .setItems(slotNames, (d, targetIdx) -> {
+                        if (targetIdx != position) {
+                            Shortcut moved = shortcuts.remove(position);
+                            shortcuts.add(targetIdx, moved);
+                            ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            Toast.makeText(this, "Moved to slot " + (targetIdx + 1), Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .show();
+        });
+
+        options.add("✥ Drag & Drop to any Slot / Folder");
+        actions.add(() -> {
+            View itemView = gridView.getChildAt(position - gridView.getFirstVisiblePosition());
+            if (itemView != null) {
+                ClipData data = ClipData.newPlainText("pos", String.valueOf(position));
+                View.DragShadowBuilder shadow = new View.DragShadowBuilder(itemView);
+                itemView.startDragAndDrop(data, shadow, itemView, View.DRAG_FLAG_OPAQUE);
+                Toast.makeText(this, "Drag and drop onto any slot or folder", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         if (s.isFolder()) {
             options.add("📂 Open folder");
-            actions.add(() -> showFolderModal(s));
+            actions.add(() -> {
+                Intent fi = IconUtil.launchIntent(this, s);
+                if (fi != null) startActivity(fi); else showFolderModal(s);
+            });
 
             options.add("✏️ Rename folder");
             actions.add(() -> {
@@ -775,6 +910,8 @@ public class HomeActivity extends Activity {
                                 s.label = n;
                                 ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
                                 loadShortcuts();
+                                BaseDockWidget.refreshAll(this);
+                                DockService.refresh(this);
                             }
                         })
                         .setNegativeButton("Cancel", null)
@@ -799,6 +936,8 @@ public class HomeActivity extends Activity {
                                 s.label = newName;
                                 ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
                                 loadShortcuts();
+                                BaseDockWidget.refreshAll(this);
+                                DockService.refresh(this);
                                 Toast.makeText(this, "Renamed to " + newName, Toast.LENGTH_SHORT).show();
                             }
                         })
@@ -846,25 +985,7 @@ public class HomeActivity extends Activity {
                 }
             }
 
-            options.add("🔀 Reorder / Move Slot");
-            actions.add(() -> {
-                String[] slotNames = new String[shortcuts.size()];
-                for (int i = 0; i < shortcuts.size(); i++) {
-                    slotNames[i] = "Slot " + (i + 1) + ": " + shortcuts.get(i).label;
-                }
-                new AlertDialog.Builder(this)
-                        .setTitle("Swap with which slot?")
-                        .setItems(slotNames, (d, targetIdx) -> {
-                            if (targetIdx != position) {
-                                Shortcut moved = shortcuts.remove(position);
-                                shortcuts.add(targetIdx, moved);
-                                ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
-                                loadShortcuts();
-                                Toast.makeText(this, "Moved to slot " + (targetIdx + 1), Toast.LENGTH_SHORT).show();
-                            }
-                        })
-                        .show();
-            });
+
 
             options.add("📌 Pin to Home screen (Main Page)");
             actions.add(() -> {
@@ -1080,6 +1201,55 @@ public class HomeActivity extends Activity {
                     badge.setVisibility(View.GONE);
                 }
             }
+
+            final int itemPos = pos;
+            v.setTag(itemPos);
+            v.setOnDragListener((targetView, event) -> {
+                switch (event.getAction()) {
+                    case DragEvent.ACTION_DRAG_STARTED:
+                        return true;
+                    case DragEvent.ACTION_DRAG_ENTERED:
+                        targetView.animate().scaleX(1.15f).scaleY(1.15f).setDuration(100).start();
+                        return true;
+                    case DragEvent.ACTION_DRAG_EXITED:
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        return true;
+                    case DragEvent.ACTION_DROP:
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        int sourcePos = -1;
+                        try {
+                            ClipData cd = event.getClipData();
+                            if (cd != null && cd.getItemCount() > 0) {
+                                sourcePos = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                            }
+                        } catch (Exception ignored) {}
+                        if (sourcePos >= 0 && sourcePos < shortcuts.size() && itemPos >= 0 && itemPos < shortcuts.size() && sourcePos != itemPos) {
+                            targetView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                            Shortcut source = shortcuts.get(sourcePos);
+                            Shortcut target = shortcuts.get(itemPos);
+                            if (target.isFolder() && !source.isFolder()) {
+                                if (target.folderItems == null) target.folderItems = new ArrayList<>();
+                                target.folderItems.add(source);
+                                shortcuts.remove(sourcePos);
+                                Toast.makeText(HomeActivity.this, "Added " + source.label + " to " + target.label, Toast.LENGTH_SHORT).show();
+                            } else {
+                                Shortcut moved = shortcuts.remove(sourcePos);
+                                shortcuts.add(itemPos, moved);
+                                Toast.makeText(HomeActivity.this, "Moved " + moved.label + " to slot " + (itemPos + 1), Toast.LENGTH_SHORT).show();
+                            }
+                            ShortcutStore.save(HomeActivity.this, ShortcutStore.activeProfile(HomeActivity.this), shortcuts);
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(HomeActivity.this);
+                            DockService.refresh(HomeActivity.this);
+                        }
+                        return true;
+                    case DragEvent.ACTION_DRAG_ENDED:
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        return true;
+                }
+                return true;
+            });
+
             return v;
         }
     }

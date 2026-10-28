@@ -382,6 +382,17 @@ public class IconUtil {
             if (Shortcut.TYPE_URL.equals(s.type)) {
                 return buildWebIntent(ctx, s.url, s.label);
             }
+            if (s.isFolder()) {
+                Intent fi = new Intent(ctx, FolderActivity.class);
+                fi.setAction("com.crtghoul.locklauncher.OPEN_FOLDER");
+                fi.putExtra(FolderActivity.EXTRA_FOLDER_ID, s.id);
+                fi.putExtra(FolderActivity.EXTRA_FOLDER_NAME, s.label);
+                fi.putExtra(FolderActivity.EXTRA_PROFILE, ShortcutStore.activeProfile(ctx));
+                fi.setComponent(new ComponentName(ctx, FolderActivity.class));
+                fi.setPackage(ctx.getPackageName());
+                fi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                return fi;
+            }
             return null;
         } catch (Exception e) {
             return null;
@@ -545,7 +556,16 @@ public class IconUtil {
             }
 
             if (s.isFolder()) {
-                return false; // Folders are handled by opening dialog in HomeActivity
+                Intent fi = launchIntent(ctx, s);
+                if (fi != null) {
+                    if (opts != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                        ctx.startActivity(fi, opts);
+                    } else {
+                        ctx.startActivity(fi);
+                    }
+                    return true;
+                }
+                return false;
             }
             if (s.isApp() && s.profileSerial > 0) {
                 try {

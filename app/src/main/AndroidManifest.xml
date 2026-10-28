@@ -92,6 +92,18 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".FolderActivity"
+            android:exported="true"
+            android:hardwareAccelerated="true"
+            android:theme="@style/Theme.LockLauncher.Drawer"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="com.crtghoul.locklauncher.OPEN_FOLDER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".DockService"
             android:exported="false"

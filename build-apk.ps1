@@ -31,8 +31,8 @@ Write-Host "== aapt2 link =="
   --java $GEN `
   --min-sdk-version 28 `
   --target-sdk-version 34 `
-  --version-code 41 `
-  --version-name "1.75" `
+  --version-code 42 `
+  --version-name "1.80" `
   "$OUT\res.zip"
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
@@ -49,8 +49,9 @@ $sourcesFile = "$OUT\sources.txt"
 if ($LASTEXITCODE -ne 0) { throw "javac failed" }
 
 Write-Host "== d8 =="
-$classFiles = (Get-ChildItem -Path $CLS -Filter "*.class" -Recurse | Select-Object -ExpandProperty FullName)
-& "$BT\d8.bat" --lib $PLATFORM --min-api 28 --output $DEX $classFiles
+& "$JAVA_BIN\jar.exe" cf "$OUT\classes.jar" -C $CLS .
+if ($LASTEXITCODE -ne 0) { throw "jar cf failed" }
+& "$BT\d8.bat" --lib $PLATFORM --min-api 28 --output $DEX "$OUT\classes.jar"
 if ($LASTEXITCODE -ne 0) { throw "d8 failed" }
 
 Write-Host "== add classes.dex =="

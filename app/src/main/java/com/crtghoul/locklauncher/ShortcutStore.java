@@ -33,6 +33,7 @@ public class ShortcutStore {
     private static final String KEY_DOUBLE_TAP_LOCK = "home_double_tap_lock";
     private static final String KEY_MONOCHROME_ICONS = "home_monochrome_icons";
     private static final String KEY_SEARCH_CALCULATOR = "search_calculator";
+    private static final String KEY_WIDGET_HEIGHT = "widget_h_";
     public static final int MAX = 16;
     public static final int PROFILES = 3;
 
@@ -252,6 +253,14 @@ public class ShortcutStore {
         if (current.remove(Integer.valueOf(widgetId))) {
             setHomeWidgets(ctx, profile, current);
         }
+    }
+
+    public static int widgetHeight(Context ctx, int widgetId) {
+        return prefs(ctx).getInt(KEY_WIDGET_HEIGHT + widgetId, -2); // -2 is ViewGroup.LayoutParams.WRAP_CONTENT
+    }
+
+    public static void setWidgetHeight(Context ctx, int widgetId, int heightDp) {
+        prefs(ctx).edit().putInt(KEY_WIDGET_HEIGHT + widgetId, heightDp).apply();
     }
 
     public static boolean isDoubleTapLock(Context ctx) {
