@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <ImageView
+        android:id="@+id/card_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/dock_card"
+        android:scaleType="fitXY" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="6dp">
+            <LinearLayout android:id="@+id/slot0" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" android:gravity="center">
+                <ImageView android:id="@+id/slot0_icon" android:layout_width="62dp" android:layout_height="62dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot0_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

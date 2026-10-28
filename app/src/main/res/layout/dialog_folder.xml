@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/dock_card"
+    android:padding="20dp">
+
+    <!-- Folder Header -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="14dp">
+
+        <TextView
+            android:id="@+id/folder_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:text="Folder"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:fontFamily="sans-serif-medium" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_folder_rename"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/btn_ghost"
+                android:text="✏️"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:layout_marginEnd="6dp" />
+
+            <Button
+                android:id="@+id/btn_folder_add_app"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:background="@drawable/btn_accent"
+                android:text="+ Add"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- Folder Apps Grid -->
+    <GridView
+        android:id="@+id/folder_grid"
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        android:numColumns="4"
+        android:verticalSpacing="12dp"
+        android:horizontalSpacing="4dp"
+        android:gravity="center" />
+
+    <TextView
+        android:id="@+id/folder_empty_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="Folder is empty.\nTap '+ Add' to put apps inside!"
+        android:textColor="#9AA0B4"
+        android:textSize="14sp"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/btn_folder_close"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/btn_ghost"
+        android:text="Done"
+        android:textColor="#FFFFFF" />
+
+</LinearLayout>

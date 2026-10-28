@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <EditText
+        android:id="@+id/url_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Name (e.g. GitHub, optional)"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#8AFFFFFF"
+        android:inputType="textCapWords"
+        android:layout_marginBottom="12dp" />
+
+    <EditText
+        android:id="@+id/url_value"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="https://example.com"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#8AFFFFFF"
+        android:inputType="textUri"
+        android:layout_marginBottom="12dp" />
+
+    <CheckBox
+        android:id="@+id/chk_pin_home"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Pin to Home screen (Main Page)"
+        android:textColor="#FFFFFF"
+        android:checked="true"
+        android:buttonTint="#7C5CFF"
+        android:textSize="14sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Opens in standalone app window with its own card in Recents"
+        android:textColor="#8AFFFFFF"
+        android:textSize="11sp"
+        android:paddingStart="4dp"
+        android:paddingTop="2dp" />
+</LinearLayout>

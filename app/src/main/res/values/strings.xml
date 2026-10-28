@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lock Launcher</string>
+    <string name="widget_1x1">Lock Launcher 1x1</string>
+    <string name="widget_2x1">Lock Launcher 2x1</string>
+    <string name="widget_4x1">Lock Launcher 4x1</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <ImageView
+        android:id="@+id/card_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/dock_card"
+        android:scaleType="fitXY" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="2">
+            <LinearLayout android:id="@+id/slot0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot0_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot0_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot1_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot1_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/home_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <!-- Top Launcher Header (Clock, Date, Battery, Profile & Settings) -->
+    <LinearLayout
+        android:id="@+id/header_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="28dp"
+        android:paddingBottom="12dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_alignParentStart="true">
+
+                <TextView
+                    android:id="@+id/home_clock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="44sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:shadowColor="#AA000000"
+                    android:shadowDx="2"
+                    android:shadowDy="2"
+                    android:shadowRadius="4" />
+
+                <TextView
+                    android:id="@+id/home_date_battery"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#DDEEFA"
+                    android:textSize="14sp"
+                    android:shadowColor="#AA000000"
+                    android:shadowDx="1"
+                    android:shadowDy="1"
+                    android:shadowRadius="3" />
+            </LinearLayout>
+
+            <!-- ⚙️ Launcher Settings Gear Button -->
+            <Button
+                android:id="@+id/btn_home_settings"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:background="@drawable/btn_ghost"
+                android:text="⚙️"
+                android:textSize="18sp"
+                android:textColor="#FFFFFF" />
+        </RelativeLayout>
+
+        <!-- Profile Tabs -->
+        <LinearLayout
+            android:id="@+id/home_tabs_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="12dp">
+
+            <Button android:id="@+id/home_tab_p0" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@drawable/btn_accent" android:text="Default" android:textSize="11sp" android:textColor="#FFFFFF" />
+            <Button android:id="@+id/home_tab_p1" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Profile 2" android:textSize="11sp" android:textColor="#FFFFFF" />
+            <Button android:id="@+id/home_tab_p2" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="3dp" android:background="@drawable/btn_ghost" android:text="Profile 3" android:textSize="11sp" android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bottom Action Bar (App Drawer Search & Add Web App) -->
+    <LinearLayout
+        android:id="@+id/bottom_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="24dp">
+
+        <!-- Search Bar: Tap to open Searchable App Drawer -->
+        <LinearLayout
+            android:id="@+id/home_search_bar"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/search_bar"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔍"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/home_search_hint"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="12dp"
+                android:text="Search apps &amp; websites..."
+                android:textColor="#BBFFFFFF"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btn_quick_add_web"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/btn_accent"
+                android:text="🌐 + Web App"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Live Widgets Container (AppWidgetHost) -->
+    <LinearLayout
+        android:id="@+id/home_widgets_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/header_container"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="6dp" />
+
+    <!-- Center Shortcuts Grid -->
+    <GridView
+        android:id="@+id/home_grid"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/home_widgets_container"
+        android:layout_above="@id/bottom_bar"
+        android:numColumns="4"
+        android:verticalSpacing="12dp"
+        android:horizontalSpacing="4dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:clipToPadding="false"
+        android:gravity="center" />
+
+    <!-- Empty State Hint -->
+    <TextView
+        android:id="@+id/home_empty_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:text="No shortcuts in this profile yet.\nTap '🌐 + Web App' below or ⚙️ Settings to add apps!"
+        android:textColor="#CCFFFFFF"
+        android:textSize="14sp"
+        android:padding="20dp"
+        android:background="@drawable/dock_card"
+        android:visibility="gone" />
+
+</RelativeLayout>

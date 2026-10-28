@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <ImageView
+        android:id="@+id/card_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/dock_card"
+        android:scaleType="fitXY" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="LOCK LAUNCHER"
+            android:textColor="#8AFFFFFF"
+            android:textSize="11sp"
+            android:letterSpacing="0.2"
+            android:gravity="center"
+            android:paddingBottom="6dp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="4">
+            <LinearLayout android:id="@+id/slot0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot0_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot0_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot1_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot1_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot2_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot2_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot3_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot3_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="4">
+            <LinearLayout android:id="@+id/slot4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot4_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot4_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot5_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot5_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot6_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot6_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot7_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot7_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="4">
+            <LinearLayout android:id="@+id/slot8" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot8_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot8_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot9" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot9_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot9_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot10" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot10_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot10_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot11" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot11_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot11_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="4">
+            <LinearLayout android:id="@+id/slot12" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot12_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot12_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot13" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot13_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot13_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot14" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot14_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot14_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/slot15" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="6dp">
+                <ImageView android:id="@+id/slot15_icon" android:layout_width="50dp" android:layout_height="50dp" android:scaleType="fitCenter" />
+                <TextView android:id="@+id/slot15_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:textColor="#D8FFFFFF" android:textSize="10sp" android:maxLines="1" android:ellipsize="end" android:paddingTop="2dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

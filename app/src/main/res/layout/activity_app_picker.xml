@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#101223"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/search"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Search apps, websites, YouTube..."
+        android:textColorHint="#9AA0B4"
+        android:textColor="#FFFFFF"
+        android:inputType="text" />
+
+    <!-- Scrollable Category Chips -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:id="@+id/category_chips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button android:id="@+id/chip_all" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_accent" android:text="All Apps" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_clones" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="Cloned Apps" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_ai" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="✨ AI &amp; Agents" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_media" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="🎬 Media" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_tools" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="🛠️ Tools" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_social" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="💬 Social" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_system" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="⚙️ System" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- Live Search External Actions (Google, YouTube, Play Store, Web) -->
+    <HorizontalScrollView
+        android:id="@+id/scroll_search_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingTop="2dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button android:id="@+id/btn_search_google" android:layout_width="wrap_content" android:layout_height="34dp" android:background="@drawable/btn_ghost" android:text="🔍 Google" android:textSize="11sp" android:textColor="#FFFFFF" android:layout_marginEnd="6dp" android:paddingStart="12dp" android:paddingEnd="12dp" />
+            <Button android:id="@+id/btn_search_youtube" android:layout_width="wrap_content" android:layout_height="34dp" android:background="@drawable/btn_ghost" android:text="▶️ YouTube" android:textSize="11sp" android:textColor="#FFFFFF" android:layout_marginEnd="6dp" android:paddingStart="12dp" android:paddingEnd="12dp" />
+            <Button android:id="@+id/btn_search_play" android:layout_width="wrap_content" android:layout_height="34dp" android:background="@drawable/btn_ghost" android:text="🛍️ Play Store" android:textSize="11sp" android:textColor="#FFFFFF" android:layout_marginEnd="6dp" android:paddingStart="12dp" android:paddingEnd="12dp" />
+            <Button android:id="@+id/btn_search_web" android:layout_width="wrap_content" android:layout_height="34dp" android:background="@drawable/btn_accent" android:text="🌐 Open Web App" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <ListView
+        android:id="@+id/app_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:divider="@null"
+        android:dividerHeight="8dp" />
+
+    <Button
+        android:id="@+id/btn_add_selected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/btn_accent"
+        android:text="Add selected (0)"
+        android:textColor="#FFFFFF" />
+</LinearLayout>
