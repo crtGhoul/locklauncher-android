@@ -174,6 +174,34 @@ public class MainActivity extends Activity {
             });
         }
 
+        Switch doubleTapLockSwitch = findViewById(R.id.switch_double_tap_lock);
+        if (doubleTapLockSwitch != null) {
+            doubleTapLockSwitch.setChecked(ShortcutStore.isDoubleTapLock(this));
+            doubleTapLockSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setDoubleTapLock(this, on);
+                if (on && !LockScreenService.isServiceRunning()) {
+                    LockScreenService.requestAccessibilityPermission(this);
+                }
+            });
+        }
+
+        Switch monochromeIconsSwitch = findViewById(R.id.switch_monochrome_icons);
+        if (monochromeIconsSwitch != null) {
+            monochromeIconsSwitch.setChecked(ShortcutStore.isMonochromeIcons(this));
+            monochromeIconsSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setMonochromeIcons(this, on);
+                Toast.makeText(this, on ? "Monochrome mode enabled" : "Full color mode enabled", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        Switch searchCalculatorSwitch = findViewById(R.id.switch_search_calculator);
+        if (searchCalculatorSwitch != null) {
+            searchCalculatorSwitch.setChecked(ShortcutStore.isSearchCalculator(this));
+            searchCalculatorSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setSearchCalculator(this, on);
+            });
+        }
+
         SeekBar opacity = findViewById(R.id.seek_opacity);
         opacity.setMax(255);
         opacity.setProgress(ShortcutStore.glassOpacity(this));

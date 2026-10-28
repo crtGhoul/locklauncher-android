@@ -30,6 +30,9 @@ public class ShortcutStore {
     private static final String KEY_HOME_COLUMNS = "home_grid_columns";
     private static final String KEY_HOME_HIDE_LABELS = "home_hide_labels";
     private static final String KEY_HOME_WIDGETS = "home_widgets_p";
+    private static final String KEY_DOUBLE_TAP_LOCK = "home_double_tap_lock";
+    private static final String KEY_MONOCHROME_ICONS = "home_monochrome_icons";
+    private static final String KEY_SEARCH_CALCULATOR = "search_calculator";
     public static final int MAX = 16;
     public static final int PROFILES = 3;
 
@@ -249,6 +252,30 @@ public class ShortcutStore {
         if (current.remove(Integer.valueOf(widgetId))) {
             setHomeWidgets(ctx, profile, current);
         }
+    }
+
+    public static boolean isDoubleTapLock(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_DOUBLE_TAP_LOCK, false);
+    }
+
+    public static void setDoubleTapLock(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean(KEY_DOUBLE_TAP_LOCK, enabled).apply();
+    }
+
+    public static boolean isMonochromeIcons(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_MONOCHROME_ICONS, false);
+    }
+
+    public static void setMonochromeIcons(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean(KEY_MONOCHROME_ICONS, enabled).apply();
+    }
+
+    public static boolean isSearchCalculator(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_SEARCH_CALCULATOR, true);
+    }
+
+    public static void setSearchCalculator(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean(KEY_SEARCH_CALCULATOR, enabled).apply();
     }
 
     private static SharedPreferences prefs(Context ctx) {

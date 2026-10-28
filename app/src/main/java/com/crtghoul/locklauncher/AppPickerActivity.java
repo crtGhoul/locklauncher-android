@@ -2,6 +2,8 @@ package com.crtghoul.locklauncher;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -20,13 +22,17 @@ import android.os.UserManager;
 import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -59,6 +65,11 @@ public class AppPickerActivity extends Activity {
     private Button btnGoogle, btnYoutube, btnPlay, btnWeb;
     private Button chipAll, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem;
     private String currentCategory = "all";
+
+    // Powerhouse Calculator & Quick Settings
+    private View cardCalculator, cardQuickSetting;
+    private TextView textCalcExpr, textCalcResult, textSettingIcon, textSettingTitle;
+    private Button btnCalcCopy;
 
     static class AppEntry {
         String pkg, label;
@@ -157,6 +168,17 @@ public class AppPickerActivity extends Activity {
         chipTools = findViewById(R.id.chip_tools);
         chipSocial = findViewById(R.id.chip_social);
         chipSystem = findViewById(R.id.chip_system);
+
+        cardCalculator = findViewById(R.id.card_calculator);
+        textCalcExpr = findViewById(R.id.text_calc_expr);
+        textCalcResult = findViewById(R.id.text_calc_result);
+        btnCalcCopy = findViewById(R.id.btn_calc_copy);
+
+        cardQuickSetting = findViewById(R.id.card_quick_setting);
+        textSettingIcon = findViewById(R.id.text_setting_icon);
+        textSettingTitle = findViewById(R.id.text_setting_title);
+
+        setupAlphabetScrubber();
 
         // Count how many clones we found
         int cloneCount = 0;
@@ -292,6 +314,44 @@ public class AppPickerActivity extends Activity {
                 adapter.filterQuery = query;
                 adapter.applyFilter();
 
+                // 1. Live Math Calculation
+                if (ShortcutStore.isSearchCalculator(AppPickerActivity.this)) {
+                    MathEvaluator.Result calc = MathEvaluator.evaluate(query);
+                    if (calc.isValid) {
+                        cardCalculator.setVisibility(View.VISIBLE);
+                        textCalcExpr.setText(query);
+                        textCalcResult.setText("= " + calc.formatted);
+                        btnCalcCopy.setOnClickListener(v -> {
+                            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                            if (cm != null) {
+                                cm.setPrimaryClip(ClipData.newPlainText("Result", calc.formatted));
+                                Toast.makeText(AppPickerActivity.this, "Copied " + calc.formatted, Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    } else {
+                        cardCalculator.setVisibility(View.GONE);
+                    }
+                } else {
+                    cardCalculator.setVisibility(View.GONE);
+                }
+
+                // 2. Quick Device Settings Match
+                QuickSettingsHelper.SettingMatch settingMatch = QuickSettingsHelper.matchSetting(AppPickerActivity.this, query);
+                if (settingMatch != null) {
+                    cardQuickSetting.setVisibility(View.VISIBLE);
+                    textSettingIcon.setText(settingMatch.icon);
+                    textSettingTitle.setText(settingMatch.title);
+                    cardQuickSetting.setOnClickListener(v -> {
+                        try {
+                            startActivity(settingMatch.intent);
+                        } catch (Exception e) {
+                            Toast.makeText(AppPickerActivity.this, "Setting not supported on this device", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } else {
+                    cardQuickSetting.setVisibility(View.GONE);
+                }
+
                 if (query.isEmpty()) {
                     if (scrollSearchActions != null) scrollSearchActions.setVisibility(View.GONE);
                 } else {
@@ -299,6 +359,13 @@ public class AppPickerActivity extends Activity {
                     btnGoogle.setText("🔍 Google \"" + query + "\"");
                     btnYoutube.setText("▶️ YouTube \"" + query + "\"");
                     btnPlay.setText("🛍️ Play Store \"" + query + "\"");
+
+                    // Direct domain detection
+                    if (query.contains(".") && !query.contains(" ") && (query.endsWith(".com") || query.endsWith(".org") || query.endsWith(".net") || query.endsWith(".io") || query.endsWith(".ai") || query.endsWith(".app") || query.endsWith(".dev") || query.startsWith("http://") || query.startsWith("https://"))) {
+                        btnWeb.setText("🌐 Open " + query);
+                    } else {
+                        btnWeb.setText("🌐 Open Web App");
+                    }
 
                     btnGoogle.setOnClickListener(v -> {
                         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(query)));
@@ -356,6 +423,56 @@ public class AppPickerActivity extends Activity {
             return "system";
         }
         return "tools";
+    }
+
+    private void setupAlphabetScrubber() {
+        LinearLayout scrubber = findViewById(R.id.alphabet_scrubber);
+        TextView bubble = findViewById(R.id.scrubber_bubble);
+        ListView list = findViewById(R.id.app_list);
+        if (scrubber == null || bubble == null || list == null) return;
+        scrubber.removeAllViews();
+
+        String[] alphabet = {"#", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
+        for (String letter : alphabet) {
+            TextView tv = new TextView(this);
+            tv.setText(letter);
+            tv.setTextSize(9f);
+            tv.setTextColor(0xAAFFFFFF);
+            tv.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
+            tv.setLayoutParams(lp);
+            scrubber.addView(tv);
+        }
+
+        scrubber.setOnTouchListener((v, event) -> {
+            float y = event.getY();
+            float height = v.getHeight();
+            if (height <= 0) return true;
+            int index = (int) ((y / height) * alphabet.length);
+            index = Math.max(0, Math.min(alphabet.length - 1, index));
+            String targetLetter = alphabet[index];
+
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_MOVE:
+                    bubble.setVisibility(View.VISIBLE);
+                    bubble.setText(targetLetter);
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    if (adapter != null) {
+                        int targetPos = adapter.findPositionForLetter(targetLetter);
+                        if (targetPos >= 0) {
+                            list.setSelection(targetPos);
+                        }
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    bubble.setVisibility(View.GONE);
+                    return true;
+            }
+            return true;
+        });
     }
 
     private void updateCategoryChipStyles() {
@@ -468,6 +585,29 @@ public class AppPickerActivity extends Activity {
             }
             shown = filtered;
             notifyDataSetChanged();
+        }
+
+        public int findPositionForLetter(String letter) {
+            if (shown.isEmpty()) return -1;
+            if (letter.equals("#")) {
+                for (int i = 0; i < shown.size(); i++) {
+                    String lbl = shown.get(i).label;
+                    if (lbl != null && !lbl.isEmpty()) {
+                        char first = lbl.toUpperCase().charAt(0);
+                        if (!Character.isLetter(first)) return i;
+                    }
+                }
+                return 0;
+            }
+            char target = letter.charAt(0);
+            for (int i = 0; i < shown.size(); i++) {
+                String lbl = shown.get(i).label;
+                if (lbl != null && !lbl.isEmpty()) {
+                    char first = lbl.toUpperCase().charAt(0);
+                    if (first >= target) return i;
+                }
+            }
+            return shown.size() - 1;
         }
 
         @Override public int getCount() { return shown.size(); }

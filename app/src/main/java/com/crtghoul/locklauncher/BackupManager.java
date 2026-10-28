@@ -47,6 +47,9 @@ public class BackupManager {
             settings.put("home_show_profiles", ShortcutStore.isHomeProfiles(ctx));
             settings.put("home_grid_columns", ShortcutStore.homeGridColumns(ctx));
             settings.put("home_hide_labels", ShortcutStore.isHomeHideLabels(ctx));
+            settings.put("home_double_tap_lock", ShortcutStore.isDoubleTapLock(ctx));
+            settings.put("home_monochrome_icons", ShortcutStore.isMonochromeIcons(ctx));
+            settings.put("search_calculator", ShortcutStore.isSearchCalculator(ctx));
             root.put("settings", settings);
 
             JSONArray profiles = new JSONArray();
@@ -118,6 +121,15 @@ public class BackupManager {
                 }
                 if (settings.has("home_hide_labels")) {
                     ShortcutStore.setHomeHideLabels(ctx, settings.optBoolean("home_hide_labels", false));
+                }
+                if (settings.has("home_double_tap_lock")) {
+                    ShortcutStore.setDoubleTapLock(ctx, settings.optBoolean("home_double_tap_lock", false));
+                }
+                if (settings.has("home_monochrome_icons")) {
+                    ShortcutStore.setMonochromeIcons(ctx, settings.optBoolean("home_monochrome_icons", false));
+                }
+                if (settings.has("search_calculator")) {
+                    ShortcutStore.setSearchCalculator(ctx, settings.optBoolean("search_calculator", true));
                 }
             }
 

@@ -121,10 +121,24 @@ public class HomeActivity extends Activity {
         View header = findViewById(R.id.header_container);
         if (header != null) header.setOnLongClickListener(bgLongClickListener);
 
-        // Swipe Gestures: Swipe Up for Drawer, Swipe Down for Notifications
+        // Swipe Gestures: Swipe Up for Drawer, Swipe Down for Notifications, Double-Tap to Lock
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             private static final int SWIPE_THRESHOLD = 120;
             private static final int SWIPE_VELOCITY = 120;
+
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                if (ShortcutStore.isDoubleTapLock(HomeActivity.this)) {
+                    if (LockScreenService.isServiceRunning()) {
+                        LockScreenService.lockScreen(HomeActivity.this);
+                        return true;
+                    } else {
+                        LockScreenService.requestAccessibilityPermission(HomeActivity.this);
+                        return true;
+                    }
+                }
+                return false;
+            }
 
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {

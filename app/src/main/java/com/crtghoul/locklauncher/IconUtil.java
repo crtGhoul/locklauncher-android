@@ -183,7 +183,22 @@ public class IconUtil {
         if (ShortcutStore.isRoundIcons(ctx)) {
             b = circleCrop(b);
         }
+        if (ShortcutStore.isMonochromeIcons(ctx)) {
+            b = toMonochrome(b);
+        }
         return b;
+    }
+
+    public static Bitmap toMonochrome(Bitmap src) {
+        if (src == null) return null;
+        Bitmap out = Bitmap.createBitmap(src.getWidth(), src.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix();
+        cm.setSaturation(0);
+        paint.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
+        canvas.drawBitmap(src, 0, 0, paint);
+        return out;
     }
 
     private static Bitmap drawableToBitmap(Drawable d) {

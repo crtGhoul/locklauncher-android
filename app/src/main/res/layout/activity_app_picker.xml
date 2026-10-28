@@ -10,7 +10,7 @@
         android:id="@+id/search"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Search apps, websites, YouTube..."
+        android:hint="Search apps, websites, YouTube, or type math..."
         android:textColorHint="#9AA0B4"
         android:textColor="#FFFFFF"
         android:inputType="text" />
@@ -39,6 +39,111 @@
         </LinearLayout>
     </HorizontalScrollView>
 
+    <!-- Inline Math & Calculator Result Card -->
+    <LinearLayout
+        android:id="@+id/card_calculator"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/dock_card"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🧮"
+            android:textSize="22sp"
+            android:layout_marginEnd="10dp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/text_calc_expr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="45 * 12"
+                android:textColor="#A0A8C0"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/text_calc_result"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="= 540"
+                android:textColor="#55E6A5"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_calc_copy"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:background="@drawable/btn_accent"
+            android:text="Copy"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp" />
+    </LinearLayout>
+
+    <!-- Quick Device Setting Card -->
+    <LinearLayout
+        android:id="@+id/card_quick_setting"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/dock_card"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/text_setting_icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⚙️"
+            android:textSize="22sp"
+            android:layout_marginEnd="10dp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/text_setting_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Wi-Fi Settings"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tap to open device setting directly"
+                android:textColor="#8899AA"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="➡️"
+            android:textSize="16sp" />
+    </LinearLayout>
+
     <!-- Live Search External Actions (Google, YouTube, Play Store, Web) -->
     <HorizontalScrollView
         android:id="@+id/scroll_search_actions"
@@ -61,13 +166,45 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <ListView
-        android:id="@+id/app_list"
+    <!-- Main List Container with Fast Alphabet Scrubber -->
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:divider="@null"
-        android:dividerHeight="8dp" />
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/app_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_alignParentStart="true"
+            android:layout_toStartOf="@+id/alphabet_scrubber"
+            android:divider="@null"
+            android:dividerHeight="8dp" />
+
+        <!-- Vertical Alphabet Scrubber Bar -->
+        <LinearLayout
+            android:id="@+id/alphabet_scrubber"
+            android:layout_width="22dp"
+            android:layout_height="match_parent"
+            android:layout_alignParentEnd="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp" />
+
+        <!-- Floating Scrubber Letter Bubble -->
+        <TextView
+            android:id="@+id/scrubber_bubble"
+            android:layout_width="68dp"
+            android:layout_height="68dp"
+            android:layout_centerInParent="true"
+            android:background="@drawable/dock_card"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </RelativeLayout>
 
     <Button
         android:id="@+id/btn_add_selected"
