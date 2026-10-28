@@ -65,6 +65,12 @@ public class HomeActivity extends Activity {
 
     private int pendingSlotIndex = -1;
     private Shortcut pendingLogoShortcut = null;
+    private int activeDraggedPosition = -1;
+    private boolean dragWasDropped = false;
+
+    private View dragActionBar;
+    private View dragActionRemove;
+    private View dragActionOptions;
 
     private TextView clockView;
     private TextView dateBatteryView;
@@ -109,6 +115,75 @@ public class HomeActivity extends Activity {
         dateBatteryView = findViewById(R.id.home_date_battery);
         gridView = findViewById(R.id.home_grid);
         emptyHint = findViewById(R.id.home_empty_hint);
+
+        dragActionBar = findViewById(R.id.drag_action_bar);
+        dragActionRemove = findViewById(R.id.drag_action_remove);
+        dragActionOptions = findViewById(R.id.drag_action_options);
+
+        if (dragActionRemove != null) {
+            dragActionRemove.setOnDragListener((v, event) -> {
+                switch (event.getAction()) {
+                    case DragEvent.ACTION_DRAG_ENTERED:
+                        v.animate().scaleX(1.15f).scaleY(1.15f).setDuration(100).start();
+                        return true;
+                    case DragEvent.ACTION_DRAG_EXITED:
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        return true;
+                    case DragEvent.ACTION_DROP:
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        int src = -1;
+                        try {
+                            ClipData cd = event.getClipData();
+                            if (cd != null && cd.getItemCount() > 0) {
+                                src = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                            }
+                        } catch (Exception ignored) {}
+                        if (src >= 0 && src < shortcuts.size()) {
+                            dragWasDropped = true;
+                            Shortcut s = shortcuts.get(src);
+                            lastRemovedShortcut = s;
+                            lastRemovedIndex = src;
+                            shortcuts.set(src, Shortcut.createEmpty());
+                            ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            Toast.makeText(this, "Removed " + s.label + " from Home (Tap wallpaper -> Undo)", Toast.LENGTH_LONG).show();
+                        }
+                        return true;
+                }
+                return true;
+            });
+        }
+
+        if (dragActionOptions != null) {
+            dragActionOptions.setOnDragListener((v, event) -> {
+                switch (event.getAction()) {
+                    case DragEvent.ACTION_DRAG_ENTERED:
+                        v.animate().scaleX(1.15f).scaleY(1.15f).setDuration(100).start();
+                        return true;
+                    case DragEvent.ACTION_DRAG_EXITED:
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        return true;
+                    case DragEvent.ACTION_DROP:
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        int src = -1;
+                        try {
+                            ClipData cd = event.getClipData();
+                            if (cd != null && cd.getItemCount() > 0) {
+                                src = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                            }
+                        } catch (Exception ignored) {}
+                        if (src >= 0 && src < shortcuts.size()) {
+                            dragWasDropped = true;
+                            final int p = src;
+                            v.post(() -> showShortcutMenu(p));
+                        }
+                        return true;
+                }
+                return true;
+            });
+        }
 
         profileTabs[0] = findViewById(R.id.home_tab_p0);
         profileTabs[1] = findViewById(R.id.home_tab_p1);
@@ -238,7 +313,19 @@ public class HomeActivity extends Activity {
                     showAddShortcutDialogForSlot(position);
                     return true;
                 }
-                showShortcutMenu(position);
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                activeDraggedPosition = position;
+                dragWasDropped = false;
+                if (dragActionBar != null) dragActionBar.setVisibility(View.VISIBLE);
+
+                ClipData data = ClipData.newPlainText("pos", String.valueOf(position));
+                View.DragShadowBuilder shadow = new View.DragShadowBuilder(view);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    view.startDragAndDrop(data, shadow, view, View.DRAG_FLAG_OPAQUE);
+                } else {
+                    view.startDrag(data, shadow, view, 0);
+                }
+                view.animate().scaleX(0.85f).scaleY(0.85f).alpha(0.45f).setDuration(120).start();
                 return true;
             }
             return false;
@@ -444,6 +531,9 @@ public class HomeActivity extends Activity {
                 lastRemovedIndex = -1;
             });
         }
+
+        opts.add("🗂️ Organize Home Grid (16 Slots)");
+        acts.add(this::showGridOrganizerDialog);
 
         opts.add("🧩 Add Android Widget");
         acts.add(this::selectWidget);
@@ -1253,43 +1343,217 @@ public class HomeActivity extends Activity {
 
     private void showAddShortcutDialogForSlot(int slotIndex) {
         pendingSlotIndex = slotIndex;
-        String[] options = {
-                "📱 Add App to Slot " + (slotIndex + 1),
-                "🌐 Add Web App to Slot " + (slotIndex + 1),
-                "📁 Create Folder in Slot " + (slotIndex + 1),
-                "🧹 Pack All Apps to Top (Fill Gaps)"
-        };
+        List<String> options = new ArrayList<>();
+        List<Runnable> actions = new ArrayList<>();
+
+        options.add("📱 Add App to Slot " + (slotIndex + 1));
+        actions.add(() -> {
+            Intent pick = new Intent(this, AppPickerActivity.class);
+            pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, false);
+            startActivityForResult(pick, REQUEST_PICK_APP_FOR_SLOT);
+        });
+
+        options.add("🌐 Add Web App to Slot " + (slotIndex + 1));
+        actions.add(() -> showAddWebAppDialog("", ""));
+
+        options.add("📁 Create Folder in Slot " + (slotIndex + 1));
+        actions.add(() -> {
+            EditText input = new EditText(this);
+            input.setHint("Folder name (e.g. Social, Games)");
+            new AlertDialog.Builder(this)
+                    .setTitle("New Folder in Slot " + (slotIndex + 1))
+                    .setView(input)
+                    .setPositiveButton("Create", (d, w) -> {
+                        String name = input.getText().toString().trim();
+                        if (name.isEmpty()) name = "Folder";
+                        Shortcut folder = Shortcut.createFolder(name, new ArrayList<>());
+                        shortcuts.set(slotIndex, folder);
+                        ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                        loadShortcuts();
+                        Toast.makeText(this, "Created folder: " + name, Toast.LENGTH_SHORT).show();
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        });
+
+        // 📲 Move an Existing App Here
+        List<Integer> existingIndices = new ArrayList<>();
+        for (int i = 0; i < shortcuts.size(); i++) {
+            if (!shortcuts.get(i).isEmpty()) existingIndices.add(i);
+        }
+        if (!existingIndices.isEmpty()) {
+            options.add("📲 Move an Existing App Here (to Slot " + (slotIndex + 1) + ")");
+            actions.add(() -> {
+                String[] appNames = new String[existingIndices.size()];
+                for (int j = 0; j < existingIndices.size(); j++) {
+                    int idx = existingIndices.get(j);
+                    Shortcut sc = shortcuts.get(idx);
+                    appNames[j] = "Slot " + (idx + 1) + ": " + (sc.isFolder() ? "📁 " : "") + sc.label;
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("Select App to Move to Slot " + (slotIndex + 1))
+                        .setItems(appNames, (d, sel) -> {
+                            int fromIdx = existingIndices.get(sel);
+                            Shortcut moved = shortcuts.get(fromIdx);
+                            shortcuts.set(slotIndex, moved);
+                            shortcuts.set(fromIdx, Shortcut.createEmpty());
+                            ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            Toast.makeText(this, "Moved " + moved.label + " to slot " + (slotIndex + 1), Toast.LENGTH_SHORT).show();
+                        })
+                        .show();
+            });
+        }
+
+        options.add("🗂️ Open Visual Grid Organizer");
+        actions.add(this::showGridOrganizerDialog);
+
+        options.add("🧹 Pack All Apps to Top (Fill Gaps)");
+        actions.add(this::packShortcutsToTop);
+
         new AlertDialog.Builder(this)
                 .setTitle("Slot " + (slotIndex + 1) + " (Empty)")
-                .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
-                        Intent pick = new Intent(this, AppPickerActivity.class);
-                        pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, false);
-                        startActivityForResult(pick, REQUEST_PICK_APP_FOR_SLOT);
-                    } else if (which == 1) {
-                        showAddWebAppDialog("", "");
-                    } else if (which == 2) {
-                        EditText input = new EditText(this);
-                        input.setHint("Folder name (e.g. Social, Games)");
-                        new AlertDialog.Builder(this)
-                                .setTitle("New Folder in Slot " + (slotIndex + 1))
-                                .setView(input)
-                                .setPositiveButton("Create", (d, w) -> {
-                                    String name = input.getText().toString().trim();
-                                    if (name.isEmpty()) name = "Folder";
-                                    Shortcut folder = Shortcut.createFolder(name, new ArrayList<>());
-                                    shortcuts.set(slotIndex, folder);
-                                    ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
-                                    loadShortcuts();
-                                    Toast.makeText(this, "Created folder: " + name, Toast.LENGTH_SHORT).show();
-                                })
-                                .setNegativeButton("Cancel", null)
-                                .show();
-                    } else if (which == 3) {
-                        packShortcutsToTop();
+                .setItems(options.toArray(new String[0]), (dialog, which) -> {
+                    if (which >= 0 && which < actions.size()) {
+                        actions.get(which).run();
                     }
                 })
                 .show();
+    }
+
+    private void showGridOrganizerDialog() {
+        int currentProfile = ShortcutStore.activeProfile(this);
+        String profName = ShortcutStore.profileName(this, currentProfile);
+        String[] items = new String[shortcuts.size() + 3];
+        items[0] = "🔤 Sort Non-Empty Apps A–Z";
+        items[1] = "🧹 Compact All Apps to Top (Fill Gaps)";
+        items[2] = "➕ Insert Blank Space at Beginning";
+
+        for (int i = 0; i < shortcuts.size(); i++) {
+            Shortcut s = shortcuts.get(i);
+            items[i + 3] = "Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty Slot ]" : (s.isFolder() ? "📁 " : "") + s.label);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("🗂️ Organize Grid: " + profName)
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) {
+                        sortShortcutsAZ();
+                    } else if (which == 1) {
+                        packShortcutsToTop();
+                    } else if (which == 2) {
+                        insertBlankSpaceAt(0);
+                    } else {
+                        int slotIdx = which - 3;
+                        showSlotControlDialog(slotIdx);
+                    }
+                })
+                .setPositiveButton("Done", null)
+                .show();
+    }
+
+    private void showSlotControlDialog(int slotIdx) {
+        Shortcut s = shortcuts.get(slotIdx);
+        if (s.isEmpty()) {
+            showAddShortcutDialogForSlot(slotIdx);
+            return;
+        }
+
+        String[] slotOpts = {
+                "🔀 Move to another Slot...",
+                "🔄 Swap with another Slot...",
+                "➕ Insert Blank Space Before this",
+                "🗑️ Clear Slot (Leave Empty)"
+        };
+
+        new AlertDialog.Builder(this)
+                .setTitle("Slot " + (slotIdx + 1) + ": " + s.label)
+                .setItems(slotOpts, (d, opt) -> {
+                    if (opt == 0) {
+                        pickSlotTarget(slotIdx, false);
+                    } else if (opt == 1) {
+                        pickSlotTarget(slotIdx, true);
+                    } else if (opt == 2) {
+                        insertBlankSpaceAt(slotIdx);
+                    } else if (opt == 3) {
+                        lastRemovedShortcut = s;
+                        lastRemovedIndex = slotIdx;
+                        shortcuts.set(slotIdx, Shortcut.createEmpty());
+                        ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                        loadShortcuts();
+                        BaseDockWidget.refreshAll(this);
+                        DockService.refresh(this);
+                        Toast.makeText(this, "Cleared slot " + (slotIdx + 1) + " (Tap wallpaper -> Undo)", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
+    }
+
+    private void pickSlotTarget(int fromSlot, boolean swap) {
+        String[] targets = new String[shortcuts.size()];
+        for (int i = 0; i < shortcuts.size(); i++) {
+            Shortcut sc = shortcuts.get(i);
+            targets[i] = "Slot " + (i + 1) + ": " + (sc.isEmpty() ? "[ ✨ Empty ]" : sc.label);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle((swap ? "Swap" : "Move") + " " + shortcuts.get(fromSlot).label + " with:")
+                .setItems(targets, (d, toSlot) -> {
+                    if (fromSlot != toSlot) {
+                        Shortcut src = shortcuts.get(fromSlot);
+                        Shortcut dst = shortcuts.get(toSlot);
+                        if (swap || !dst.isEmpty()) {
+                            shortcuts.set(toSlot, src);
+                            shortcuts.set(fromSlot, dst);
+                            Toast.makeText(this, "Swapped slot " + (fromSlot + 1) + " and " + (toSlot + 1), Toast.LENGTH_SHORT).show();
+                        } else {
+                            shortcuts.set(toSlot, src);
+                            shortcuts.set(fromSlot, Shortcut.createEmpty());
+                            Toast.makeText(this, "Moved to slot " + (toSlot + 1), Toast.LENGTH_SHORT).show();
+                        }
+                        ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                        loadShortcuts();
+                        BaseDockWidget.refreshAll(this);
+                        DockService.refresh(this);
+                    }
+                })
+                .show();
+    }
+
+    private void sortShortcutsAZ() {
+        List<Shortcut> nonEmpties = new ArrayList<>();
+        for (Shortcut s : shortcuts) {
+            if (!s.isEmpty()) nonEmpties.add(s);
+        }
+        nonEmpties.sort((a, b) -> {
+            String la = a.label != null ? a.label : "";
+            String lb = b.label != null ? b.label : "";
+            return la.compareToIgnoreCase(lb);
+        });
+        shortcuts.clear();
+        shortcuts.addAll(nonEmpties);
+        while (shortcuts.size() < ShortcutStore.MAX) {
+            shortcuts.add(Shortcut.createEmpty());
+        }
+        ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+        loadShortcuts();
+        BaseDockWidget.refreshAll(this);
+        DockService.refresh(this);
+        Toast.makeText(this, "Sorted A–Z", Toast.LENGTH_SHORT).show();
+    }
+
+    private void insertBlankSpaceAt(int index) {
+        if (index < 0 || index >= shortcuts.size()) return;
+        shortcuts.add(index, Shortcut.createEmpty());
+        while (shortcuts.size() > ShortcutStore.MAX) {
+            shortcuts.remove(shortcuts.size() - 1);
+        }
+        ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+        loadShortcuts();
+        BaseDockWidget.refreshAll(this);
+        DockService.refresh(this);
+        Toast.makeText(this, "Inserted space at slot " + (index + 1), Toast.LENGTH_SHORT).show();
     }
 
     private void packShortcutsToTop() {
@@ -1512,18 +1776,58 @@ public class HomeActivity extends Activity {
 
             final int itemPos = pos;
             v.setTag(itemPos);
+
+            // Fluid native drag initiation directly on long-press
+            v.setOnLongClickListener(childView -> {
+                if (s.isEmpty()) {
+                    childView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                    showAddShortcutDialogForSlot(itemPos);
+                    return true;
+                }
+                childView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                activeDraggedPosition = itemPos;
+                dragWasDropped = false;
+                if (dragActionBar != null) dragActionBar.setVisibility(View.VISIBLE);
+
+                ClipData data = ClipData.newPlainText("pos", String.valueOf(itemPos));
+                View.DragShadowBuilder shadow = new View.DragShadowBuilder(childView);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    childView.startDragAndDrop(data, shadow, childView, View.DRAG_FLAG_OPAQUE);
+                } else {
+                    childView.startDrag(data, shadow, childView, 0);
+                }
+                childView.animate().scaleX(0.85f).scaleY(0.85f).alpha(0.45f).setDuration(120).start();
+                return true;
+            });
+
             v.setOnDragListener((targetView, event) -> {
                 switch (event.getAction()) {
                     case DragEvent.ACTION_DRAG_STARTED:
+                        if (dragActionBar != null) dragActionBar.setVisibility(View.VISIBLE);
+                        if (s.isEmpty()) {
+                            icon.setImageResource(R.drawable.slot_empty_target);
+                            icon.setAlpha(0.65f);
+                        }
                         return true;
+
                     case DragEvent.ACTION_DRAG_ENTERED:
                         targetView.animate().scaleX(1.15f).scaleY(1.15f).setDuration(100).start();
+                        if (s.isEmpty()) {
+                            icon.setImageResource(R.drawable.slot_empty_target_hover);
+                            icon.setAlpha(1.0f);
+                        }
                         return true;
+
                     case DragEvent.ACTION_DRAG_EXITED:
                         targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        if (s.isEmpty()) {
+                            icon.setImageResource(R.drawable.slot_empty_target);
+                            icon.setAlpha(0.40f);
+                        }
                         return true;
+
                     case DragEvent.ACTION_DROP:
-                        targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(100).start();
                         int sourcePos = -1;
                         try {
                             ClipData cd = event.getClipData();
@@ -1531,32 +1835,51 @@ public class HomeActivity extends Activity {
                                 sourcePos = Integer.parseInt(cd.getItemAt(0).getText().toString());
                             }
                         } catch (Exception ignored) {}
-                        if (sourcePos >= 0 && sourcePos < shortcuts.size() && itemPos >= 0 && itemPos < shortcuts.size() && sourcePos != itemPos) {
-                            targetView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-                            Shortcut source = shortcuts.get(sourcePos);
-                            Shortcut target = shortcuts.get(itemPos);
-                            if (target.isFolder() && !source.isFolder()) {
-                                if (target.folderItems == null) target.folderItems = new ArrayList<>();
-                                target.folderItems.add(source);
-                                shortcuts.set(sourcePos, Shortcut.createEmpty());
-                                Toast.makeText(HomeActivity.this, "Added " + source.label + " to " + target.label, Toast.LENGTH_SHORT).show();
-                            } else if (target.isEmpty()) {
-                                shortcuts.set(itemPos, source);
-                                shortcuts.set(sourcePos, Shortcut.createEmpty());
-                                Toast.makeText(HomeActivity.this, "Moved " + source.label + " to slot " + (itemPos + 1), Toast.LENGTH_SHORT).show();
+
+                        if (sourcePos >= 0 && sourcePos < shortcuts.size() && itemPos >= 0 && itemPos < shortcuts.size()) {
+                            dragWasDropped = true;
+                            if (sourcePos != itemPos) {
+                                targetView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                                Shortcut source = shortcuts.get(sourcePos);
+                                Shortcut target = shortcuts.get(itemPos);
+
+                                if (target.isFolder() && !source.isFolder()) {
+                                    if (target.folderItems == null) target.folderItems = new ArrayList<>();
+                                    target.folderItems.add(source);
+                                    shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                    Toast.makeText(HomeActivity.this, "Added " + source.label + " to " + target.label, Toast.LENGTH_SHORT).show();
+                                } else if (target.isEmpty()) {
+                                    shortcuts.set(itemPos, source);
+                                    shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                    Toast.makeText(HomeActivity.this, "Moved " + source.label + " to slot " + (itemPos + 1), Toast.LENGTH_SHORT).show();
+                                } else {
+                                    shortcuts.set(itemPos, source);
+                                    shortcuts.set(sourcePos, target);
+                                    Toast.makeText(HomeActivity.this, "Swapped " + source.label + " with " + target.label, Toast.LENGTH_SHORT).show();
+                                }
+                                ShortcutStore.save(HomeActivity.this, ShortcutStore.activeProfile(HomeActivity.this), shortcuts);
+                                loadShortcuts();
+                                BaseDockWidget.refreshAll(HomeActivity.this);
+                                DockService.refresh(HomeActivity.this);
                             } else {
-                                shortcuts.set(itemPos, source);
-                                shortcuts.set(sourcePos, target);
-                                Toast.makeText(HomeActivity.this, "Swapped " + source.label + " with " + target.label, Toast.LENGTH_SHORT).show();
+                                // Dropped back on itself -> open menu
+                                showShortcutMenu(sourcePos);
                             }
-                            ShortcutStore.save(HomeActivity.this, ShortcutStore.activeProfile(HomeActivity.this), shortcuts);
-                            loadShortcuts();
-                            BaseDockWidget.refreshAll(HomeActivity.this);
-                            DockService.refresh(HomeActivity.this);
                         }
                         return true;
+
                     case DragEvent.ACTION_DRAG_ENDED:
-                        targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(100).start();
+                        if (dragActionBar != null) dragActionBar.setVisibility(View.GONE);
+                        if (s.isEmpty()) {
+                            icon.setImageResource(R.drawable.slot_empty_target);
+                            icon.setAlpha(0.40f);
+                        }
+                        if (!dragWasDropped && activeDraggedPosition >= 0) {
+                            final int openedPos = activeDraggedPosition;
+                            activeDraggedPosition = -1;
+                            targetView.post(() -> showShortcutMenu(openedPos));
+                        }
                         return true;
                 }
                 return true;

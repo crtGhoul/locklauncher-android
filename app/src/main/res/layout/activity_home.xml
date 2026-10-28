@@ -5,6 +5,48 @@
     android:layout_height="match_parent"
     android:fitsSystemWindows="true">
 
+    <!-- Drag Action Bar (Drop targets for Remove / Options) -->
+    <LinearLayout
+        android:id="@+id/drag_action_bar"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_alignParentTop="true"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:background="#E610121C"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/drag_action_remove"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:background="@drawable/dock_card"
+            android:gravity="center"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="🗑️ Drop to Remove"
+            android:textColor="#FF5A5A"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            android:layout_marginEnd="16dp" />
+
+        <TextView
+            android:id="@+id/drag_action_options"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:background="@drawable/dock_card"
+            android:gravity="center"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="⚙️ Drop for Options"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium" />
+    </LinearLayout>
+
     <!-- Top Launcher Header (Clock, Date, Battery, Profile & Settings) -->
     <LinearLayout
         android:id="@+id/header_container"
