@@ -81,11 +81,16 @@
 
         <activity
             android:name=".WebAppActivity"
-            android:exported="false"
+            android:exported="true"
             android:hardwareAccelerated="true"
             android:documentLaunchMode="intoExisting"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:theme="@android:style/Theme.Material.NoActionBar" />
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="com.crtghoul.locklauncher.OPEN_WEB_APP" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <service
             android:name=".DockService"

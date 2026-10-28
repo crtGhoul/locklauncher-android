@@ -9,12 +9,20 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Fullscreen Video / Media / HTML5 Container -->
+    <FrameLayout
+        android:id="@+id/fullscreen_custom_view_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="gone" />
+
     <!-- Thin Top Progress Indicator -->
     <ProgressBar
         android:id="@+id/web_progress"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="3dp"
+        android:layout_height="2.5dp"
         android:layout_alignParentTop="true"
         android:indeterminate="false"
         android:max="100"

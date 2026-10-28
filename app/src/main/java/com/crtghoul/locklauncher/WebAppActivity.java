@@ -3,24 +3,32 @@ package com.crtghoul.locklauncher;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 
 import java.io.ByteArrayInputStream;
 
 /**
  * Standalone Immersive Ad-Free Web App Container.
- * Appears as a dedicated native app task in Recents with zero browser chrome and zero ads.
+ * Features:
+ * - 100% True Fullscreen: Supports HTML5 video/canvas/game onShowCustomView fullscreen.
+ * - Zero Browser Chrome: No address bar, no search bar, no URL input.
+ * - Airtight Ad & Tracker Blocking: Network request interceptor + continuous DOM ad-removal.
+ * - 120Hz Hardware-Accelerated Rendering on LTPO Displays.
  */
 public class WebAppActivity extends Activity {
 
@@ -29,11 +37,26 @@ public class WebAppActivity extends Activity {
 
     private WebView webView;
     private ProgressBar progressBar;
+    private FrameLayout fullscreenContainer;
+    private View customView;
+    private WebChromeClient.CustomViewCallback customViewCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         DisplayHelper.enforceHighRefreshRate(this);
+
+        // Edge-to-edge transparent system bars
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            getWindow().setStatusBarColor(0x00000000);
+            getWindow().setNavigationBarColor(0x00000000);
+        }
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+
         setContentView(R.layout.activity_web_app);
 
         String url = getIntent().getStringExtra(EXTRA_URL);
@@ -56,7 +79,6 @@ public class WebAppActivity extends Activity {
         }
         if (title == null) title = "Web App";
 
-        // Set task description for Android Recents so it shows as a dedicated app card
         setTitle(title);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             setTaskDescription(new ActivityManager.TaskDescription(title, null, 0xFF101223));
@@ -64,6 +86,7 @@ public class WebAppActivity extends Activity {
 
         progressBar = findViewById(R.id.web_progress);
         webView = findViewById(R.id.web_view);
+        fullscreenContainer = findViewById(R.id.fullscreen_custom_view_container);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -75,6 +98,10 @@ public class WebAppActivity extends Activity {
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+
+        // Block popups and multiple windows to keep the user in the ad-free container
+        settings.setSupportMultipleWindows(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
@@ -97,6 +124,40 @@ public class WebAppActivity extends Activity {
                     setTitle(pageTitle);
                 }
             }
+
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) {
+                    onHideCustomView();
+                    return;
+                }
+                customView = view;
+                customViewCallback = callback;
+                webView.setVisibility(View.GONE);
+                fullscreenContainer.addView(view, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+                fullscreenContainer.setVisibility(View.VISIBLE);
+
+                // True sticky immersive fullscreen for video/game playback
+                setImmersiveMode(true);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (customView == null) return;
+                fullscreenContainer.removeView(customView);
+                fullscreenContainer.setVisibility(View.GONE);
+                customView = null;
+                if (customViewCallback != null) {
+                    customViewCallback.onCustomViewHidden();
+                    customViewCallback = null;
+                }
+                webView.setVisibility(View.VISIBLE);
+
+                // Restore standard edge-to-edge
+                setImmersiveMode(false);
+            }
         });
 
         webView.setWebViewClient(new WebViewClient() {
@@ -105,7 +166,7 @@ public class WebAppActivity extends Activity {
                 if (request != null && request.getUrl() != null) {
                     String reqUrl = request.getUrl().toString();
                     if (AdBlockEngine.isAdUrl(reqUrl)) {
-                        // Return empty response to block the ad or tracker request
+                        // Return completely empty stream to drop the ad request instantly
                         return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
                     }
                 }
@@ -113,18 +174,48 @@ public class WebAppActivity extends Activity {
             }
 
             @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String pageUrl) {
                 super.onPageFinished(view, pageUrl);
-                // Inject cosmetic ad blocking CSS to hide ad container blocks
-                view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_CSS, null);
+                // Continuous DOM ad-cleaner and cosmetic CSS injection
+                view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
             }
         });
 
         webView.loadUrl(url);
     }
 
+    private void setImmersiveMode(boolean immersive) {
+        if (immersive) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
+    }
+
     @Override
     public void onBackPressed() {
+        if (customView != null) {
+            // Exit fullscreen video/game first
+            if (webView != null && webView.getWebChromeClient() != null) {
+                webView.getWebChromeClient().onHideCustomView();
+            }
+            return;
+        }
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
@@ -141,6 +232,7 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        DisplayHelper.enforceHighRefreshRate(this);
         if (webView != null) webView.onResume();
     }
 
