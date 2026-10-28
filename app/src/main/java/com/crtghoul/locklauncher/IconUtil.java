@@ -62,15 +62,36 @@ public class IconUtil {
         }
     }
 
-    // ---- icon rendering ----
+    // ---- icon rendering & 120Hz caching ----
+
+    private static final android.util.LruCache<String, Bitmap> sIconLru = new android.util.LruCache<>(300);
+
+    public static void clearCache() {
+        sIconLru.evictAll();
+    }
 
     public static Bitmap iconFor(Context ctx, Shortcut s) {
+        if (s == null) return letterIcon("?", -1);
+        String cacheKey = (s.id != null ? s.id : "") + "_" + (s.pkg != null ? s.pkg : "") + "_" + (s.type != null ? s.type : "")
+                + "_" + (s.iconMode != null ? s.iconMode : "") + "_" + s.iconColor + "_" + (s.iconEmoji != null ? s.iconEmoji : "")
+                + "_" + s.profileSerial + "_" + ShortcutStore.isRoundIcons(ctx) + "_" + ShortcutStore.isMonochromeIcons(ctx)
+                + "_" + IconPackManager.getActiveIconPack(ctx);
+
+        Bitmap cached = sIconLru.get(cacheKey);
+        if (cached != null && !cached.isRecycled()) {
+            return cached;
+        }
+
         if (s.isFolder()) {
-            return finishIcon(ctx, folderBitmap(ctx, s));
+            Bitmap fb = finishIcon(ctx, folderBitmap(ctx, s));
+            sIconLru.put(cacheKey, fb);
+            return fb;
         }
         Bitmap custom = loadCustomIcon(ctx, s.id);
         if (custom != null) {
-            return finishIcon(ctx, custom);
+            Bitmap cb = finishIcon(ctx, custom);
+            sIconLru.put(cacheKey, cb);
+            return cb;
         }
         Bitmap b;
         if (Shortcut.ICON_EMOJI.equals(s.iconMode)) {
@@ -90,7 +111,9 @@ public class IconUtil {
                                 List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
                                 if (!acts.isEmpty()) {
                                     b = drawableToBitmap(acts.get(0).getBadgedIcon(0));
-                                    return finishIcon(ctx, b);
+                                    Bitmap finished = finishIcon(ctx, b);
+                                    sIconLru.put(cacheKey, finished);
+                                    return finished;
                                 }
                             }
                         }
@@ -114,7 +137,9 @@ public class IconUtil {
                 b = letterIcon(label, s.iconColor);
             }
         }
-        return finishIcon(ctx, b);
+        Bitmap finished = finishIcon(ctx, b);
+        sIconLru.put(cacheKey, finished);
+        return finished;
     }
 
     public static Bitmap folderBitmap(Context ctx, Shortcut folder) {
@@ -515,8 +540,13 @@ public class IconUtil {
             Bundle opts = null;
             if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 try {
-                    opts = ActivityOptions.makeScaleUpAnimation(
-                            sourceView, 0, 0, sourceView.getWidth(), sourceView.getHeight()).toBundle();
+                    int w = Math.max(sourceView.getWidth(), 48);
+                    int h = Math.max(sourceView.getHeight(), 48);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        opts = ActivityOptions.makeClipRevealAnimation(sourceView, 0, 0, w, h).toBundle();
+                    } else {
+                        opts = ActivityOptions.makeScaleUpAnimation(sourceView, 0, 0, w, h).toBundle();
+                    }
                 } catch (Exception ignored) {
                 }
             }

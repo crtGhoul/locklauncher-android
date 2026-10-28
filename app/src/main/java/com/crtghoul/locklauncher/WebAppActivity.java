@@ -33,6 +33,7 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        DisplayHelper.enforceHighRefreshRate(this);
         setContentView(R.layout.activity_web_app);
 
         String url = getIntent().getStringExtra(EXTRA_URL);

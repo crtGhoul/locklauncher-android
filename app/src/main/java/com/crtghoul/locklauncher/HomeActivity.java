@@ -81,6 +81,7 @@ public class HomeActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        DisplayHelper.enforceHighRefreshRate(this);
         setContentView(R.layout.activity_home);
 
         // AppWidgetHost Initialization
@@ -118,6 +119,7 @@ public class HomeActivity extends Activity {
             Intent intent = new Intent(this, AppPickerActivity.class);
             intent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
             startActivity(intent);
+            overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
         });
 
         findViewById(R.id.btn_quick_add_web).setOnClickListener(v -> {
@@ -164,6 +166,7 @@ public class HomeActivity extends Activity {
                             Intent drawer = new Intent(HomeActivity.this, AppPickerActivity.class);
                             drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
                             startActivity(drawer);
+                            overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
                             return true;
                         } else {
                             // Swipe down -> Open notification shade
@@ -188,13 +191,13 @@ public class HomeActivity extends Activity {
                 }
                 view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                 view.animate()
-                        .scaleX(0.90f).scaleY(0.90f)
-                        .setDuration(60)
+                        .scaleX(0.92f).scaleY(0.92f)
+                        .setDuration(40)
                         .withEndAction(() -> {
                             view.animate()
                                     .scaleX(1.0f).scaleY(1.0f)
-                                    .setDuration(130)
-                                    .setInterpolator(new android.view.animation.OvershootInterpolator(2.5f))
+                                    .setDuration(120)
+                                    .setInterpolator(new android.view.animation.OvershootInterpolator(2.0f))
                                     .start();
                         }).start();
 
@@ -256,6 +259,7 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        DisplayHelper.enforceHighRefreshRate(this);
         timeHandler.post(timeRunnable);
         try {
             IntentFilter filter = new IntentFilter(LockNotificationListenerService.ACTION_NOTIFICATIONS_CHANGED);

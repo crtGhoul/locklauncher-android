@@ -203,6 +203,10 @@
         android:paddingTop="8dp"
         android:paddingBottom="8dp"
         android:clipToPadding="false"
+        android:listSelector="@android:color/transparent"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        android:fadingEdge="none"
         android:gravity="center" />
 
     <!-- Empty State Hint -->

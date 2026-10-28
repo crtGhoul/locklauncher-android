@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        DisplayHelper.enforceHighRefreshRate(this);
         setContentView(R.layout.activity_main);
 
         shortcuts = ShortcutStore.load(this);
@@ -865,6 +866,7 @@ public class MainActivity extends Activity {
                 .setSingleChoiceItems(names.toArray(new String[0]), selectedIdx, (dialog, which) -> {
                     String chosen = pkgs.get(which);
                     IconPackManager.setActiveIconPack(this, chosen);
+                    IconUtil.clearCache();
                     toast("Applied " + names.get(which));
                     dialog.dismiss();
                     if (adapter != null) adapter.notifyDataSetChanged();

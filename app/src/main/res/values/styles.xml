@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Seamless translucent theme for App Drawer -->
+    <style name="Theme.LockLauncher.Drawer" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">#D90A0D18</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@style/DrawerAnimation</item>
+        <item name="android:statusBarColor">#00000000</item>
+        <item name="android:navigationBarColor">#00000000</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+    <style name="DrawerAnimation" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/drawer_slide_up</item>
+        <item name="android:activityOpenExitAnimation">@anim/launcher_fade_out</item>
+        <item name="android:activityCloseEnterAnimation">@anim/launcher_fade_in</item>
+        <item name="android:activityCloseExitAnimation">@anim/drawer_slide_down</item>
+    </style>
+</resources>

@@ -4,7 +4,8 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="8dp">
+    android:padding="6dp"
+    android:background="?android:attr/selectableItemBackgroundBorderless">
 
     <FrameLayout
         android:layout_width="56dp"

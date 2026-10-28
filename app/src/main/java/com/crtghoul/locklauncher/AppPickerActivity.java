@@ -1,6 +1,7 @@
 package com.crtghoul.locklauncher;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -15,6 +16,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
 import android.os.UserHandle;
@@ -86,6 +88,7 @@ public class AppPickerActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        DisplayHelper.enforceHighRefreshRate(this);
         setContentView(R.layout.activity_app_picker);
 
         SharedPreferences prefs = getSharedPreferences("drawer_prefs", MODE_PRIVATE);
@@ -219,7 +222,7 @@ public class AppPickerActivity extends Activity {
             addButton.setVisibility(View.GONE);
             list.setOnItemClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
-                launchApp(e, launcherApps);
+                launchApp(e, launcherApps, view);
             });
             list.setOnItemLongClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
@@ -238,7 +241,7 @@ public class AppPickerActivity extends Activity {
                         .setItems(opts, (d, which) -> {
                             switch (which) {
                                 case 0:
-                                    launchApp(e, launcherApps);
+                                    launchApp(e, launcherApps, view);
                                     break;
                                 case 1:
                                     // Pin directly to active profile with full clone support
@@ -575,10 +578,18 @@ public class AppPickerActivity extends Activity {
                 .show();
     }
 
-    private void launchApp(AppEntry e, LauncherApps launcherApps) {
+    private void launchApp(AppEntry e, LauncherApps launcherApps, View sourceView) {
+        Bundle opts = null;
+        if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                int w = Math.max(sourceView.getWidth(), 48);
+                int h = Math.max(sourceView.getHeight(), 48);
+                opts = ActivityOptions.makeClipRevealAnimation(sourceView, 0, 0, w, h).toBundle();
+            } catch (Exception ignored) {}
+        }
         try {
             if (e.component != null && e.user != null && launcherApps != null) {
-                launcherApps.startMainActivity(e.component, e.user, null, null);
+                launcherApps.startMainActivity(e.component, e.user, null, opts);
                 finish();
                 return;
             }
@@ -587,11 +598,21 @@ public class AppPickerActivity extends Activity {
         Intent launch = getPackageManager().getLaunchIntentForPackage(e.pkg);
         if (launch != null) {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(launch);
+            if (opts != null) {
+                startActivity(launch, opts);
+            } else {
+                startActivity(launch);
+            }
             finish();
         } else {
             Toast.makeText(this, "Cannot launch " + e.label, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.launcher_fade_in, R.anim.drawer_slide_down);
     }
 
     private void updateAddButton() {
