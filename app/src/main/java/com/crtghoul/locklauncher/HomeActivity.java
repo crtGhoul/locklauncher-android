@@ -193,6 +193,10 @@ public class HomeActivity extends Activity {
             startActivity(intent);
             overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
         });
+        View quickWidget = findViewById(R.id.btn_quick_add_widget);
+        if (quickWidget != null) {
+            quickWidget.setOnClickListener(v -> selectWidget());
+        }
         findViewById(R.id.btn_quick_add_web).setOnClickListener(v -> {
             showAddWebAppDialog("", "");
         });
@@ -558,8 +562,20 @@ public class HomeActivity extends Activity {
                 lastRemovedIndex = -1;
             });
         }
-        opts.add("🗂️ Organize Home Grid (16 Slots)");
+        opts.add("🧩 Add Android Widget");
+        acts.add(this::selectWidget);
+        opts.add("➕ Add Apps to Home Screen");
+        acts.add(() -> {
+            Intent addAppIntent = new Intent(this, AppPickerActivity.class);
+            addAppIntent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
+            startActivity(addAppIntent);
+        });
+        opts.add("🗂️ Move & Organize Apps (Push to Bottom, Sort, Swap)");
         acts.add(this::showGridOrganizerDialog);
+        opts.add("📐 Grid Columns & Layout (4x4, 4x8, Bottom Thumb-Reach)");
+        acts.add(this::showColumnsDialog);
+        opts.add("🏝️ Dynamic Island Settings (16 Slots & Toggle)");
+        acts.add(this::showIslandAppManagerDialog);
         boolean clean = ShortcutStore.isHomeCleanMode(this);
         opts.add(clean ? "✨ Clean Mode: Enabled (Tap to Show Apps)" : "✨ Clean Mode: Hide Apps behind Pill");
         acts.add(() -> {
@@ -569,10 +585,6 @@ public class HomeActivity extends Activity {
             applyCleanModeState(true);
             Toast.makeText(this, next ? "Clean Mode active! Tap '🚀 Apps' pill to reveal." : "Clean Mode disabled", Toast.LENGTH_SHORT).show();
         });
-        opts.add("🏝️ Manage Dynamic Island Apps");
-        acts.add(this::showIslandAppManagerDialog);
-        opts.add("🧩 Add Android Widget");
-        acts.add(this::selectWidget);
         opts.add("📁 Create New Folder");
         acts.add(this::createNewFolderDialog);
         opts.add("🖼️ Change Wallpaper");
@@ -585,12 +597,6 @@ public class HomeActivity extends Activity {
         });
         opts.add("🌐 Add Web App");
         acts.add(() -> showAddWebAppDialog("", ""));
-        opts.add("➕ Add App / Shortcut");
-        acts.add(() -> {
-            Intent addAppIntent = new Intent(this, AppPickerActivity.class);
-            addAppIntent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
-            startActivity(addAppIntent);
-        });
         opts.add("📱 Search & All Apps");
         acts.add(() -> {
             Intent drawer = new Intent(this, AppPickerActivity.class);
@@ -600,7 +606,7 @@ public class HomeActivity extends Activity {
         opts.add("⚙️ Launcher Settings");
         acts.add(() -> startActivity(new Intent(this, MainActivity.class)));
         new AlertDialog.Builder(this)
-                .setTitle("Home Screen")
+                .setTitle("OnePlus Home Screen Customization")
                 .setItems(opts.toArray(new String[0]), (d, which) -> {
                     if (which >= 0 && which < acts.size()) {
                         acts.get(which).run();
@@ -1597,6 +1603,40 @@ public class HomeActivity extends Activity {
                 .setItems(options.toArray(new String[0]), (dialog, which) -> {
                     if (which >= 0 && which < actions.size()) {
                         actions.get(which).run();
+                    }
+                })
+                .show();
+    }
+    private void showColumnsDialog() {
+        String[] options = {
+                "3 Columns (Spacious, Large Icons)",
+                "4 Columns (Standard Android / OnePlus)",
+                "5 Columns (Dense, More Apps)",
+                "Toggle Thumb-Reach (Align Apps to Bottom)"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Grid Layout & Density")
+                .setItems(options, (d, which) -> {
+                    if (which == 0) {
+                        ShortcutStore.setHomeGridColumns(this, 3);
+                        if (gridView != null) gridView.setNumColumns(3);
+                        loadShortcuts();
+                        Toast.makeText(this, "Grid set to 3 Columns", Toast.LENGTH_SHORT).show();
+                    } else if (which == 1) {
+                        ShortcutStore.setHomeGridColumns(this, 4);
+                        if (gridView != null) gridView.setNumColumns(4);
+                        loadShortcuts();
+                        Toast.makeText(this, "Grid set to 4 Columns", Toast.LENGTH_SHORT).show();
+                    } else if (which == 2) {
+                        ShortcutStore.setHomeGridColumns(this, 5);
+                        if (gridView != null) gridView.setNumColumns(5);
+                        loadShortcuts();
+                        Toast.makeText(this, "Grid set to 5 Columns", Toast.LENGTH_SHORT).show();
+                    } else if (which == 3) {
+                        boolean bottom = !ShortcutStore.isHomeAlignBottom(this);
+                        ShortcutStore.setHomeAlignBottom(this, bottom);
+                        loadShortcuts();
+                        Toast.makeText(this, bottom ? "Thumb-Reach: Apps aligned to bottom" : "Standard: Apps aligned to top", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .show();

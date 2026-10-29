@@ -196,7 +196,16 @@ public class AdBlockEngine {
             String host = uri.getHost();
             if (host != null) {
                 host = host.toLowerCase();
-                // Whitelist essential auth / account switching endpoints so logins and account pickers never freeze
+
+                // Whitelist YouTube video streaming, player APIs, and image assets so video never blacks out
+                if (host.equals("youtube.com") || host.endsWith(".youtube.com")
+                        || host.equals("googlevideo.com") || host.endsWith(".googlevideo.com")
+                        || host.equals("ytimg.com") || host.endsWith(".ytimg.com")
+                        || host.equals("ggpht.com") || host.endsWith(".ggpht.com")) {
+                    return false;
+                }
+
+                // Whitelist Google accounts, auth, and application backends so account switching never freezes
                 if (host.equals("accounts.google.com")
                         || host.endsWith(".accounts.google.com")
                         || host.equals("myaccount.google.com")
@@ -225,7 +234,6 @@ public class AdBlockEngine {
             if (lowerUrl.contains("/ads.js")
                     || lowerUrl.contains("/pagead/")
                     || lowerUrl.contains("adsbygoogle")
-                    || lowerUrl.contains("google_ad_")
                     || lowerUrl.contains("/ad-banner")
                     || lowerUrl.contains("/adserver")
                     || lowerUrl.contains("/adservice")
@@ -248,10 +256,6 @@ public class AdBlockEngine {
                     || lowerUrl.contains("trafficjunky")
                     || lowerUrl.contains("clickadu")
                     || lowerUrl.contains("adtrue")
-                    || lowerUrl.contains("/adunit")
-                    || lowerUrl.contains("/adclick")
-                    || lowerUrl.contains("banner_ad")
-                    || lowerUrl.contains("ad_status=")
                     || lowerUrl.contains("highperformancecpmgate")
                     || lowerUrl.contains("profitabledisplaynetwork")) {
                 return true;
@@ -294,50 +298,22 @@ public class AdBlockEngine {
     public static final String COSMETIC_AD_BLOCK_JS =
             "javascript:(function() {" +
             "  try {" +
-            "    var noop = function() {};" +
+            "    var h = (location.hostname || '').toLowerCase();" +
+            "    if (h.indexOf('youtube.com') !== -1 || h.indexOf('google.com') !== -1) return;" +
             "    var css = '" +
-            "      .ad, .ads, .adsbygoogle, .advertisement, .ad-banner, .ad-container, " +
-            "      .ad-wrapper, .sponsored-post, [id^=\"ad_\"], [id^=\"google_ads_\"], [id^=\"aswift_\"], " +
-            "      [class*=\"ad-slot\"], [class*=\"banner-ad\"], [class*=\"sponsored\"], " +
-            "      [data-ad], [data-ad-unit], [data-google-query-id], " +
-            "      .ytp-ad-module, .ytp-ad-overlay-container, .ytp-ad-text, .video-ads, " +
-            "      #carbonads, .taboola-ad, .outbrain-ad, .mgid-ad, " +
-            "      [class*=\"sticky-ad\"], [id*=\"sticky-ad\"], [class*=\"floating-ad\"], [id*=\"floating-ad\"], " +
-            "      [class*=\"overlay-banner\"], [id*=\"overlay-banner\"], " +
-            "      amp-ad, amp-embed, [data-ad-client], [data-ad-slot] { " +
+            "      .adsbygoogle, [id^=\"google_ads_\"], [id^=\"aswift_\"], " +
+            "      .taboola-ad, .outbrain-ad, .mgid-ad, #carbonads, " +
+            "      [data-ad-slot], amp-ad { " +
             "        display: none !important; " +
             "        height: 0 !important; " +
-            "        min-height: 0 !important; " +
-            "        max-height: 0 !important; " +
             "        visibility: hidden !important; " +
-            "        opacity: 0 !important; " +
-            "        pointer-events: none !important; " +
-            "      } " +
-            "      body, html { overflow: auto !important; }';" +
+            "      }';" +
             "    var style = document.getElementById('locklauncher-adblock-css');" +
             "    if (!style) {" +
             "      style = document.createElement('style');" +
             "      style.id = 'locklauncher-adblock-css';" +
             "      style.textContent = css;" +
             "      (document.head || document.documentElement).appendChild(style);" +
-            "    }" +
-            "    function sanitizeLinks() {" +
-            "      var links = document.querySelectorAll('a[target=\"_blank\"]');" +
-            "      for (var i = 0; i < links.length; i++) { links[i].removeAttribute('target'); }" +
-            "    }" +
-            "    function nukeAds() {" +
-            "      sanitizeLinks();" +
-            "      var adEls = document.querySelectorAll('.ad, .adsbygoogle, [id^=\"google_ads\"], [id^=\"aswift_\"], .ytp-ad-module, .video-ads, iframe[src*=\"doubleclick\"], iframe[src*=\"ad\"]');" +
-            "      for (var i = 0; i < adEls.length; i++) { try { adEls[i].remove(); } catch(e) {} }" +
-            "      var skipBtn = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .videoAdUiSkipButton');" +
-            "      if (skipBtn) { try { skipBtn.click(); } catch(e) {} }" +
-            "      var adVideo = document.querySelector('.ad-showing video');" +
-            "      if (adVideo && !isNaN(adVideo.duration)) { adVideo.currentTime = adVideo.duration; }" +
-            "    }" +
-            "    nukeAds();" +
-            "    if (!window._llObserver) {" +
-            "      window._llObserver = new MutationObserver(nukeAds);" +
-            "      window._llObserver.observe(document.documentElement, { childList: true, subtree: true });" +
             "    }" +
             "  } catch(e) {}" +
             "})();";

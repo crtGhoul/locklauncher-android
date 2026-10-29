@@ -643,6 +643,22 @@ public class IconUtil {
                         km.requestDismissKeyguard((Activity) ctx, null);
                     } catch (Exception ignored) {}
                 }
+                Intent launch = launchIntent(ctx, s);
+                if (launch != null) {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                    try {
+                        PendingIntent pi = PendingIntent.getActivity(
+                                ctx, (int) (System.currentTimeMillis() & 0xffff), launch,
+                                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                        pi.send();
+                        return true;
+                    } catch (Exception e) {
+                        try {
+                            ctx.startActivity(launch);
+                            return true;
+                        } catch (Exception ignored) {}
+                    }
+                }
                 try {
                     LauncherApps la = (LauncherApps) ctx.getSystemService(Context.LAUNCHER_APPS_SERVICE);
                     UserManager um = (UserManager) ctx.getSystemService(Context.USER_SERVICE);
@@ -654,7 +670,7 @@ public class IconUtil {
                                 la.startMainActivity(acts.get(0).getComponentName(), uh, null, null);
                                 return true;
                             }
-                        }
+                        } 
                     }
                 } catch (Exception ignored) {
                 }

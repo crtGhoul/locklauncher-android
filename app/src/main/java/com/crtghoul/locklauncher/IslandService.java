@@ -226,7 +226,7 @@ public class IslandService extends Service {
     }
 
     private void triggerChargingPulse() {
-        lastChargingMsg = "âš¡ " + IconUtil.getLiveBatteryInfo(this) + " (Charging)";
+        lastChargingMsg = "⚡ " + IconUtil.getLiveBatteryInfo(this) + " (Charging)";
         rebuild();
         mainHandler.postDelayed(() -> {
             lastChargingMsg = null;
@@ -348,7 +348,7 @@ public class IslandService extends Service {
         pill.setPadding(dp(14), dp(6), dp(14), dp(6));
 
         TextView musicIcon = new TextView(this);
-        musicIcon.setText("ðŸŽµ ");
+        musicIcon.setText("🎵 ");
         musicIcon.setTextSize(14);
         pill.addView(musicIcon);
         // Music wave bars: driven by the REAL playing state only.
@@ -366,7 +366,7 @@ public class IslandService extends Service {
             String t = meta.getString(MediaMetadata.METADATA_KEY_TITLE);
             if (t != null && !t.isEmpty()) title = t;
             String a = meta.getString(MediaMetadata.METADATA_KEY_ARTIST);
-            if (a != null && !a.isEmpty()) artist = " Â· " + a;
+            if (a != null && !a.isEmpty()) artist = " · " + a;
         }
 
         TextView textInfo = new TextView(this);
@@ -381,7 +381,7 @@ public class IslandService extends Service {
 
         // Play/Pause control
         TextView btnPlayPause = new TextView(this);
-        btnPlayPause.setText("â¸ï¸");
+        btnPlayPause.setText("⏸️ ");
         btnPlayPause.setTextSize(15);
         btnPlayPause.setPadding(dp(4), 0, dp(6), 0);
         btnPlayPause.setOnClickListener(v -> {
@@ -394,7 +394,7 @@ public class IslandService extends Service {
 
         // Next Track control
         TextView btnNext = new TextView(this);
-        btnNext.setText("â­ï¸");
+        btnNext.setText("⏭️ ");
         btnNext.setTextSize(15);
         btnNext.setPadding(dp(4), 0, dp(2), 0);
         btnNext.setOnClickListener(v -> {
@@ -451,7 +451,7 @@ public class IslandService extends Service {
         IslandGlowHelper.applySilentDot(silentDot, this);
         
         TextView glyph = new TextView(this);
-        glyph.setText("â—");
+        glyph.setText("● ");
         glyph.setTextColor(0x7AFFFFFF);
         glyph.setTextSize(9);
         glyph.setPadding(0, 0, dp(5), 0);
@@ -613,7 +613,7 @@ public class IslandService extends Service {
         header.setPadding(0, 0, 0, dp(10));
 
         TextView title = new TextView(this);
-        title.setText("ðŸï¸ Dynamic Island");
+        title.setText("🏝️ Dynamic Island");
         title.setTextColor(0xFFFFFFFF);
         title.setTextSize(15);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -649,9 +649,9 @@ public class IslandService extends Service {
         gap.setLayoutParams(new LinearLayout.LayoutParams(dp(6), 1));
         header.addView(gap);
 
-        // [ ï¼‹ Add App ] button
+        // [ ＋ Add App ] button
         TextView btnAdd = new TextView(this);
-        btnAdd.setText("ï¼‹ Add App");
+        btnAdd.setText("＋ Add App");
         btnAdd.setTextColor(0xFFFFFFFF);
         btnAdd.setTextSize(12);
         btnAdd.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -670,9 +670,9 @@ public class IslandService extends Service {
         });
         header.addView(btnAdd);
 
-        // [ âœ• ] close button
+        // [ ✕ ] close button
         TextView btnClose = new TextView(this);
-        btnClose.setText(" âœ• ");
+        btnClose.setText(" ✕ ");
         btnClose.setTextColor(0x8AFFFFFF);
         btnClose.setTextSize(16);
         btnClose.setPadding(dp(8), dp(4), dp(2), dp(4));
@@ -696,7 +696,7 @@ public class IslandService extends Service {
             emptyBox.setPadding(dp(12), dp(24), dp(12), dp(24));
 
             TextView emptyGlyph = new TextView(this);
-            emptyGlyph.setText("ðŸï¸");
+            emptyGlyph.setText("🏝️");
             emptyGlyph.setTextSize(32);
             emptyGlyph.setGravity(Gravity.CENTER);
             emptyBox.addView(emptyGlyph);
@@ -719,7 +719,7 @@ public class IslandService extends Service {
             emptyBox.addView(emptySub);
 
             TextView btnAddBig = new TextView(this);
-            btnAddBig.setText("  ï¼‹ Add Apps to Island  ");
+            btnAddBig.setText("  ＋ Add Apps to Island  ");
             btnAddBig.setTextColor(0xFF000000);
             btnAddBig.setTextSize(13);
             btnAddBig.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -833,14 +833,14 @@ public class IslandService extends Service {
         if (islandView == null) return;
         final List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
         String[] opts = {
-                "ðŸš€ Launch App",
-                "ðŸ—‘ï¸ Remove from Island",
-                (index > 0 ? "â¬…ï¸ Move Left" : "â¬…ï¸ (Already First)"),
-                (index < shortcuts.size() - 1 ? "âž¡ï¸ Move Right" : "âž¡ï¸ (Already Last)")
+                "🚀 Launch App",
+                "🗑️ Remove from Island",
+                (index > 0 ? "⬅️ Move Left" : "⬅️ (Already First)"),
+                (index < shortcuts.size() - 1 ? "➡️ Move Right" : "➡️ (Already Last)")
         };
 
         AlertDialog.Builder b = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
-        b.setTitle("ðŸï¸ " + s.label);
+        b.setTitle("🏝️ " + s.label);
         b.setItems(opts, (d, which) -> {
             switch (which) {
                 case 0:
@@ -979,7 +979,7 @@ public class IslandService extends Service {
     /** Long-press hides the island; the in-app toggle brings it back. */
     private void hideIsland() {
         setIslandOn(this, false);
-        Toast.makeText(this, "Island hidden â€” turn it back on in Lock Launcher",
+        Toast.makeText(this, "Island hidden — turn it back on in Lock Launcher",
                 Toast.LENGTH_LONG).show();
         stopSelf();
     }
