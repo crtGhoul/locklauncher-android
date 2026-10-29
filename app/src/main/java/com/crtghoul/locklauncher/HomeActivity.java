@@ -62,6 +62,7 @@ public class HomeActivity extends Activity {
     private static final int REQUEST_CREATE_APPWIDGET = 2002;
     private static final int REQUEST_PICK_APP_FOR_SLOT = 2005;
     private static final int REQ_PICK_CUSTOM_LOGO = 2006;
+    private static final int REQUEST_PICK_APP_FOR_ISLAND = 2007;
 
     private int pendingSlotIndex = -1;
     private Shortcut pendingLogoShortcut = null;
@@ -71,6 +72,10 @@ public class HomeActivity extends Activity {
     private View dragActionBar;
     private View dragActionRemove;
     private View dragActionOptions;
+
+    private View toggleAppsPill;
+    private TextView toggleAppsPillText;
+    private boolean appsRevealedInCleanMode = false;
 
     private TextView clockView;
     private TextView dateBatteryView;
@@ -213,6 +218,16 @@ public class HomeActivity extends Activity {
             showAddWebAppDialog("", "");
         });
 
+        toggleAppsPill = findViewById(R.id.btn_toggle_apps_pill);
+        toggleAppsPillText = findViewById(R.id.text_toggle_apps_pill);
+        if (toggleAppsPill != null) {
+            toggleAppsPill.setOnClickListener(v -> toggleCleanModeApps());
+            toggleAppsPill.setOnLongClickListener(v -> {
+                showCleanModeOptionsDialog();
+                return true;
+            });
+        }
+
         View.OnLongClickListener bgLongClickListener = v -> {
             showWallpaperMenu();
             return true;
@@ -249,6 +264,10 @@ public class HomeActivity extends Activity {
                 if (Math.abs(diffY) > Math.abs(diffX)) {
                     if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY) {
                         if (diffY < 0) {
+                            if (ShortcutStore.isHomeCleanMode(HomeActivity.this) && !appsRevealedInCleanMode) {
+                                toggleCleanModeApps();
+                                return true;
+                            }
                             // Swipe up -> Open searchable app drawer
                             Intent drawer = new Intent(HomeActivity.this, AppPickerActivity.class);
                             drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
@@ -256,6 +275,10 @@ public class HomeActivity extends Activity {
                             overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
                             return true;
                         } else {
+                            if (ShortcutStore.isHomeCleanMode(HomeActivity.this) && appsRevealedInCleanMode) {
+                                toggleCleanModeApps();
+                                return true;
+                            }
                             // Swipe down -> Open notification shade
                             expandNotificationShade();
                             return true;
@@ -535,6 +558,19 @@ public class HomeActivity extends Activity {
         opts.add("🗂️ Organize Home Grid (16 Slots)");
         acts.add(this::showGridOrganizerDialog);
 
+        boolean clean = ShortcutStore.isHomeCleanMode(this);
+        opts.add(clean ? "✨ Clean Mode: Enabled (Tap to Show Apps)" : "✨ Clean Mode: Hide Apps behind Pill");
+        acts.add(() -> {
+            boolean next = !clean;
+            ShortcutStore.setHomeCleanMode(this, next);
+            appsRevealedInCleanMode = false;
+            applyCleanModeState(true);
+            Toast.makeText(this, next ? "Clean Mode active! Tap '🚀 Apps' pill to reveal." : "Clean Mode disabled", Toast.LENGTH_SHORT).show();
+        });
+
+        opts.add("🏝️ Manage Dynamic Island Apps");
+        acts.add(this::showIslandAppManagerDialog);
+
         opts.add("🧩 Add Android Widget");
         acts.add(this::selectWidget);
 
@@ -688,6 +724,22 @@ public class HomeActivity extends Activity {
                 Toast.makeText(this, "Could not load image", Toast.LENGTH_SHORT).show();
             }
             pendingLogoShortcut = null;
+        } else if (requestCode == REQUEST_PICK_APP_FOR_ISLAND && resultCode == RESULT_OK && data != null) {
+            ArrayList<String> pkgs = data.getStringArrayListExtra(AppPickerActivity.EXTRA_PACKAGES);
+            ArrayList<String> labels = data.getStringArrayListExtra(AppPickerActivity.EXTRA_LABELS);
+            long[] serials = data.getLongArrayExtra(AppPickerActivity.EXTRA_PROFILE_SERIALS);
+            if (pkgs != null && !pkgs.isEmpty()) {
+                List<Shortcut> island = ShortcutStore.loadIsland(this);
+                for (int i = 0; i < pkgs.size() && island.size() < ShortcutStore.MAX; i++) {
+                    String p = pkgs.get(i);
+                    String l = (labels != null && i < labels.size()) ? labels.get(i) : p;
+                    long s = (serials != null && i < serials.length) ? serials[i] : 0;
+                    island.add(new Shortcut(Shortcut.TYPE_APP, p, "", l, s));
+                }
+                ShortcutStore.saveIsland(this, island);
+                IslandService.refresh(this);
+                Toast.makeText(this, "Added to Dynamic Island!", Toast.LENGTH_SHORT).show();
+            }
         } else if (resultCode == RESULT_OK) {
             if (requestCode == REQUEST_PICK_APPWIDGET) {
                 configureWidget(data);
@@ -973,6 +1025,7 @@ public class HomeActivity extends Activity {
             }
             emptyHint.setVisibility(allEmpty ? View.VISIBLE : View.GONE);
         }
+        applyCleanModeState(false);
     }
 
     private void switchProfile(int profileIndex) {
@@ -996,6 +1049,152 @@ public class HomeActivity extends Activity {
                     }
                 })
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void applyCleanModeState(boolean animate) {
+        if (toggleAppsPill == null || gridView == null) return;
+        boolean cleanMode = ShortcutStore.isHomeCleanMode(this);
+        if (cleanMode) {
+            toggleAppsPill.setVisibility(View.VISIBLE);
+            if (appsRevealedInCleanMode) {
+                gridView.setVisibility(View.VISIBLE);
+                if (toggleAppsPillText != null) toggleAppsPillText.setText("▲ Hide Apps");
+                if (animate) {
+                    gridView.setAlpha(0f);
+                    gridView.setScaleX(0.92f);
+                    gridView.setScaleY(0.92f);
+                    gridView.animate().alpha(1f).scaleX(1f).scaleY(1f)
+                            .setDuration(220)
+                            .setInterpolator(new android.view.animation.OvershootInterpolator(1.2f))
+                            .start();
+                } else {
+                    gridView.setAlpha(1f);
+                    gridView.setScaleX(1f);
+                    gridView.setScaleY(1f);
+                }
+            } else {
+                if (toggleAppsPillText != null) toggleAppsPillText.setText("🚀 Apps");
+                if (animate) {
+                    gridView.animate().alpha(0f).scaleX(0.92f).scaleY(0.92f)
+                            .setDuration(160)
+                            .withEndAction(() -> gridView.setVisibility(View.GONE))
+                            .start();
+                } else {
+                    gridView.setVisibility(View.GONE);
+                }
+            }
+        } else {
+            toggleAppsPill.setVisibility(View.GONE);
+            gridView.setVisibility(View.VISIBLE);
+            gridView.setAlpha(1f);
+            gridView.setScaleX(1f);
+            gridView.setScaleY(1f);
+        }
+    }
+
+    private void toggleCleanModeApps() {
+        appsRevealedInCleanMode = !appsRevealedInCleanMode;
+        applyCleanModeState(true);
+    }
+
+    private void showCleanModeOptionsDialog() {
+        String[] opts = {
+                ShortcutStore.isHomeCleanMode(this) ? "Disable Clean Mode (Keep apps always visible)" : "Enable Clean Mode (Tuck apps into pill)",
+                "🏝️ Manage Dynamic Island Apps",
+                "🗂️ Organize Home Grid (16 Slots)"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Home Screen Mode")
+                .setItems(opts, (d, w) -> {
+                    if (w == 0) {
+                        boolean cur = ShortcutStore.isHomeCleanMode(this);
+                        ShortcutStore.setHomeCleanMode(this, !cur);
+                        appsRevealedInCleanMode = false;
+                        applyCleanModeState(true);
+                        Toast.makeText(this, !cur ? "Clean Mode active! Tap '🚀 Apps' to reveal." : "Clean Mode disabled", Toast.LENGTH_SHORT).show();
+                    } else if (w == 1) {
+                        showIslandAppManagerDialog();
+                    } else if (w == 2) {
+                        showGridOrganizerDialog();
+                    }
+                })
+                .show();
+    }
+
+    private void showIslandAppManagerDialog() {
+        List<Shortcut> island = ShortcutStore.loadIslandPadded(this);
+        String[] items = new String[island.size() + 2];
+        items[0] = "➕ Add App from Drawer to Island";
+        items[1] = "🔄 Copy All Current Home Apps to Island";
+
+        for (int i = 0; i < island.size(); i++) {
+            Shortcut s = island.get(i);
+            items[i + 2] = "Island Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty ]" : (s.isFolder() ? "📁 " : "") + s.label);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("🏝️ Dynamic Island Apps (Independent)")
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) {
+                        Intent pick = new Intent(this, AppPickerActivity.class);
+                        pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
+                        Toast.makeText(this, "Long-press any app in drawer and choose '🏝️ Add to Dynamic Island'", Toast.LENGTH_LONG).show();
+                        startActivity(pick);
+                    } else if (which == 1) {
+                        List<Shortcut> home = ShortcutStore.load(this);
+                        ShortcutStore.saveIsland(this, home);
+                        IslandService.refresh(this);
+                        Toast.makeText(this, "Copied home apps to Dynamic Island", Toast.LENGTH_SHORT).show();
+                    } else {
+                        int slotIdx = which - 2;
+                        showIslandSlotOptions(slotIdx);
+                    }
+                })
+                .setPositiveButton("Done", null)
+                .show();
+    }
+
+    private void showIslandSlotOptions(int slotIdx) {
+        List<Shortcut> island = ShortcutStore.loadIslandPadded(this);
+        Shortcut s = island.get(slotIdx);
+        if (s.isEmpty()) {
+            Intent pick = new Intent(this, AppPickerActivity.class);
+            pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, false);
+            startActivityForResult(pick, REQUEST_PICK_APP_FOR_ISLAND);
+            return;
+        }
+
+        String[] opts = {
+                "🗑️ Remove from Island",
+                "✏️ Custom Display Name"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Island Slot " + (slotIdx + 1) + ": " + s.label)
+                .setItems(opts, (d, w) -> {
+                    if (w == 0) {
+                        island.set(slotIdx, Shortcut.createEmpty());
+                        ShortcutStore.saveIsland(this, island);
+                        IslandService.refresh(this);
+                        Toast.makeText(this, "Removed from Island", Toast.LENGTH_SHORT).show();
+                    } else if (w == 1) {
+                        EditText in = new EditText(this);
+                        in.setText(s.label);
+                        new AlertDialog.Builder(this)
+                                .setTitle("Rename Island Shortcut")
+                                .setView(in)
+                                .setPositiveButton("Save", (cd, cw) -> {
+                                    String n = in.getText().toString().trim();
+                                    if (!n.isEmpty()) {
+                                        s.label = n;
+                                        ShortcutStore.saveIsland(this, island);
+                                        IslandService.refresh(this);
+                                    }
+                                })
+                                .setNegativeButton("Cancel", null)
+                                .show();
+                    }
+                })
                 .show();
     }
 
@@ -1169,6 +1368,19 @@ public class HomeActivity extends Activity {
             actions.add(() -> {
                 boolean pinned = IconUtil.pinShortcutToHomeScreen(this, s);
                 Toast.makeText(this, pinned ? "Pinned " + s.label + " to Home screen" : "Pinning not supported", Toast.LENGTH_SHORT).show();
+            });
+
+            options.add("🏝️ Add to Dynamic Island");
+            actions.add(() -> {
+                List<Shortcut> isl = ShortcutStore.loadIsland(this);
+                if (isl.size() >= ShortcutStore.MAX) {
+                    Toast.makeText(this, "Dynamic Island is full (16 max)", Toast.LENGTH_SHORT).show();
+                } else {
+                    isl.add(s);
+                    ShortcutStore.saveIsland(this, isl);
+                    IslandService.refresh(this);
+                    Toast.makeText(this, "Added " + s.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
+                }
             });
 
             if (Shortcut.TYPE_URL.equals(s.type)) {

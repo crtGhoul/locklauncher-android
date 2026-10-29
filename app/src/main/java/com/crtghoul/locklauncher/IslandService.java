@@ -336,7 +336,7 @@ public class IslandService extends Service {
     }
 
     private void showDockPill() {
-        List<Shortcut> shortcuts = ShortcutStore.load(this);
+        List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
 
         LinearLayout pill = new LinearLayout(this);
         pill.setOrientation(LinearLayout.HORIZONTAL);
@@ -499,7 +499,7 @@ public class IslandService extends Service {
     private void showExpanded() {
         removeView();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        List<Shortcut> shortcuts = ShortcutStore.load(this);
+        List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
 
         FrameLayout root = new FrameLayout(this);
         root.setOnClickListener(v -> showCollapsed());
@@ -521,8 +521,7 @@ public class IslandService extends Service {
         });
 
         TextView title = new TextView(this);
-        title.setText(ShortcutStore.profileName(this,
-                ShortcutStore.activeProfile(this)) + "  ·  tap outside to close");
+        title.setText("🏝️ Dynamic Island Apps  ·  Tap outside to close");
         title.setTextColor(0x8AFFFFFF);
         title.setTextSize(11);
         title.setGravity(Gravity.CENTER);

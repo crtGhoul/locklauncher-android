@@ -245,6 +245,27 @@
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="✨ Clean Mode (Hide apps behind 'Apps' pill)"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/switch_home_clean_mode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
             <Button
                 android:id="@+id/btn_home_grid_density"
                 android:layout_width="match_parent"
@@ -603,6 +624,36 @@
             android:layout_marginTop="8dp"
             android:background="@drawable/btn_ghost"
             android:text="Island icon count: 4 (tap to cycle 2–6)"
+            android:textColor="#FFFFFF" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Separate Island Apps from Home"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
+
+            <Switch
+                android:id="@+id/switch_island_separate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_manage_island_apps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/btn_ghost"
+            android:text="🏝️ Manage Island Apps (16 Slots)"
             android:textColor="#FFFFFF" />
 
         <Button

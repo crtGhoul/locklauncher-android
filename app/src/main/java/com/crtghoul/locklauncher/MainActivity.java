@@ -167,6 +167,15 @@ public class MainActivity extends Activity {
             homeHideLabelsSwitch.setOnCheckedChangeListener((v, on) -> ShortcutStore.setHomeHideLabels(this, on));
         }
 
+        Switch homeCleanModeSwitch = findViewById(R.id.switch_home_clean_mode);
+        if (homeCleanModeSwitch != null) {
+            homeCleanModeSwitch.setChecked(ShortcutStore.isHomeCleanMode(this));
+            homeCleanModeSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setHomeCleanMode(this, on);
+                Toast.makeText(this, on ? "Clean Mode: Apps tucked into 'Apps' pill" : "Clean Mode disabled", Toast.LENGTH_SHORT).show();
+            });
+        }
+
         Button btnGridCols = findViewById(R.id.btn_home_grid_density);
         if (btnGridCols != null) {
             btnGridCols.setText("Home Grid Density: " + ShortcutStore.homeGridColumns(this) + " Columns (tap to cycle 3, 4, 5)");
@@ -332,6 +341,21 @@ public class MainActivity extends Activity {
             islandCountBtn.setText("Island icon count: " + c + " (tap to cycle 2–6)");
             IslandService.refresh(this);
         });
+
+        Switch islandSeparateSwitch = findViewById(R.id.switch_island_separate);
+        if (islandSeparateSwitch != null) {
+            islandSeparateSwitch.setChecked(ShortcutStore.isIslandSeparate(this));
+            islandSeparateSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setIslandSeparate(this, on);
+                IslandService.refresh(this);
+                Toast.makeText(this, on ? "Dynamic Island has separate apps now" : "Dynamic Island linked to home profile", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        Button btnManageIsland = findViewById(R.id.btn_manage_island_apps);
+        if (btnManageIsland != null) {
+            btnManageIsland.setOnClickListener(v -> showManageIslandAppsDialog());
+        }
 
         findViewById(R.id.btn_sort).setOnClickListener(v -> {
             Collections.sort(shortcuts, (x, y) -> x.label.toLowerCase(Locale.ROOT)
@@ -1499,5 +1523,49 @@ public class MainActivity extends Activity {
         }
         persist();
         toast("Deleted " + removed.label);
+    }
+
+    private void showManageIslandAppsDialog() {
+        List<Shortcut> island = ShortcutStore.loadIslandPadded(this);
+        String[] items = new String[island.size() + 2];
+        items[0] = "➕ Add App from Drawer to Island";
+        items[1] = "🔄 Copy All Current Home Apps to Island";
+
+        for (int i = 0; i < island.size(); i++) {
+            Shortcut s = island.get(i);
+            items[i + 2] = "Island Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty ]" : (s.isFolder() ? "📁 " : "") + s.label);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("🏝️ Dynamic Island Apps (16 Slots)")
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) {
+                        Intent pick = new Intent(this, AppPickerActivity.class);
+                        pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
+                        Toast.makeText(this, "Long-press any app in drawer and choose '🏝️ Add to Dynamic Island'", Toast.LENGTH_LONG).show();
+                        startActivity(pick);
+                    } else if (which == 1) {
+                        List<Shortcut> home = ShortcutStore.load(this);
+                        ShortcutStore.saveIsland(this, home);
+                        IslandService.refresh(this);
+                        Toast.makeText(this, "Copied home apps to Dynamic Island", Toast.LENGTH_SHORT).show();
+                    } else {
+                        int slotIdx = which - 2;
+                        Shortcut s = island.get(slotIdx);
+                        if (s.isEmpty()) {
+                            Intent pick = new Intent(this, AppPickerActivity.class);
+                            pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
+                            Toast.makeText(this, "Long-press an app to add to Island", Toast.LENGTH_SHORT).show();
+                            startActivity(pick);
+                        } else {
+                            island.set(slotIdx, Shortcut.createEmpty());
+                            ShortcutStore.saveIsland(this, island);
+                            IslandService.refresh(this);
+                            Toast.makeText(this, "Cleared slot " + (slotIdx + 1), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                })
+                .setPositiveButton("Done", null)
+                .show();
     }
 }

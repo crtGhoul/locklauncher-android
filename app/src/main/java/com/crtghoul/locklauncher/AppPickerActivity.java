@@ -244,6 +244,7 @@ public class AppPickerActivity extends Activity {
                         "📌 Pin to Home screen (Main Page)",
                         "📁 Add to Folder...",
                         "➕ Add to Lock Launcher Dock",
+                        "🏝️ Add to Dynamic Island",
                         "✏️ Custom Display Name",
                         "ℹ️ App Info",
                         "🚫 Hide from drawer",
@@ -283,6 +284,17 @@ public class AppPickerActivity extends Activity {
                                     }
                                     break;
                                 case 4:
+                                    List<Shortcut> islandList = ShortcutStore.loadIsland(this);
+                                    if (islandList.size() >= ShortcutStore.MAX) {
+                                        Toast.makeText(this, "Dynamic Island is full (16 max)", Toast.LENGTH_SHORT).show();
+                                    } else {
+                                        islandList.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
+                                        ShortcutStore.saveIsland(this, islandList);
+                                        IslandService.refresh(this);
+                                        Toast.makeText(this, "Added " + e.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
+                                    }
+                                    break;
+                                case 5:
                                     EditText input = new EditText(this);
                                     input.setText(e.label);
                                     if (e.label != null) input.setSelection(e.label.length());
@@ -329,12 +341,12 @@ public class AppPickerActivity extends Activity {
                                             .setNegativeButton("Cancel", null)
                                             .show();
                                     break;
-                                case 5:
+                                case 6:
                                     Intent info = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                                     info.setData(Uri.parse("package:" + e.pkg));
                                     startActivity(info);
                                     break;
-                                case 6:
+                                case 7:
                                     Set<String> curHidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
                                     curHidden.add(e.pkg);
                                     prefs.edit().putStringSet("hidden_apps", curHidden).apply();
@@ -342,7 +354,7 @@ public class AppPickerActivity extends Activity {
                                     adapter.applyFilter();
                                     Toast.makeText(this, e.label + " hidden from drawer", Toast.LENGTH_SHORT).show();
                                     break;
-                                case 7:
+                                case 8:
                                     Intent uninst = new Intent(Intent.ACTION_DELETE);
                                     uninst.setData(Uri.parse("package:" + e.pkg));
                                     startActivity(uninst);

@@ -34,6 +34,9 @@ public class ShortcutStore {
     private static final String KEY_MONOCHROME_ICONS = "home_monochrome_icons";
     private static final String KEY_SEARCH_CALCULATOR = "search_calculator";
     private static final String KEY_WIDGET_HEIGHT = "widget_h_";
+    private static final String KEY_ISLAND_SEPARATE_APPS = "island_separate_apps";
+    private static final String KEY_ISLAND_SHORTCUTS = "island_shortcuts";
+    private static final String KEY_HOME_CLEAN_MODE = "home_clean_mode";
     public static final int MAX = 16;
     public static final int PROFILES = 3;
 
@@ -293,6 +296,66 @@ public class ShortcutStore {
 
     public static void setSearchCalculator(Context ctx, boolean enabled) {
         prefs(ctx).edit().putBoolean(KEY_SEARCH_CALCULATOR, enabled).apply();
+    }
+
+    public static boolean isIslandSeparate(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_ISLAND_SEPARATE_APPS, true);
+    }
+
+    public static void setIslandSeparate(Context ctx, boolean separate) {
+        prefs(ctx).edit().putBoolean(KEY_ISLAND_SEPARATE_APPS, separate).apply();
+    }
+
+    public static List<Shortcut> loadIsland(Context ctx) {
+        if (!isIslandSeparate(ctx)) {
+            return load(ctx);
+        }
+        List<Shortcut> out = new ArrayList<>();
+        SharedPreferences p = prefs(ctx);
+        String raw = p.getString(KEY_ISLAND_SHORTCUTS, null);
+        if (raw == null) {
+            List<Shortcut> prof0 = load(ctx, 0);
+            for (int i = 0; i < Math.min(6, prof0.size()); i++) {
+                if (!prof0.get(i).isEmpty()) out.add(prof0.get(i));
+            }
+            saveIsland(ctx, out);
+            return out;
+        }
+        try {
+            JSONArray a = new JSONArray(raw);
+            for (int i = 0; i < a.length() && i < MAX; i++) {
+                out.add(Shortcut.fromJson(a.getJSONObject(i)));
+            }
+        } catch (JSONException ignored) {
+        }
+        return out;
+    }
+
+    public static List<Shortcut> loadIslandPadded(Context ctx) {
+        List<Shortcut> list = loadIsland(ctx);
+        while (list.size() < MAX) {
+            list.add(Shortcut.createEmpty());
+        }
+        return list;
+    }
+
+    public static void saveIsland(Context ctx, List<Shortcut> list) {
+        JSONArray a = new JSONArray();
+        for (Shortcut s : list) {
+            try {
+                a.put(s.toJson());
+            } catch (JSONException ignored) {
+            }
+        }
+        prefs(ctx).edit().putString(KEY_ISLAND_SHORTCUTS, a.toString()).apply();
+    }
+
+    public static boolean isHomeCleanMode(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_HOME_CLEAN_MODE, false);
+    }
+
+    public static void setHomeCleanMode(Context ctx, boolean clean) {
+        prefs(ctx).edit().putBoolean(KEY_HOME_CLEAN_MODE, clean).apply();
     }
 
     private static SharedPreferences prefs(Context ctx) {
