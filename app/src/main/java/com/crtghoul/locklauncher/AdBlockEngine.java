@@ -196,6 +196,23 @@ public class AdBlockEngine {
             String host = uri.getHost();
             if (host != null) {
                 host = host.toLowerCase();
+                // Whitelist essential auth / account switching endpoints so logins and account pickers never freeze
+                if (host.equals("accounts.google.com")
+                        || host.endsWith(".accounts.google.com")
+                        || host.equals("myaccount.google.com")
+                        || host.equals("apis.google.com")
+                        || host.equals("oauth2.googleapis.com")
+                        || host.equals("passwords.google.com")
+                        || host.equals("ssl.gstatic.com")
+                        || host.equals("accounts.youtube.com")
+                        || host.equals("appleid.apple.com")
+                        || host.equals("login.microsoftonline.com")
+                        || host.equals("login.live.com")
+                        || host.equals("auth.openai.com")
+                        || host.equals("id.atlassian.com")
+                        || host.equals("github.com")) {
+                    return false;
+                }
                 for (String adDomain : AD_DOMAINS) {
                     if (host.equals(adDomain) || host.endsWith("." + adDomain)) {
                         return true;
@@ -216,7 +233,9 @@ public class AdBlockEngine {
                     || lowerUrl.contains("/prebid")
                     || lowerUrl.contains("doubleclick.net")
                     || lowerUrl.contains("/popunder")
-                    || lowerUrl.contains("/popup")
+                    || lowerUrl.contains("/popads")
+                    || lowerUrl.contains("popup.js")
+                    || lowerUrl.contains("pop-under")
                     || lowerUrl.contains("/sponsored/")
                     || lowerUrl.contains("googletagmanager.com/gtm.js")
                     || lowerUrl.contains("google-analytics.com/analytics.js")
@@ -276,16 +295,6 @@ public class AdBlockEngine {
             "javascript:(function() {" +
             "  try {" +
             "    var noop = function() {};" +
-            "    var dummyWin = { closed: true, focus: noop, blur: noop, close: noop, postMessage: noop, document: {}, location: {} };" +
-            "    try {" +
-            "      window.open = function(u, t, f) { return dummyWin; };" +
-            "      Object.defineProperty(window, 'open', { value: window.open, writable: false, configurable: false });" +
-            "    } catch(e) {}" +
-            "    try {" +
-            "      window.alert = noop;" +
-            "      window.confirm = function() { return false; };" +
-            "      window.prompt = function() { return null; };" +
-            "    } catch(e) {}" +
             "    var css = '" +
             "      .ad, .ads, .adsbygoogle, .advertisement, .ad-banner, .ad-container, " +
             "      .ad-wrapper, .sponsored-post, [id^=\"ad_\"], [id^=\"google_ads_\"], [id^=\"aswift_\"], " +

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/web_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0D1117">
@@ -31,21 +32,115 @@
         android:progressDrawable="@drawable/btn_accent"
         android:visibility="gone" />
 
-    <!-- Floating Minimalist Fullscreen Toggle Button (Auto-fades) -->
-    <TextView
-        android:id="@+id/btn_toggle_fullscreen"
-        android:layout_width="38dp"
-        android:layout_height="38dp"
-        android:layout_alignParentEnd="true"
+    <!-- Floating Minimalist Web Navigation Dock -->
+    <LinearLayout
+        android:id="@+id/web_nav_bar"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
         android:layout_alignParentBottom="true"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="24dp"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="20dp"
         android:background="@drawable/dock_card"
-        android:gravity="center"
-        android:text="⛶"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:alpha="0.8"
-        android:elevation="6dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:elevation="10dp">
+
+        <!-- Backward Button -->
+        <TextView
+            android:id="@+id/btn_web_back"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="◀"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <!-- Forward Button -->
+        <TextView
+            android:id="@+id/btn_web_forward"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="▶"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <!-- Refresh / Reload Button -->
+        <TextView
+            android:id="@+id/btn_web_refresh"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="↻"
+            android:textColor="#FFFFFF"
+            android:textSize="19sp"
+            android:textStyle="bold"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="6dp"
+            android:background="#25FFFFFF" />
+
+        <!-- Domain / Title Pill -->
+        <TextView
+            android:id="@+id/text_web_domain"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxWidth="130dp"
+            android:singleLine="true"
+            android:ellipsize="middle"
+            android:text="🔒 Web"
+            android:textColor="#DDFFFFFF"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="4dp"
+            android:paddingEnd="8dp" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="4dp"
+            android:background="#25FFFFFF" />
+
+        <!-- Immersive Fullscreen Toggle Button -->
+        <TextView
+            android:id="@+id/btn_toggle_fullscreen"
+            android:layout_width="36dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="⛶"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <!-- Close / Exit Button -->
+        <TextView
+            android:id="@+id/btn_web_close"
+            android:layout_width="36dp"
+            android:layout_height="38dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textColor="#FF7777"
+            android:textSize="16sp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
 
 </RelativeLayout>

@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
@@ -23,6 +24,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -30,14 +32,17 @@ import android.widget.Toast;
 /**
  * Standalone Immersive 100% Ad-Free Web App Container.
  * Features:
+ * - Floating Minimalist Web Navigation Dock with Back (◀), Forward (▶), Refresh/Stop (↻/✕),
+ *   Domain Pill, Fullscreen Toggle (⛶/🗗), and Close (✕).
+ * - Smooth Multi-Account Authentication: Seamless Google, Microsoft, and OAuth account switching
+ *   with full cross-origin cookie persistence and popup window transport routing.
+ * - Anti-Block User-Agent: Sanitized Chrome Mobile headers preventing Google's embedded WebView security block.
+ * - Hardware Gesture Support: Android 13+ OnBackInvokedCallback and hardware back history traversal.
  * - 100% True Fullscreen: Supports HTML5 video/canvas/game onShowCustomView fullscreen.
- * - Dedicated Floating ⛶ Fullscreen Toggle for instant distraction-free immersive mode.
- * - Zero Browser Chrome: No address bar, no search bar, no URL input.
  * - Airtight Ad & Popup Suppression (AppForge/appmaka architecture):
- *   1. Intercepts all window.open / target="_blank" popups and drops them (0% popup leaks).
- *   2. Blocks rogue store redirects (market://, intent://) and popup dialog traps.
- *   3. Network request interceptor across 220+ ad networks with MIME-safe null payloads.
- *   4. Continuous DOM ad & overlay cleanup via MutationObserver.
+ *   1. Blocks rogue store redirects (market://, intent://) and malicious popup dialog traps.
+ *   2. Network request interceptor across 220+ ad networks with MIME-safe null payloads.
+ *   3. Continuous DOM ad & overlay cleanup via MutationObserver.
  * - 120Hz Hardware-Accelerated Rendering on LTPO Displays.
  */
 public class WebAppActivity extends Activity {
@@ -48,11 +53,19 @@ public class WebAppActivity extends Activity {
     private WebView webView;
     private ProgressBar progressBar;
     private FrameLayout fullscreenContainer;
+    private LinearLayout webNavBar;
+    private TextView btnBack;
+    private TextView btnForward;
+    private TextView btnRefresh;
+    private TextView textDomain;
     private TextView btnToggleFullscreen;
+    private TextView btnClose;
     private View customView;
     private WebChromeClient.CustomViewCallback customViewCallback;
-    private boolean isImmersiveFullscreen = true;
+    private boolean isImmersiveFullscreen = false;
+    private boolean isLoading = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private Object backCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,8 +81,8 @@ public class WebAppActivity extends Activity {
 
         setContentView(R.layout.activity_web_app);
 
-        // Apply true immersive fullscreen immediately
-        applyFullscreen(true);
+        // Standard clean edge-to-edge view by default
+        applyFullscreen(false);
 
         String url = getIntent().getStringExtra(EXTRA_URL);
         if (url == null && getIntent().getData() != null) {
@@ -120,22 +133,84 @@ public class WebAppActivity extends Activity {
         progressBar = findViewById(R.id.web_progress);
         webView = findViewById(R.id.web_view);
         fullscreenContainer = findViewById(R.id.fullscreen_custom_view_container);
+        webNavBar = findViewById(R.id.web_nav_bar);
+        btnBack = findViewById(R.id.btn_web_back);
+        btnForward = findViewById(R.id.btn_web_forward);
+        btnRefresh = findViewById(R.id.btn_web_refresh);
+        textDomain = findViewById(R.id.text_web_domain);
         btnToggleFullscreen = findViewById(R.id.btn_toggle_fullscreen);
+        btnClose = findViewById(R.id.btn_web_close);
 
+        // Setup Back Button
+        if (btnBack != null) {
+            btnBack.setOnClickListener(v -> {
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                }
+            });
+        }
+
+        // Setup Forward Button
+        if (btnForward != null) {
+            btnForward.setOnClickListener(v -> {
+                if (webView != null && webView.canGoForward()) {
+                    webView.goForward();
+                }
+            });
+        }
+
+        // Setup Refresh / Stop Button
+        if (btnRefresh != null) {
+            btnRefresh.setOnClickListener(v -> {
+                if (webView != null) {
+                    if (isLoading) {
+                        webView.stopLoading();
+                    } else {
+                        webView.reload();
+                    }
+                }
+            });
+        }
+
+        // Setup Domain indicator pill click (shows full URL in toast)
+        if (textDomain != null) {
+            textDomain.setOnClickListener(v -> {
+                if (webView != null && webView.getUrl() != null) {
+                    String info = (webView.getTitle() != null ? webView.getTitle() + "\n" : "") + webView.getUrl();
+                    Toast.makeText(this, info, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        // Setup Fullscreen Toggle Button
         if (btnToggleFullscreen != null) {
             btnToggleFullscreen.setOnClickListener(v -> {
                 isImmersiveFullscreen = !isImmersiveFullscreen;
                 applyFullscreen(isImmersiveFullscreen);
-                btnToggleFullscreen.setText(isImmersiveFullscreen ? "⛶" : "🗗");
+                btnToggleFullscreen.setText(isImmersiveFullscreen ? "🗗" : "⛶");
                 Toast.makeText(this, isImmersiveFullscreen ? "Immersive Fullscreen" : "Standard View", Toast.LENGTH_SHORT).show();
             });
+        }
 
-            // Fade floating fullscreen button slightly after 4 seconds
-            handler.postDelayed(() -> {
-                if (btnToggleFullscreen != null) {
-                    btnToggleFullscreen.animate().alpha(0.35f).setDuration(500).start();
-                }
-            }, 4000);
+        // Setup Close Button
+        if (btnClose != null) {
+            btnClose.setOnClickListener(v -> finish());
+        }
+
+        // Enable Cookies and 3rd-party cookies (essential for Google Account switching & cross-origin OAuth)
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(webView, true);
+        }
+
+        // Register predictive back gesture on Android 13+ (API 33+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            android.window.OnBackInvokedCallback callback = this::handleBackNavigation;
+            this.backCallback = callback;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    callback);
         }
 
         WebSettings settings = webView.getSettings();
@@ -148,15 +223,24 @@ public class WebAppActivity extends Activity {
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+
+        // Sanitize User-Agent to bypass Google's "This browser or app may not be secure" block
+        String defaultUa = settings.getUserAgentString();
+        if (defaultUa != null) {
+            String cleanUa = defaultUa.replace("; wv", "")
+                    .replaceAll("Version\\/\\d+\\.\\d+\\s*", "");
+            settings.setUserAgentString(cleanUa);
+        }
+
         // P0-1: never let a loaded page reach local files or content providers.
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
 
-        // Multi-window enabled so WebChromeClient.onCreateWindow strictly intercepts all popup triggers
+        // Multi-window and JS window opening for smooth OAuth / Account Chooser popups
         settings.setSupportMultipleWindows(true);
-        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
@@ -166,11 +250,14 @@ public class WebAppActivity extends Activity {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 if (newProgress < 100) {
+                    isLoading = true;
                     progressBar.setVisibility(View.VISIBLE);
                     progressBar.setProgress(newProgress);
                 } else {
+                    isLoading = false;
                     progressBar.setVisibility(View.GONE);
                 }
+                updateNavState();
 
                 // Progressive DOM ad cleansing during loading
                 if (newProgress == 30 || newProgress == 60 || newProgress == 85) {
@@ -183,30 +270,64 @@ public class WebAppActivity extends Activity {
                 if (pageTitle != null && !pageTitle.isEmpty()) {
                     setTitle(pageTitle);
                 }
+                updateNavState();
             }
 
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
-                // 100% block popup windows!
-                // If this is a real user click on a legitimate link (not an ad), navigate in the same view.
-                WebView.HitTestResult hitResult = view.getHitTestResult();
-                if (hitResult != null) {
-                    String extra = hitResult.getExtra();
-                    int type = hitResult.getType();
-                    if (extra != null && !AdBlockEngine.isAdUrl(extra)
-                            && (type == WebView.HitTestResult.SRC_ANCHOR_TYPE || type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE)) {
-                        // P0-1: funnel popup navigation through the same
-                        // http/https-only check as the initial URL.
-                        try {
-                            String ps = Uri.parse(extra).getScheme();
-                            if (ps != null && (ps.equalsIgnoreCase("http") || ps.equalsIgnoreCase("https"))) {
-                                view.loadUrl(extra);
-                            }
-                        } catch (Exception ignored) {
+                if (resultMsg == null) return false;
+
+                // Create a temporary hidden WebView to receive the popup's window transport
+                // so Chromium's V8 JavaScript engine does not hang or reject window.open promises
+                // (e.g. during Google Account switching, OAuth, or link clicks).
+                final WebView tempWebView = new WebView(view.getContext());
+                WebSettings tempSettings = tempWebView.getSettings();
+                tempSettings.setJavaScriptEnabled(true);
+
+                tempWebView.setWebViewClient(new WebViewClient() {
+                    private boolean redirected = false;
+
+                    private boolean handleRedirect(String targetUrl) {
+                        if (redirected) return true;
+                        if (targetUrl == null || targetUrl.isEmpty() || targetUrl.equals("about:blank")) {
+                            return false;
                         }
+                        redirected = true;
+                        if (!AdBlockEngine.isAdUrl(targetUrl)) {
+                            // Funnel navigation safely into the main WebView
+                            view.post(() -> view.loadUrl(targetUrl));
+                        }
+                        view.post(tempWebView::destroy);
+                        return true;
                     }
+
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
+                        if (request != null && request.getUrl() != null) {
+                            return handleRedirect(request.getUrl().toString());
+                        }
+                        return false;
+                    }
+
+                    @SuppressWarnings("deprecation")
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView v, String url) {
+                        return handleRedirect(url);
+                    }
+
+                    @Override
+                    public void onPageStarted(WebView v, String url, Bitmap favicon) {
+                        super.onPageStarted(v, url, favicon);
+                        handleRedirect(url);
+                    }
+                });
+
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                if (transport != null) {
+                    transport.setWebView(tempWebView);
+                    resultMsg.sendToTarget();
+                    return true;
                 }
-                // Returning false tells WebView to drop the popup window completely.
                 return false;
             }
 
@@ -253,7 +374,7 @@ public class WebAppActivity extends Activity {
                 customView = view;
                 customViewCallback = callback;
                 webView.setVisibility(View.GONE);
-                if (btnToggleFullscreen != null) btnToggleFullscreen.setVisibility(View.GONE);
+                if (webNavBar != null) webNavBar.setVisibility(View.GONE);
                 fullscreenContainer.addView(view, new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT));
@@ -273,7 +394,7 @@ public class WebAppActivity extends Activity {
                     customViewCallback = null;
                 }
                 webView.setVisibility(View.VISIBLE);
-                if (btnToggleFullscreen != null) btnToggleFullscreen.setVisibility(View.VISIBLE);
+                if (webNavBar != null) webNavBar.setVisibility(View.VISIBLE);
 
                 applyFullscreen(isImmersiveFullscreen);
             }
@@ -310,7 +431,7 @@ public class WebAppActivity extends Activity {
                     return true;
                 }
 
-                // Block known ad/tracker/popup domains
+                // Block known ad/tracker domains
                 if (AdBlockEngine.isAdUrl(destUrl)) {
                     return true;
                 }
@@ -341,6 +462,8 @@ public class WebAppActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                isLoading = true;
+                updateNavState();
                 view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
             }
 
@@ -353,11 +476,53 @@ public class WebAppActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String pageUrl) {
                 super.onPageFinished(view, pageUrl);
+                isLoading = false;
+                updateNavState();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    CookieManager.getInstance().flush();
+                }
                 view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
             }
         });
 
         webView.loadUrl(url);
+        updateNavState();
+    }
+
+    private void updateNavState() {
+        if (webView == null) return;
+
+        boolean canBack = webView.canGoBack();
+        if (btnBack != null) {
+            btnBack.setEnabled(canBack);
+            btnBack.setAlpha(canBack ? 1.0f : 0.35f);
+        }
+
+        boolean canFwd = webView.canGoForward();
+        if (btnForward != null) {
+            btnForward.setEnabled(canFwd);
+            btnForward.setAlpha(canFwd ? 1.0f : 0.35f);
+        }
+
+        if (btnRefresh != null) {
+            btnRefresh.setText(isLoading ? "✕" : "↻");
+        }
+
+        if (textDomain != null) {
+            String curUrl = webView.getUrl();
+            if (curUrl != null && !curUrl.isEmpty()) {
+                try {
+                    Uri u = Uri.parse(curUrl);
+                    String host = u.getHost();
+                    if (host != null) {
+                        if (host.startsWith("www.")) host = host.substring(4);
+                        boolean isHttps = "https".equalsIgnoreCase(u.getScheme());
+                        textDomain.setText((isHttps ? "🔒 " : "🌐 ") + host);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     private void applyFullscreen(boolean hideBars) {
@@ -389,8 +554,7 @@ public class WebAppActivity extends Activity {
         }
     }
 
-    @Override
-    public void onBackPressed() {
+    private void handleBackNavigation() {
         if (customView != null) {
             // Exit fullscreen video/game first
             if (webView != null && webView.getWebChromeClient() != null) {
@@ -400,9 +564,14 @@ public class WebAppActivity extends Activity {
         }
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
-        } else {
-            super.onBackPressed();
+            return;
         }
+        finish();
+    }
+
+    @Override
+    public void onBackPressed() {
+        handleBackNavigation();
     }
 
     @Override
@@ -421,6 +590,13 @@ public class WebAppActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((android.window.OnBackInvokedCallback) backCallback);
+            } catch (Exception ignored) {
+            }
+            backCallback = null;
+        }
         if (webView != null) {
             webView.destroy();
         }
