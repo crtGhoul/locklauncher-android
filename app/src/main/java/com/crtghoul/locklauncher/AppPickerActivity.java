@@ -78,6 +78,7 @@ public class AppPickerActivity extends Activity {
     private final List<AppEntry> all = new ArrayList<>();
     private final Map<String, AppEntry> selected = new LinkedHashMap<>(); // itemKey -> AppEntry
     private AppAdapter adapter;
+    private final MemoizedSearch memoizedSearch = new MemoizedSearch();
     private Button addButton;
     private View scrollSearchActions;
     private Button btnGoogle, btnYoutube, btnPlay, btnWeb;
@@ -173,6 +174,11 @@ public class AppPickerActivity extends Activity {
         }
 
         Collections.sort(all, (a, c) -> a.label.compareToIgnoreCase(c.label));
+
+        // Memoized prefix index, built once per app list.
+        List<String> pickerLabels = new ArrayList<>();
+        for (AppEntry e : all) pickerLabels.add(e.label);
+        memoizedSearch.setTargets(pickerLabels);
 
         adapter = new AppAdapter();
         ListView list = findViewById(R.id.app_list);
@@ -446,7 +452,7 @@ public class AppPickerActivity extends Activity {
 
                 // 1. Live Math Calculation
                 if (ShortcutStore.isSearchCalculator(AppPickerActivity.this)) {
-                    MathEvaluator.Result calc = MathEvaluator.evaluate(query);
+                    MathEvaluator.Result calc = memoizedSearch.evaluateMath(query);
                     if (calc.isValid) {
                         cardCalculator.setVisibility(View.VISIBLE);
                         textCalcExpr.setText(query);
@@ -731,7 +737,22 @@ public class AppPickerActivity extends Activity {
                 if ("social".equals(currentCategory) && !"social".equals(e.category)) continue;
                 if ("system".equals(currentCategory) && !e.isSystem) continue;
 
-                if (!q.isEmpty()) {
+                if (!q.isEmpty() && q.length() < 3) {
+                    // Prefix fast path only: 1-2 char queries never
+                    // run the full fuzzy scorer. Behaviour note:
+                    // short queries now match label word-starts
+                    // (prefix index) or package prefixes, not
+                    // arbitrary fuzzy substrings. Category filtering
+                    // above still applies. Longer queries keep the
+                    // existing FuzzyMatcher path unchanged.
+                    boolean labelHit = false;
+                    for (MemoizedSearch.Result r : memoizedSearch.search(q)) {
+                        if (r.target.equals(e.label)) { labelHit = true; break; }
+                    }
+                    boolean pkgHit = e.pkg != null && e.pkg.toLowerCase().startsWith(q);
+                    if (!labelHit && !pkgHit) continue;
+                    scores.put(e, labelHit ? 100 : 50);
+                } else if (!q.isEmpty()) {
                     int score = FuzzyMatcher.matchScore(e.label, q);
                     if (score < 0) {
                         score = FuzzyMatcher.matchScore(e.pkg, q);

@@ -307,22 +307,13 @@ public class HomeActivity extends Activity {
             showFolderModal(s);
             return;
         }
-        if (view != null) {
-            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-            view.animate()
-                    .scaleX(0.92f).scaleY(0.92f)
-                    .setDuration(40)
-                    .withEndAction(() -> {
-                        view.animate()
-                                .scaleX(1.0f).scaleY(1.0f)
-                                .setDuration(120)
-                                .setInterpolator(new android.view.animation.OvershootInterpolator(2.0f))
-                                .start();
-                    }).start();
-        }
+        // Press scale + haptic are handled by PressableHelper.attach
+        // in HomeShortcutAdapter.getView (instant 0.92 on down, spring
+        // rebound + tick on up). Do NOT re-add a scale animation here
+        // or two animations will fight over scaleX/scaleY.
         boolean ok = IconUtil.fireShortcut(this, s, view);
         if (!ok) {
-            Toast.makeText(this, "Could not open " + s.label, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, IconUtil.launchFailureReason(this, s), Toast.LENGTH_SHORT).show();
         }
     }
     private void applyDynamicTheming() {
@@ -332,6 +323,21 @@ public class HomeActivity extends Activity {
                 View searchBar = findViewById(R.id.home_search_bar);
                 if (searchBar != null && searchBar.getBackground() != null) {
                     searchBar.getBackground().setTint(theme.subtleGlassTint);
+                }
+                // Monochromatic wallpaper tint, contrast-checked
+                // (>= 4.5): monochrome background for the search-bar
+                // surface, contrast-checked text for its text children.
+                // The island deck keeps its own obsidian background.
+                int[] mono = WallpaperTintHelper.monochromePair(this);
+                if (searchBar != null && searchBar.getBackground() != null) {
+                    searchBar.getBackground().setTint(mono[0]);
+                }
+                if (searchBar instanceof ViewGroup) {
+                    ViewGroup sg = (ViewGroup) searchBar;
+                    for (int i = 0; i < sg.getChildCount(); i++) {
+                        View c = sg.getChildAt(i);
+                        if (c instanceof TextView) ((TextView) c).setTextColor(mono[1]);
+                    }
                 }
                 Button btnAddWeb = findViewById(R.id.btn_quick_add_web);
                 if (btnAddWeb != null && btnAddWeb.getBackground() != null) {
@@ -859,7 +865,9 @@ public class HomeActivity extends Activity {
                 label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
                 v.setOnClickListener(childView -> {
                     dialog.dismiss();
-                    IconUtil.fireShortcut(HomeActivity.this, child, childView);
+                    if (!IconUtil.fireShortcut(HomeActivity.this, child, childView)) {
+                        Toast.makeText(HomeActivity.this, IconUtil.launchFailureReason(HomeActivity.this, child), Toast.LENGTH_SHORT).show();
+                    }
                 });
                 return v;
             }
@@ -868,7 +876,9 @@ public class HomeActivity extends Activity {
         grid.setOnItemClickListener((parent, view, pos, id) -> {
             Shortcut child = items.get(pos);
             dialog.dismiss();
-            IconUtil.fireShortcut(HomeActivity.this, child);
+            if (!IconUtil.fireShortcut(HomeActivity.this, child)) {
+                Toast.makeText(HomeActivity.this, IconUtil.launchFailureReason(HomeActivity.this, child), Toast.LENGTH_SHORT).show();
+            }
         });
         grid.setOnItemLongClickListener((parent, view, pos, id) -> {
             Shortcut child = items.get(pos);
@@ -977,13 +987,13 @@ public class HomeActivity extends Activity {
                 gridView.setVisibility(View.VISIBLE);
                 if (toggleAppsPillText != null) toggleAppsPillText.setText("▲ Hide Apps");
                 if (animate) {
-                    gridView.setAlpha(0f);
-                    gridView.setScaleX(0.92f);
-                    gridView.setScaleY(0.92f);
-                    gridView.animate().alpha(1f).scaleX(1f).scaleY(1f)
-                            .setDuration(220)
-                            .setInterpolator(new android.view.animation.OvershootInterpolator(1.2f))
-                            .start();
+                    // Spring cascade, 12ms/item, visible children only
+                    // (GridView recycles; off-screen slots appear at
+                    // rest state). Replaces the whole-grid animation.
+                    gridView.setAlpha(1f);
+                    gridView.setScaleX(1f);
+                    gridView.setScaleY(1f);
+                    StaggerHelper.cascadeGridView(gridView, true, null);
                 } else {
                     gridView.setAlpha(1f);
                     gridView.setScaleX(1f);
@@ -992,10 +1002,8 @@ public class HomeActivity extends Activity {
             } else {
                 if (toggleAppsPillText != null) toggleAppsPillText.setText("🚀 Apps");
                 if (animate) {
-                    gridView.animate().alpha(0f).scaleX(0.92f).scaleY(0.92f)
-                            .setDuration(160)
-                            .withEndAction(() -> gridView.setVisibility(View.GONE))
-                            .start();
+                    StaggerHelper.cascadeGridView(gridView, false,
+                            () -> gridView.setVisibility(View.GONE));
                 } else {
                     gridView.setVisibility(View.GONE);
                 }
@@ -1193,7 +1201,11 @@ public class HomeActivity extends Activity {
             });
         } else {
             options.add("🚀 Launch app");
-            actions.add(() -> IconUtil.fireShortcut(this, s));
+            actions.add(() -> {
+                if (!IconUtil.fireShortcut(this, s)) {
+                    Toast.makeText(this, IconUtil.launchFailureReason(this, s), Toast.LENGTH_SHORT).show();
+                }
+            });
             options.add("✏️ Rename App / Custom Label");
             actions.add(() -> {
                 EditText input = new EditText(this);
@@ -1344,7 +1356,28 @@ public class HomeActivity extends Activity {
                     if (targetList.size() >= ShortcutStore.MAX) {
                         Toast.makeText(this, ShortcutStore.profileName(this, targetP) + " is full", Toast.LENGTH_SHORT).show();
                     } else {
-                        targetList.add(s);
+                        // P1-9: copy by value with a fresh UUID + icon copy,
+                        // like MainActivity. Adding the same object meant
+                        // editing the copy edited the original (same id,
+                        // same custom-icon file).
+                        String newId = java.util.UUID.randomUUID().toString();
+                        Shortcut clone = new Shortcut(newId, s.type, s.pkg, s.url, s.data,
+                                s.label, s.iconMode, s.iconColor, s.iconEmoji, s.profileSerial);
+                        if (s.folderItems != null && !s.folderItems.isEmpty()) {
+                            clone.folderItems = new java.util.ArrayList<>(s.folderItems);
+                        }
+                        java.io.File srcIcon = IconUtil.customIconFile(this, s.id);
+                        if (srcIcon.exists()) {
+                            java.io.File destIcon = IconUtil.customIconFile(this, newId);
+                            try (java.io.FileInputStream fis = new java.io.FileInputStream(srcIcon);
+                                 java.io.FileOutputStream fos = new java.io.FileOutputStream(destIcon)) {
+                                byte[] buf = new byte[4096];
+                                int n;
+                                while ((n = fis.read(buf)) > 0) fos.write(buf, 0, n);
+                            } catch (Exception ignored) {
+                            }
+                        }
+                        targetList.add(clone);
                         ShortcutStore.save(this, targetP, targetList);
                         Toast.makeText(this, "Copied to " + ShortcutStore.profileName(this, targetP), Toast.LENGTH_SHORT).show();
                     }
@@ -1664,7 +1697,7 @@ public class HomeActivity extends Activity {
                 .setItems(opts, (dialog, which) -> {
                     if (which == 0) {
                         Toast.makeText(this, "Fetching high-res favicon...", Toast.LENGTH_SHORT).show();
-                        WebLogoHelper.fetchFaviconAsync(this, s.url, s.id, (bmp) -> {
+                        WebLogoHelper.fetchFaviconExplicit(this, s.url, s.id, (bmp) -> {
                             loadShortcuts();
                             BaseDockWidget.refreshAll(this);
                             DockService.refresh(this);
@@ -1841,6 +1874,27 @@ public class HomeActivity extends Activity {
             }
             final int itemPos = pos;
             v.setTag(itemPos);
+            // Pressable WITHOUT consuming the touch: PressableHelper
+            // .attach() returns true on DOWN, which would kill this
+            // view's OnLongClickListener (drag/menu) below. Use
+            // pressDown/release with a non-consuming listener instead,
+            // so click, long-press drag, and menu all still fire.
+            // (Attach-as-documented is therefore NOT used here.)
+            v.setOnTouchListener((touchView, event) -> {
+                switch (event.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        PressableHelper.pressDown(touchView);
+                        break;
+                    case android.view.MotionEvent.ACTION_UP:
+                        PressableHelper.release(touchView);
+                        HapticHelper.tick(touchView);
+                        break;
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        PressableHelper.release(touchView);
+                        break;
+                }
+                return false;
+            });
             v.setOnClickListener(childView -> {
                 launchOrHandleShortcut(itemPos, childView);
             });

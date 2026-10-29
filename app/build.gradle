@@ -6,6 +6,10 @@ android {
     namespace 'com.crtghoul.locklauncher'
     compileSdk 34
 
+    // NOTE: the raw aapt2 pipeline (build-apk.sh/.ps1) is the build used
+    // for releases and reads version.properties (2.12 / code 50). These
+    // Gradle defaults are intentionally NOT the release version; do not
+    // ship a Gradle-built APK as a release without syncing them first.
     defaultConfig {
         applicationId 'com.crtghoul.locklauncher'
         minSdk 28

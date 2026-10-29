@@ -44,16 +44,24 @@ public class ShortcutStore {
         return "shortcuts_p" + profile;
     }
 
+    /** Clamp a profile index to the valid range; never trust stored/imported values. */
+    public static int clampProfile(int profile) {
+        if (profile < 0) return 0;
+        if (profile >= PROFILES) return PROFILES - 1;
+        return profile;
+    }
+
     public static int activeProfile(Context ctx) {
-        return prefs(ctx).getInt(KEY_ACTIVE_PROFILE, 0);
+        return clampProfile(prefs(ctx).getInt(KEY_ACTIVE_PROFILE, 0));
     }
 
     public static void setActiveProfile(Context ctx, int profile) {
-        prefs(ctx).edit().putInt(KEY_ACTIVE_PROFILE, profile).apply();
+        prefs(ctx).edit().putInt(KEY_ACTIVE_PROFILE, clampProfile(profile)).apply();
     }
 
     public static String profileName(Context ctx, int profile) {
         String[] defaults = {"Default", "Profile 2", "Profile 3"};
+        profile = clampProfile(profile);
         try {
             JSONArray a = new JSONArray(
                     prefs(ctx).getString(KEY_PROFILE_NAMES, "[]"));
@@ -67,6 +75,7 @@ public class ShortcutStore {
     }
 
     public static void setProfileName(Context ctx, int profile, String name) {
+        profile = clampProfile(profile);
         try {
             JSONArray a;
             try {

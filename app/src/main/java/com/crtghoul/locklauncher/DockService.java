@@ -103,7 +103,10 @@ public class DockService extends Service {
                 .setContentIntent(cfgPi)
                 .setOngoing(true)
                 .setShowWhen(false)
-                .setVisibility(Notification.VISIBILITY_PUBLIC);
+                // P1-2: private by default. A PUBLIC notification exposes
+                // dock labels and the memo on the lock screen to anyone
+                // holding the phone; PRIVATE hides custom content until unlock.
+                .setVisibility(Notification.VISIBILITY_PRIVATE);
 
         // Fallback: standard action buttons with real icons, in case the OEM
         // strips the custom RemoteViews layout.

@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
@@ -46,11 +47,17 @@ public class IconUtil {
 
     // ---- custom icon files (UUID-keyed, survive reorder + profiles) ----
 
+    /** Icon ids are used as file-name fragments; only this shape is ever written. */
+    public static boolean isValidIconId(String id) {
+        return id != null && !id.isEmpty() && id.matches("[A-Za-z0-9_-]+");
+    }
+
     public static File customIconFile(Context ctx, String shortcutId) {
         return new File(ctx.getFilesDir(), "icon_" + shortcutId + ".png");
     }
 
     public static boolean saveCustomIcon(Context ctx, String shortcutId, Bitmap bmp) {
+        if (!isValidIconId(shortcutId)) return false;
         try (FileOutputStream out = new FileOutputStream(customIconFile(ctx, shortcutId))) {
             bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
             return true;
@@ -60,6 +67,7 @@ public class IconUtil {
     }
 
     public static void deleteCustomIcon(Context ctx, String shortcutId) {
+        if (!isValidIconId(shortcutId)) return;
         try {
             customIconFile(ctx, shortcutId).delete();
         } catch (Exception ignored) {
@@ -216,6 +224,7 @@ public class IconUtil {
     }
 
     private static Bitmap loadCustomIcon(Context ctx, String shortcutId) {
+        if (!isValidIconId(shortcutId)) return null;
         try {
             File f = customIconFile(ctx, shortcutId);
             if (!f.exists()) return null;
@@ -354,10 +363,50 @@ public class IconUtil {
     public static final String PANEL_ALARM = "alarm";
     public static final String PANEL_SOUND = "sound";
 
+    /** True if the app exists, is enabled, and is not suspended. */
+    public static boolean isAppLaunchable(Context ctx, Shortcut s) {
+        if (s == null || !s.isApp() || s.pkg == null || s.pkg.isEmpty()) return false;
+        try {
+            ApplicationInfo ai = ctx.getPackageManager().getApplicationInfo(s.pkg, 0);
+            if (ai == null || !ai.enabled) return false;
+            if ((ai.flags & ApplicationInfo.FLAG_SUSPENDED) != 0) return false;
+        } catch (Exception e) {
+            return false;
+        }
+        try {
+            LauncherApps la = (LauncherApps) ctx.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            if (la != null) {
+                List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, android.os.Process.myUserHandle());
+                if (acts != null && !acts.isEmpty()) return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return ctx.getPackageManager().getLaunchIntentForPackage(s.pkg) != null;
+    }
+
+    /** Human-readable reason a shortcut cannot be launched, for toasts. */
+    public static String launchFailureReason(Context ctx, Shortcut s) {
+        if (s == null) return "Shortcut is missing";
+        if (s.isApp()) {
+            try {
+                ApplicationInfo ai = ctx.getPackageManager().getApplicationInfo(s.pkg, 0);
+                if (ai == null || !ai.enabled) return (s.label == null ? "App" : s.label) + " is disabled or not installed";
+                if ((ai.flags & ApplicationInfo.FLAG_SUSPENDED) != 0) return (s.label == null ? "App" : s.label) + " is suspended";
+            } catch (Exception e) {
+                return (s.label == null ? "App" : s.label) + " is not installed";
+            }
+            return "Could not open " + (s.label == null ? "app" : s.label);
+        }
+        return "Could not open " + (s.label == null ? "shortcut" : s.label);
+    }
+
     /** Launch intent for a shortcut, or null if it can't be built. */
     public static Intent launchIntent(Context ctx, Shortcut s) {
         try {
             if (s.isApp()) {
+                // P1-1: a disabled/suspended app must never produce a
+                // visible-but-dead slot; fail here so callers can explain it.
+                if (!isAppLaunchable(ctx, s)) return null;
                 Intent i = ctx.getPackageManager().getLaunchIntentForPackage(s.pkg);
                 if (i == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     try {
@@ -384,13 +433,10 @@ public class IconUtil {
                 return null; // handled via broadcast in pendingFor()
             }
             if (Shortcut.TYPE_CALL.equals(s.type)) {
-                Intent i;
-                if (ctx.checkSelfPermission(android.Manifest.permission.CALL_PHONE)
-                        == PackageManager.PERMISSION_GRANTED) {
-                    i = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + s.data));
-                } else {
-                    i = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + s.data));
-                }
+                // P1-7: never direct-dial, even when CALL_PHONE is granted.
+                // ACTION_DIAL shows the number for the user to confirm, so an
+                // imported or mistyped shortcut cannot place a call by itself.
+                Intent i = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + sanitizeCallData(s.data)));
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 return i;
             }
@@ -514,6 +560,15 @@ public class IconUtil {
         return p.contains("browser") || p.contains("chrome") || p.contains("firefox")
                 || p.contains("opera") || p.contains("edge") || p.contains("duckduckgo")
                 || p.contains("webview") || p.contains("navigator");
+    }
+
+    /** Keep only digits and a leading '+' for dial data; strip spaces, separators and codes. */
+    public static String sanitizeCallData(String data) {
+        if (data == null) return "";
+        String d = data.trim();
+        boolean plus = d.startsWith("+");
+        String digits = d.replaceAll("[^0-9]", "");
+        return (plus ? "+" : "") + digits;
     }
 
     /** Floating Settings.Panel on API 29+, plain settings pages below/fallback. */
@@ -689,10 +744,15 @@ public class IconUtil {
                     continue;
                 }
                 rv.setImageViewBitmap(ICONS[i], iconFor(ctx, s));
-                rv.setTextViewText(LABELS[i], s.label);
                 PendingIntent pi = pendingFor(ctx, s, pendingBase + i);
                 if (pi != null) {
+                    rv.setTextViewText(LABELS[i], s.label);
                     rv.setOnClickPendingIntent(SLOTS[i], pi);
+                } else {
+                    // P1-1: no handler, no silent dead tap. The slot stays
+                    // visible but is labelled as missing so the user can
+                    // remove or fix it instead of tapping it in vain.
+                    rv.setTextViewText(LABELS[i], (s.label == null ? "" : s.label) + " (missing)");
                 }
                 rv.setViewVisibility(SLOTS[i], View.VISIBLE);
                 rv.setContentDescription(SLOTS[i], s.label);
@@ -770,7 +830,13 @@ public class IconUtil {
             if (rawMemo == null || rawMemo.trim().isEmpty()) {
                 rv.setViewVisibility(R.id.dock_memo_text, View.GONE);
             } else {
-                String formatted = resolveMemoTokens(ctx, rawMemo.trim());
+                // P1-2: never expand calendar/alarm tokens into a
+                // lock-screen notification. Those reveal the user's next
+                // event/alarm to anyone holding the locked phone.
+                String safe = rawMemo.trim()
+                        .replace("{next}", "")
+                        .replace("{alarms}", "");
+                String formatted = resolveMemoTokens(ctx, safe);
                 rv.setTextViewText(R.id.dock_memo_text, formatted);
                 rv.setViewVisibility(R.id.dock_memo_text, View.VISIBLE);
             }

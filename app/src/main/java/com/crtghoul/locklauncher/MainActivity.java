@@ -215,6 +215,14 @@ public class MainActivity extends Activity {
             });
         }
 
+        Switch faviconSwitch = findViewById(R.id.switch_favicon_fetch);
+        if (faviconSwitch != null) {
+            faviconSwitch.setChecked(WebLogoHelper.isFaviconFetchEnabled(this));
+            faviconSwitch.setOnCheckedChangeListener((v, on) -> {
+                WebLogoHelper.setFaviconFetchEnabled(this, on);
+            });
+        }
+
         Switch notifBadgesSwitch = findViewById(R.id.switch_notification_badges);
         if (notifBadgesSwitch != null) {
             notifBadgesSwitch.setChecked(LockNotificationListenerService.isBadgesEnabled(this));
@@ -1173,6 +1181,9 @@ public class MainActivity extends Activity {
                         if (r.missingApps > 0) {
                             msg += " (" + r.missingApps + " apps not installed)";
                         }
+                        if (r.invalidDropped > 0) {
+                            msg += " (" + r.invalidDropped + " invalid/unresolvable slots dropped)";
+                        }
                         toast(msg);
                     } catch (Exception e) {
                         toast("Restore failed");
@@ -1366,7 +1377,7 @@ public class MainActivity extends Activity {
             }
             v.setOnClickListener(swapMode ? lv -> onSwapTap(pos) : lv -> {
                 boolean ok = IconUtil.fireShortcut(MainActivity.this, s);
-                if (!ok) toast("Could not open " + s.label);
+                if (!ok) toast(IconUtil.launchFailureReason(MainActivity.this, s));
             });
 
             v.findViewById(R.id.btn_up).setOnClickListener(b -> {
@@ -1402,7 +1413,7 @@ public class MainActivity extends Activity {
         options.add("🚀 Launch now");
         actions.add(() -> {
             boolean ok = IconUtil.fireShortcut(this, s);
-            if (!ok) toast("Could not open " + s.label);
+            if (!ok) toast(IconUtil.launchFailureReason(this, s));
         });
 
         options.add("✏️ Rename Shortcut");

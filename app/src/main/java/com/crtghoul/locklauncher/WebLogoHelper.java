@@ -529,7 +529,37 @@ public class WebLogoHelper {
 
     // ---- Async Web Favicon Fetcher (Google Favicon API + IconHorse) ----
 
+    /** Explicit opt-in for network favicon fetching. Default OFF so the
+     *  render path (IconUtil.iconFor) never phones home on its own and the
+     *  app's offline claim is true by default. Stored in the "dock" prefs. */
+    public static boolean isFaviconFetchEnabled(Context ctx) {
+        try {
+            return ctx.getSharedPreferences("dock", Context.MODE_PRIVATE)
+                    .getBoolean("favicon_fetch_enabled", false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static void setFaviconFetchEnabled(Context ctx, boolean enabled) {
+        try {
+            ctx.getSharedPreferences("dock", Context.MODE_PRIVATE)
+                    .edit().putBoolean("favicon_fetch_enabled", enabled).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
     public static void fetchFaviconAsync(Context ctx, String rawUrl, String shortcutId, LogoCallback callback) {
+        // P1-3: gated. The icon render path (IconUtil.iconFor) calls this
+        // and must not trigger a network fetch by itself; it only fetches
+        // when the user has opted in via Settings.
+        if (!isFaviconFetchEnabled(ctx)) return;
+        fetchFaviconExplicit(ctx, rawUrl, shortcutId, callback);
+    }
+
+    /** Explicit user-tap fetch (logo picker). This is a deliberate user
+     *  action, so it does not need the global auto-fetch toggle. */
+    public static void fetchFaviconExplicit(Context ctx, String rawUrl, String shortcutId, LogoCallback callback) {
         String domain = extractDomain(rawUrl);
         if (domain.isEmpty() || shortcutId == null || shortcutId.isEmpty()) return;
 
@@ -573,8 +603,26 @@ public class WebLogoHelper {
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)");
             conn.connect();
             if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                // P1-11: only image payloads, capped at 2 MB, decoded
+                // bounds-first so a huge/corrupt image cannot OOM the render.
+                String ct = conn.getContentType();
+                if (ct != null && !ct.toLowerCase(java.util.Locale.US).startsWith("image/")) return null;
                 in = conn.getInputStream();
-                Bitmap b = BitmapFactory.decodeStream(in);
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int total = 0, n;
+                while ((n = in.read(buf)) > 0) {
+                    total += n;
+                    if (total > 2 * 1024 * 1024) return null;
+                    bos.write(buf, 0, n);
+                }
+                byte[] bytes = bos.toByteArray();
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inJustDecodeBounds = true;
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.length, opts);
+                if (opts.outWidth <= 0 || opts.outHeight <= 0 || opts.outWidth > 1024 || opts.outHeight > 1024) return null;
+                opts.inJustDecodeBounds = false;
+                Bitmap b = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, opts);
                 if (b != null && b.getWidth() > 16 && b.getHeight() > 16) {
                     return b;
                 }

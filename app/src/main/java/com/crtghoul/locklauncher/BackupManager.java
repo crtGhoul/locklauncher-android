@@ -1,8 +1,11 @@
 package com.crtghoul.locklauncher;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.net.Uri;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -34,6 +37,82 @@ public class BackupManager {
     public static class ImportResult {
         public int slotsRestored;
         public int missingApps;
+        /** Slots dropped because they were invalid or unresolvable (not just uninstalled). */
+        public int invalidDropped;
+        /** Labels/packages of dropped slots, for the restore toast. */
+        public java.util.List<String> droppedLabels = new java.util.ArrayList<>();
+    }
+
+    /** Validate one imported shortcut. Returns null if it must be dropped. */
+    private static String validateShortcut(Context ctx, Shortcut s, ImportResult res) {
+        if (s == null) return "empty";
+        if (s.isEmpty()) return null; // empty slots are kept as-is
+        if (Shortcut.TYPE_APP.equals(s.type)) {
+            if (s.pkg == null || s.pkg.isEmpty()) return "app with no package";
+            if (!IconUtil.isAppLaunchable(ctx, s)) {
+                res.missingApps++;
+                return "app not installed/disabled: " + s.pkg;
+            }
+            return null;
+        }
+        if (Shortcut.TYPE_URL.equals(s.type)) {
+            String u = s.url == null ? "" : s.url.trim();
+            if (u.isEmpty()) return "url with no address";
+            try {
+                String scheme = Uri.parse(u).getScheme();
+                if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+                    return "url with non-http(s) scheme";
+                }
+            } catch (Exception e) {
+                return "unparseable url";
+            }
+            return null;
+        }
+        if (Shortcut.TYPE_DEEP.equals(s.type)) {
+            String d = s.data == null ? "" : s.data.trim();
+            if (d.isEmpty()) return "deep link with no data";
+            String low = d.toLowerCase();
+            if (low.contains("component=") || low.contains(";sel")) {
+                return "deep link with explicit component/selector";
+            }
+            if (low.startsWith("http://") || low.startsWith("https://")) {
+                return null;
+            }
+            if (!low.startsWith("intent:")) {
+                return "deep link with unsupported scheme";
+            }
+            try {
+                Intent intent = Intent.parseUri(d, Intent.URI_INTENT_SCHEME);
+                if (intent.getComponent() != null) return "deep link with explicit component";
+                if (intent.getSelector() != null) return "deep link with selector";
+                java.util.List<ResolveInfo> handlers = ctx.getPackageManager()
+                        .queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+                if (handlers == null || handlers.isEmpty()) return "deep link with no handler";
+            } catch (Exception e) {
+                return "unparseable deep link";
+            }
+            return null;
+        }
+        if (Shortcut.TYPE_CALL.equals(s.type) || Shortcut.TYPE_SMS.equals(s.type)) {
+            // Sanitise at import so a crafted backup cannot smuggle codes/URIs into dial data.
+            s.data = IconUtil.sanitizeCallData(s.data);
+            return null;
+        }
+        if (Shortcut.TYPE_FOLDER.equals(s.type)) {
+            if (s.folderItems != null) {
+                java.util.List<Shortcut> kept = new java.util.ArrayList<>();
+                for (Shortcut child : s.folderItems) {
+                    String why = validateShortcut(ctx, child, res);
+                    if (why == null) kept.add(child);
+                    else { res.invalidDropped++; res.droppedLabels.add(child.label == null ? "?" : child.label); }
+                }
+                s.folderItems = kept;
+            }
+            return null;
+        }
+        // torch / panel / profile / other known types: kept (panel keys are
+        // resolved to system settings intents at launch time, not executed).
+        return null;
     }
 
     public static boolean exportTo(Context ctx, OutputStream out) {
@@ -192,31 +271,37 @@ public class BackupManager {
                 dEdit.apply();
             }
 
-            PackageManager pm = ctx.getPackageManager();
+            // P0-2: validate every profile first, then save. Nothing is
+            // kept that is missing, unresolvable, or carries a disallowed
+            // scheme/component, and dropped slots are reported, not silently kept.
             JSONArray profiles = root.optJSONArray("profiles");
+            java.util.List<java.util.List<Shortcut>> validated = new java.util.ArrayList<>();
+            java.util.List<String> validatedNames = new java.util.ArrayList<>();
             if (profiles != null) {
                 for (int p = 0; p < profiles.length() && p < ShortcutStore.PROFILES; p++) {
                     JSONObject prof = profiles.getJSONObject(p);
-                    ShortcutStore.setProfileName(ctx, p,
-                            prof.optString("name", "Profile " + (p + 1)));
+                    validatedNames.add(prof.optString("name", "Profile " + (p + 1)));
                     List<Shortcut> slots = new ArrayList<>();
                     JSONArray arr = prof.optJSONArray("slots");
                     if (arr != null) {
                         for (int i = 0; i < arr.length() && i < ShortcutStore.MAX; i++) {
                             Shortcut s = Shortcut.fromJson(arr.getJSONObject(i));
-                            if (s.isApp()) {
-                                try {
-                                    pm.getApplicationInfo(s.pkg, 0);
-                                } catch (Exception e) {
-                                    res.missingApps++;
-                                }
+                            String why = validateShortcut(ctx, s, res);
+                            if (why != null) {
+                                res.invalidDropped++;
+                                res.droppedLabels.add(s.label == null || s.label.isEmpty() ? (s.pkg == null ? "?" : s.pkg) : s.label);
+                                continue;
                             }
                             slots.add(s);
                             res.slotsRestored++;
                         }
                     }
-                    ShortcutStore.save(ctx, p, slots);
+                    validated.add(slots);
                 }
+            }
+            for (int p = 0; p < validated.size(); p++) {
+                ShortcutStore.setProfileName(ctx, p, validatedNames.get(p));
+                ShortcutStore.save(ctx, p, validated.get(p));
             }
 
             JSONObject icons = root.optJSONObject("icons");
@@ -224,8 +309,14 @@ public class BackupManager {
                 Iterator<String> keys = icons.keys();
                 while (keys.hasNext()) {
                     String id = keys.next();
+                    // P0-2: icon ids become file-name fragments. Anything
+                    // outside [A-Za-z0-9_-] (including ../ and backslashes)
+                    // is dropped rather than written.
+                    if (!IconUtil.isValidIconId(id)) continue;
+                    String b64 = icons.getString(id);
+                    if (b64 == null || b64.length() > 2000000) continue;
                     byte[] png = android.util.Base64.decode(
-                            icons.getString(id), android.util.Base64.NO_WRAP);
+                            b64, android.util.Base64.NO_WRAP);
                     try (FileOutputStream fos = new FileOutputStream(
                             IconUtil.customIconFile(ctx, id))) {
                         fos.write(png);

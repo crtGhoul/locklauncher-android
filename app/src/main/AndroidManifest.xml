@@ -11,7 +11,6 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <!-- See every launchable app + shortcut-capable apps + icon packs -->
     <queries>
@@ -31,13 +30,22 @@
         <intent>
             <action android:name="com.teslacoilsw.launcher.THEME" />
         </intent>
+        <intent>
+            <action android:name="com.anddoes.launcher.THEME" />
+        </intent>
+        <intent>
+            <action android:name="com.fede.launcher.THEME_ICONPACK" />
+        </intent>
+        <intent>
+            <action android:name="com.gau.go.launcherex.theme" />
+        </intent>
     </queries>
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
@@ -80,29 +88,27 @@
             android:theme="@style/Theme.LockLauncher.Drawer"
             android:label="Pick an app" />
 
+        <!-- P0-1: not exported. All in-app callers use an explicit
+             component/package intent (IconUtil.buildWebIntent,
+             AppPickerActivity), so no intent filter is needed. -->
         <activity
             android:name=".WebAppActivity"
-            android:exported="true"
+            android:exported="false"
             android:hardwareAccelerated="true"
             android:documentLaunchMode="intoExisting"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:theme="@android:style/Theme.Material.NoActionBar">
-            <intent-filter>
-                <action android:name="com.crtghoul.locklauncher.OPEN_WEB_APP" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
 
+        <!-- P1-5: not exported. The only in-app caller (IconUtil)
+             uses an explicit component/package intent, so no filter
+             is needed. singleTop is kept, with onNewIntent below. -->
         <activity
             android:name=".FolderActivity"
-            android:exported="true"
+            android:exported="false"
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.LockLauncher.Drawer"
             android:launchMode="singleTop">
-            <intent-filter>
-                <action android:name="com.crtghoul.locklauncher.OPEN_FOLDER" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
 
         <service
@@ -241,6 +247,11 @@
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
+            <!-- P1-6: accessibility service config (minimal, no event
+                 inspection; the service only performs GLOBAL_ACTION_LOCK_SCREEN). -->
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
         </service>
 
         <service

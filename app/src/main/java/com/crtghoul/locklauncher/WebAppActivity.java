@@ -79,8 +79,29 @@ public class WebAppActivity extends Activity {
             finish();
             return;
         }
+        // P0-1: only http/https may be loaded as the initial URL. Any other
+        // scheme (intent:, file:, javascript:, market:, ...) is rejected
+        // instead of being handed to WebView, which would otherwise follow it.
+        try {
+            String scheme = Uri.parse(url.trim()).getScheme();
+            if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+                finish();
+                return;
+            }
+        } catch (Exception e) {
+            finish();
+            return;
+        }
 
         String title = getIntent().getStringExtra(EXTRA_TITLE);
+        // P0-1: an attacker-controlled EXTRA_TITLE must not reach the window
+        // title / Recents task description verbatim. Strip control characters
+        // and cap length; the host fallback below covers the empty case.
+        if (title != null) {
+            title = title.replaceAll("[\\p{Cntrl}]", "").trim();
+            if (title.length() > 80) title = title.substring(0, 80);
+            if (title.isEmpty()) title = null;
+        }
         if (title == null || title.trim().isEmpty()) {
             try {
                 title = Uri.parse(url).getHost();
@@ -127,6 +148,11 @@ public class WebAppActivity extends Activity {
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        // P0-1: never let a loaded page reach local files or content providers.
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
 
         // Multi-window enabled so WebChromeClient.onCreateWindow strictly intercepts all popup triggers
         settings.setSupportMultipleWindows(true);
@@ -169,7 +195,15 @@ public class WebAppActivity extends Activity {
                     int type = hitResult.getType();
                     if (extra != null && !AdBlockEngine.isAdUrl(extra)
                             && (type == WebView.HitTestResult.SRC_ANCHOR_TYPE || type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE)) {
-                        view.loadUrl(extra);
+                        // P0-1: funnel popup navigation through the same
+                        // http/https-only check as the initial URL.
+                        try {
+                            String ps = Uri.parse(extra).getScheme();
+                            if (ps != null && (ps.equalsIgnoreCase("http") || ps.equalsIgnoreCase("https"))) {
+                                view.loadUrl(extra);
+                            }
+                        } catch (Exception ignored) {
+                        }
                     }
                 }
                 // Returning false tells WebView to drop the popup window completely.

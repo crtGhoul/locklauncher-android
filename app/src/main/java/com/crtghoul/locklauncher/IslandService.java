@@ -54,6 +54,9 @@ public class IslandService extends Service {
 
     private WindowManager wm;
     private View islandView;
+    private View pendingPillToRemove;
+    private android.animation.ValueAnimator chargingRippleAnimator;
+    private android.animation.ValueAnimator musicWaveAnimator;
     private WindowManager.LayoutParams params;
     private boolean expanded = false;
     private boolean mediaDismissed = false;
@@ -232,6 +235,18 @@ public class IslandService extends Service {
     }
 
     private void removeView() {
+        if (chargingRippleAnimator != null) {
+            try { chargingRippleAnimator.cancel(); } catch (Exception ignored) {}
+            chargingRippleAnimator = null;
+        }
+        if (musicWaveAnimator != null) {
+            try { musicWaveAnimator.cancel(); } catch (Exception ignored) {}
+            musicWaveAnimator = null;
+        }
+        if (pendingPillToRemove != null && wm != null) {
+            try { wm.removeView(pendingPillToRemove); } catch (Exception ignored) {}
+            pendingPillToRemove = null;
+        }
         if (wm != null && islandView != null) {
             try {
                 wm.removeView(islandView);
@@ -322,6 +337,7 @@ public class IslandService extends Service {
         pill.addView(tv);
 
         attachPillView(pill);
+        chargingRippleAnimator = IslandGlowHelper.startChargingRipple(pill);
     }
 
     private void showMediaPill(MediaController mc) {
@@ -335,6 +351,13 @@ public class IslandService extends Service {
         musicIcon.setText("ðŸŽµ ");
         musicIcon.setTextSize(14);
         pill.addView(musicIcon);
+        // Music wave bars: driven by the REAL playing state only.
+        // getActiveMediaController() returns only STATE_PLAYING
+        // controllers, and showMediaPill is only called with one.
+        android.widget.LinearLayout waveContainer = new android.widget.LinearLayout(this);
+        waveContainer.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        waveContainer.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        pill.addView(waveContainer);
 
         MediaMetadata meta = mc.getMetadata();
         String title = "Now Playing";
@@ -391,6 +414,7 @@ public class IslandService extends Service {
         });
 
         attachPillView(pill);
+        musicWaveAnimator = IslandGlowHelper.startMusicWave(waveContainer, true);
     }
 
     /**
@@ -415,6 +439,17 @@ public class IslandService extends Service {
         pill.setMinimumWidth(dp(92));
         pill.setMinimumHeight(dp(32));
 
+        // Silent-mode dot: shown only when the real ringer mode is
+        // silent or vibrate (IslandGlowHelper checks AudioManager).
+        View silentDot = new View(this);
+        android.graphics.drawable.GradientDrawable dotBg = new android.graphics.drawable.GradientDrawable();
+        dotBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        dotBg.setColor(0xFFFFFFFF);
+        silentDot.setBackground(dotBg);
+        silentDot.setLayoutParams(new android.widget.LinearLayout.LayoutParams(dp(8), dp(8)));
+        pill.addView(silentDot);
+        IslandGlowHelper.applySilentDot(silentDot, this);
+        
         TextView glyph = new TextView(this);
         glyph.setText("â—");
         glyph.setTextColor(0x7AFFFFFF);
@@ -535,7 +570,11 @@ public class IslandService extends Service {
      * High-res symmetrical 4-column deck of user's chosen Island apps with quick actions.
      */
     private void showExpanded() {
-        removeView();
+        // True FLIP needs the pill alive: do NOT removeView() yet.
+        // Only morph from a collapsed pill; if already expanded, the
+        // current view is a deck root, not a pill, so skip the morph.
+        final boolean wasExpanded = expanded;
+        final View pillToMorph = wasExpanded ? null : islandView;
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         List<Shortcut> allShortcuts = ShortcutStore.loadIsland(this);
         final List<Shortcut> shortcuts = new ArrayList<>();
@@ -548,11 +587,11 @@ public class IslandService extends Service {
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setColor(0xF40D1117); // Obsidian Glass
-        cardBg.setCornerRadius(dp(22));
-        cardBg.setStroke(dp(1), 0x3DFFFFFF);
-        card.setBackground(cardBg);
+        // AMOLED deck: layered obsidian + specular + ambient glow
+        // tinted from the first island app's dominant icon colour.
+        int deckAccent = shortcuts.isEmpty() ? 0xFF5865F2
+                : IslandGlowHelper.dominantColor(IconUtil.iconFor(this, shortcuts.get(0)));
+        card.setBackground(IslandGlowHelper.deckBackground(deckAccent, dp(22)));
         card.setPadding(dp(16), dp(14), dp(16), dp(16));
 
         int cardW = Math.min(getResources().getDisplayMetrics().widthPixels - dp(32), dp(360));
@@ -561,18 +600,11 @@ public class IslandService extends Service {
         clp.topMargin = statusBarHeight() + dp(8);
         card.setLayoutParams(clp);
         card.setOnClickListener(v -> { }); // prevent dismiss on card tap
-
-        // 120Hz GPU Entrance Animation
-        card.setScaleX(0.88f);
-        card.setScaleY(0.88f);
-        card.setAlpha(0.0f);
-        card.animate()
-                .scaleX(1.0f)
-                .scaleY(1.0f)
-                .alpha(1.0f)
-                .setDuration(180)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator())
-                .start();
+        // Old 180ms Decelerate entrance REMOVED: it would fight the
+        // spring morph/entrance applied after the card is added below.
+        // Backdrop tap now collapses with a spring exit, not an
+        // immediate rebuild.
+        root.setOnClickListener(v -> IslandMorphHelper.collapse(card, () -> showCollapsed()));
 
         // Header Bar
         LinearLayout header = new LinearLayout(this);
@@ -644,7 +676,7 @@ public class IslandService extends Service {
         btnClose.setTextColor(0x8AFFFFFF);
         btnClose.setTextSize(16);
         btnClose.setPadding(dp(8), dp(4), dp(2), dp(4));
-        btnClose.setOnClickListener(v -> showCollapsed());
+        btnClose.setOnClickListener(v -> IslandMorphHelper.collapse(card, () -> showCollapsed()));
         header.addView(btnClose);
 
         card.addView(header);
@@ -775,6 +807,26 @@ public class IslandService extends Service {
             wm.addView(islandView, params);
         } catch (Exception ignored) {
         }
+        // FLIP morph (pill still alive in its own window) or, if no
+        // pill exists, a spring entrance. The old pill window is
+        // removed only when the morph lands, never before.
+        card.post(() -> {
+            boolean morphed = false;
+            if (pillToMorph != null) {
+                pendingPillToRemove = pillToMorph;
+                morphed = IslandMorphHelper.morphFromPill(pillToMorph, card, () -> {
+                    try { wm.removeView(pillToMorph); } catch (Exception ignored) {}
+                    pendingPillToRemove = null;
+                });
+            }
+            if (!morphed) {
+                IslandMorphHelper.entrance(card, null);
+                if (pillToMorph != null) {
+                    try { wm.removeView(pillToMorph); } catch (Exception ignored) {}
+                    pendingPillToRemove = null;
+                }
+            }
+        });
     }
 
     private void showIslandAppMenu(Shortcut s, int index) {
@@ -792,7 +844,9 @@ public class IslandService extends Service {
         b.setItems(opts, (d, which) -> {
             switch (which) {
                 case 0:
-                    IconUtil.fireShortcut(IslandService.this, s);
+                    if (!IconUtil.fireShortcut(IslandService.this, s)) {
+                        Toast.makeText(IslandService.this, IconUtil.launchFailureReason(IslandService.this, s), Toast.LENGTH_SHORT).show();
+                    }
                     showCollapsed();
                     break;
                 case 1:
@@ -831,7 +885,9 @@ public class IslandService extends Service {
         try {
             dialog.show();
         } catch (Exception e) {
-            IconUtil.fireShortcut(IslandService.this, s);
+            if (!IconUtil.fireShortcut(IslandService.this, s)) {
+                Toast.makeText(IslandService.this, IconUtil.launchFailureReason(IslandService.this, s), Toast.LENGTH_SHORT).show();
+            }
             showCollapsed();
         }
     }

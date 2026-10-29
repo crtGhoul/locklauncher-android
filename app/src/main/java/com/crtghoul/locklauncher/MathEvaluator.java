@@ -26,6 +26,15 @@ public class MathEvaluator {
         if (input == null) return new Result(false, 0, "");
         String raw = input.trim();
         if (raw.isEmpty()) return new Result(false, 0, "");
+        // P1-12: deep nesting (e.g. thousands of '(') recursed until
+        // StackOverflowError, which Exception does not catch. Cap input
+        // length and depth, and catch the error as invalid input.
+        if (raw.length() > 256) return new Result(false, 0, "");
+        int depth = 0;
+        for (char c : raw.toCharArray()) {
+            if (c == '(') { depth++; if (depth > 32) return new Result(false, 0, ""); }
+            else if (c == ')') depth--;
+        }
 
         // Support "X% of Y" pattern
         String lower = raw.toLowerCase(Locale.ROOT);
@@ -74,6 +83,8 @@ public class MathEvaluator {
                 return new Result(false, 0, "");
             }
             return formatResult(val);
+        } catch (StackOverflowError e) {
+            return new Result(false, 0, "");
         } catch (Exception e) {
             return new Result(false, 0, "");
         }

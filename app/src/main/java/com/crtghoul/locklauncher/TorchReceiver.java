@@ -24,7 +24,22 @@ public class TorchReceiver extends BroadcastReceiver {
         }
         try {
             CameraManager cm = context.getSystemService(CameraManager.class);
-            String id = cm.getCameraIdList()[0];
+            // P1-10: pick the first camera that actually has a flash,
+            // not blindly index 0 (which may be a flash-less camera).
+            String id = null;
+            for (String cid : cm.getCameraIdList()) {
+                try {
+                    Boolean hasFlash = cm.getCameraCharacteristics(cid)
+                            .get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    if (Boolean.TRUE.equals(hasFlash)) { id = cid; break; }
+                } catch (Exception ignored) {
+                }
+            }
+            if (id == null) {
+                Toast.makeText(context, "Flashlight not available",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
             boolean on = !context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .getBoolean(KEY_TORCH, false);
             cm.setTorchMode(id, on);

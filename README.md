@@ -1,19 +1,19 @@
 # Lock Launcher for Android
 
-[![Release](https://img.shields.io/badge/Release-v2.11-7C5CFF.svg)](https://github.com/crtGhoul/locklauncher-android/releases)
+[![Release](https://img.shields.io/badge/Release-v2.12-7C5CFF.svg)](https://github.com/crtGhoul/locklauncher-android/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Zero Ads](https://img.shields.io/badge/Ads-0%25%20Offline-00E676.svg)](README.md)
 [![Refresh Rate](https://img.shields.io/badge/Display-120Hz%20LTPO-FF6F00.svg)](README.md)
 
-**Lock Launcher** is a flagship, privacy-first, 100% offline Android launcher and overlay system designed for speed, minimalism, and full control over your apps.
+**Lock Launcher** is a flagship, privacy-first Android launcher and overlay system designed for speed, minimalism, and full control over your apps.
 
-No ads. No telemetry. No background phoning home. Zero network trackers.
+No ads. No telemetry. No background phoning home. Zero network trackers. The launcher itself is offline by default: web pages you open load over the network (that is their content, not tracking), and web favicons are only fetched over the network when you opt in via Settings ("Auto-fetch web favicons", off by default) or tap "Auto-Fetch High-Res Favicon" for a single web app. Fetched favicons are saved as that shortcut's custom icon; they are not refreshed automatically, so re-fetch explicitly if a site's icon changes.
 
 ---
 
 ## ✨ Key Features
 
-### 🏝️ Dynamic Island Overlay (v2.11)
+### 🏝️ Dynamic Island Overlay (v2.12)
 - **Minimalist Collapsed Capsule**: A sleek, unobtrusive obsidian black pill displaying live battery status or system state without cluttering app icons.
 - **Click-to-Expand Deck**: Tap the capsule to smoothly open a symmetrical 4-column glass deck of your chosen Island apps.
 - **Built-in `⚙️ Organize` Suite**:

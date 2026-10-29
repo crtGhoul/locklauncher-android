@@ -67,6 +67,19 @@ public class IconPackManager {
     }
 
     public static synchronized void setActiveIconPack(Context ctx, String packPackage) {
+        // P1-11: a restored pack name is untrusted. Only accept it if it
+        // is the built-in default/material-you value or an actually
+        // installed icon pack; anything else falls back to system default.
+        if (packPackage != null && !packPackage.isEmpty() && !packPackage.equals(PACK_MATERIAL_YOU)) {
+            boolean installed = false;
+            try {
+                for (IconPackInfo info : getInstalledIconPacks(ctx)) {
+                    if (packPackage.equals(info.packageName)) { installed = true; break; }
+                }
+            } catch (Exception ignored) {
+            }
+            if (!installed) packPackage = PACK_SYSTEM_DEFAULT;
+        }
         ctx.getSharedPreferences("dock", Context.MODE_PRIVATE)
                 .edit()
                 .putString(PREF_ICON_PACK, packPackage == null ? PACK_SYSTEM_DEFAULT : packPackage)
@@ -250,10 +263,18 @@ public class IconPackManager {
 
     private static Bitmap drawableToBitmap(Drawable drawable) {
         if (drawable instanceof BitmapDrawable) {
-            return ((BitmapDrawable) drawable).getBitmap();
+            Bitmap src = ((BitmapDrawable) drawable).getBitmap();
+            // P1-11: cap a pack-supplied bitmap instead of trusting its size.
+            if (src != null && src.getWidth() > 0 && src.getHeight() > 0
+                    && src.getWidth() <= 1024 && src.getHeight() <= 1024) {
+                return src;
+            }
+            if (src == null) return null;
+            return Bitmap.createScaledBitmap(src, 144, 144, true);
         }
-        int w = Math.max(drawable.getIntrinsicWidth(), 144);
-        int h = Math.max(drawable.getIntrinsicHeight(), 144);
+        int w = drawable.getIntrinsicWidth();
+        int h = drawable.getIntrinsicHeight();
+        if (w <= 0 || h <= 0 || w > 1024 || h > 1024) { w = 144; h = 144; }
         Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());

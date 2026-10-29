@@ -4,4 +4,5 @@
     <string name="widget_1x1">Lock Launcher 1x1</string>
     <string name="widget_2x1">Lock Launcher 2x1</string>
     <string name="widget_4x1">Lock Launcher 4x1</string>
+    <string name="accessibility_service_description">Lets Lock Launcher lock the screen on double-tap. It does not read screen content.</string>
 </resources>

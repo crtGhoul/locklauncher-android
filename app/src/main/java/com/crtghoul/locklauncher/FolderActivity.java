@@ -60,6 +60,7 @@ public class FolderActivity extends Activity {
         folderId = intent != null ? intent.getStringExtra(EXTRA_FOLDER_ID) : null;
         folderName = intent != null ? intent.getStringExtra(EXTRA_FOLDER_NAME) : null;
         profile = intent != null ? intent.getIntExtra(EXTRA_PROFILE, ShortcutStore.activeProfile(this)) : 0;
+        profile = ShortcutStore.clampProfile(profile);
 
         titleView = findViewById(R.id.folder_title);
         gridView = findViewById(R.id.folder_grid);
@@ -118,7 +119,9 @@ public class FolderActivity extends Activity {
                         .setItems(opts, (d, which) -> {
                             switch (which) {
                                 case 0:
-                                    IconUtil.fireShortcut(FolderActivity.this, child);
+                                    if (!IconUtil.fireShortcut(FolderActivity.this, child)) {
+                                        Toast.makeText(FolderActivity.this, IconUtil.launchFailureReason(FolderActivity.this, child), Toast.LENGTH_SHORT).show();
+                                    }
                                     finish();
                                     break;
                                 case 1:
@@ -202,33 +205,40 @@ public class FolderActivity extends Activity {
         updateEmptyState();
     }
 
-    private void loadFolderData() {
-        allShortcuts = ShortcutStore.load(this, profile);
-        folderShortcut = findFolder(allShortcuts);
-
-        // If not found in current profile, scan all other profiles
+    @Override
+    protected void onNewIntent(Intent intent) {
+        // P1-5: singleTop redelivery. Re-read the folder from the new
+        // intent instead of keeping the stale folder from onCreate.
+        super.onNewIntent(intent);
+        setIntent(intent);
+        folderId = intent != null ? intent.getStringExtra(EXTRA_FOLDER_ID) : null;
+        folderName = intent != null ? intent.getStringExtra(EXTRA_FOLDER_NAME) : null;
+        profile = intent != null ? intent.getIntExtra(EXTRA_PROFILE, ShortcutStore.activeProfile(this)) : 0;
+        profile = ShortcutStore.clampProfile(profile);
+        loadFolderData();
         if (folderShortcut == null) {
-            for (int p = 0; p < ShortcutStore.PROFILES; p++) {
-                if (p == profile) continue;
-                List<Shortcut> other = ShortcutStore.load(this, p);
-                Shortcut found = findFolder(other);
-                if (found != null) {
-                    profile = p;
-                    allShortcuts = other;
-                    folderShortcut = found;
-                    break;
-                }
-            }
+            Toast.makeText(this, "Folder not found", Toast.LENGTH_SHORT).show();
+            finish();
+        } else if (titleView != null) {
+            titleView.setText("📁 " + folderShortcut.label);
+            if (adapter != null) adapter.notifyDataSetChanged();
+            updateEmptyState();
         }
     }
 
+    private void loadFolderData() {
+        // P1-5: only the profile named in the intent is searched, and
+        // only by UUID. Matching by label alone let any caller open a
+        // same-named folder in another profile.
+        profile = ShortcutStore.clampProfile(profile);
+        allShortcuts = ShortcutStore.load(this, profile);
+        folderShortcut = findFolder(allShortcuts);
+    }
+
     private Shortcut findFolder(List<Shortcut> list) {
-        if (list == null) return null;
+        if (list == null || folderId == null || folderId.isEmpty()) return null;
         for (Shortcut s : list) {
-            if (s.isFolder()) {
-                if (folderId != null && folderId.equals(s.id)) return s;
-                if (folderName != null && folderName.equals(s.label)) return s;
-            }
+            if (s.isFolder() && folderId.equals(s.id)) return s;
         }
         return null;
     }

@@ -105,7 +105,10 @@ public class WidgetConfigActivity extends Activity {
     private int detectSlotCount() {
         try {
             AppWidgetManager mgr = AppWidgetManager.getInstance(this);
-            String cls = mgr.getAppWidgetInfo(appWidgetId).provider.getClassName();
+            // P1-10: an unknown/forged widget id must not crash config.
+            android.appwidget.AppWidgetProviderInfo info = mgr.getAppWidgetInfo(appWidgetId);
+            if (info == null || info.provider == null) return 4;
+            String cls = info.provider.getClassName();
             if (cls.contains("1x1")) return 1;
             if (cls.contains("2x1")) return 2;
             return 4;
