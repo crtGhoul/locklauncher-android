@@ -2,3 +2,4 @@ build-out/
 *.idsig
 debug.keystore
 *.zip
+screencap*.png
