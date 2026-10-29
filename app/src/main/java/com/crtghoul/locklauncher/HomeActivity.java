@@ -307,14 +307,54 @@ public class HomeActivity extends Activity {
             showFolderModal(s);
             return;
         }
-        // Press scale + haptic are handled by PressableHelper.attach
-        // in HomeShortcutAdapter.getView (instant 0.92 on down, spring
-        // rebound + tick on up). Do NOT re-add a scale animation here
-        // or two animations will fight over scaleX/scaleY.
+        if (s.isApp() && ShortcutStore.isAppLocked(this, s.pkg)) {
+            BiometricHelper.authenticate(this, "Unlock " + s.label, "Authenticate to open app", new BiometricHelper.AuthCallback() {
+                @Override
+                public void onSuccess() {
+                    performFireShortcut(s, view);
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    Toast.makeText(HomeActivity.this, "Authentication required to open " + s.label, Toast.LENGTH_SHORT).show();
+                }
+            });
+            return;
+        }
+        performFireShortcut(s, view);
+    }
+    private void performFireShortcut(Shortcut s, View view) {
         boolean ok = IconUtil.fireShortcut(this, s, view);
         if (!ok) {
             Toast.makeText(this, IconUtil.launchFailureReason(this, s), Toast.LENGTH_SHORT).show();
         }
+    }
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
+    }
+    private void alignShortcutsBottom() {
+        List<Shortcut> nonEmpties = new ArrayList<>();
+        for (Shortcut sc : shortcuts) {
+            if (!sc.isEmpty()) nonEmpties.add(sc);
+        }
+        if (nonEmpties.isEmpty()) return;
+        shortcuts.clear();
+        int emptyCount = Math.max(0, ShortcutStore.MAX - nonEmpties.size());
+        for (int i = 0; i < emptyCount; i++) {
+            shortcuts.add(Shortcut.createEmpty());
+        }
+        shortcuts.addAll(nonEmpties);
+        while (shortcuts.size() < ShortcutStore.MAX) {
+            shortcuts.add(Shortcut.createEmpty());
+        }
+    }
+    private void pushShortcutsToBottom() {
+        alignShortcutsBottom();
+        ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+        loadShortcuts();
+        BaseDockWidget.refreshAll(this);
+        DockService.refresh(this);
+        Toast.makeText(this, "Pushed icons to bottom for one-hand reach", Toast.LENGTH_SHORT).show();
     }
     private void applyDynamicTheming() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -342,6 +382,14 @@ public class HomeActivity extends Activity {
                 Button btnAddWeb = findViewById(R.id.btn_quick_add_web);
                 if (btnAddWeb != null && btnAddWeb.getBackground() != null) {
                     btnAddWeb.getBackground().setTint(theme.primaryAccent);
+                }
+                View pill = findViewById(R.id.btn_toggle_apps_pill);
+                if (pill != null && pill.getBackground() != null) {
+                    pill.getBackground().setTint(theme.subtleGlassTint);
+                }
+                View tabs = findViewById(R.id.home_tabs_container);
+                if (tabs != null && tabs.getBackground() != null) {
+                    tabs.getBackground().setTint(theme.subtleGlassTint);
                 }
             } catch (Exception ignored) {
             }
@@ -822,7 +870,7 @@ public class HomeActivity extends Activity {
                     if (name.isEmpty()) name = "Folder";
                     int p = ShortcutStore.activeProfile(this);
                     if (shortcuts.size() >= ShortcutStore.MAX) {
-                        Toast.makeText(this, "Home screen is full (16 max)", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Home screen is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                         return;
                     }
                     Shortcut folder = Shortcut.createFolder(name, new ArrayList<>());
@@ -938,6 +986,9 @@ public class HomeActivity extends Activity {
             }
         }
         shortcuts = ShortcutStore.loadPadded(this, currentProfile);
+        if (ShortcutStore.isHomeAlignBottom(this)) {
+            alignShortcutsBottom();
+        }
         final List<Shortcut> warmList = new ArrayList<>(shortcuts);
         android.os.AsyncTask.THREAD_POOL_EXECUTOR.execute(() -> {
             for (Shortcut s : warmList) {
@@ -1282,7 +1333,7 @@ public class HomeActivity extends Activity {
             actions.add(() -> {
                 List<Shortcut> isl = ShortcutStore.loadIsland(this);
                 if (isl.size() >= ShortcutStore.MAX) {
-                    Toast.makeText(this, "Dynamic Island is full (16 max)", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Dynamic Island is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                 } else {
                     isl.add(s);
                     ShortcutStore.saveIsland(this, isl);
@@ -1290,6 +1341,15 @@ public class HomeActivity extends Activity {
                     Toast.makeText(this, "Added " + s.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
                 }
             });
+            if (s.isApp()) {
+                boolean isLocked = ShortcutStore.isAppLocked(this, s.pkg);
+                options.add(isLocked ? "🔓 Remove Fingerprint Lock" : "🔒 Lock with Fingerprint");
+                actions.add(() -> {
+                    ShortcutStore.setAppLocked(this, s.pkg, !isLocked);
+                    loadShortcuts();
+                    Toast.makeText(this, (!isLocked ? "Locked " : "Unlocked ") + s.label, Toast.LENGTH_SHORT).show();
+                });
+            }
             if (Shortcut.TYPE_URL.equals(s.type)) {
                 options.add("🎨 Change Web App Logo");
                 actions.add(() -> showWebLogoPickerDialog(s));
@@ -1445,7 +1505,7 @@ public class HomeActivity extends Activity {
                         } else if (shortcuts.size() < ShortcutStore.MAX) {
                             shortcuts.add(sc);
                         } else {
-                            Toast.makeText(this, "Home screen is full (16 max)", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Home screen is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                             return;
                         }
                     }
@@ -1544,13 +1604,14 @@ public class HomeActivity extends Activity {
     private void showGridOrganizerDialog() {
         int currentProfile = ShortcutStore.activeProfile(this);
         String profName = ShortcutStore.profileName(this, currentProfile);
-        String[] items = new String[shortcuts.size() + 3];
+        String[] items = new String[shortcuts.size() + 4];
         items[0] = "🔤 Sort Non-Empty Apps A–Z";
         items[1] = "🧹 Compact All Apps to Top (Fill Gaps)";
-        items[2] = "➕ Insert Blank Space at Beginning";
+        items[2] = "⬇️ Push All Apps to Bottom (One-Hand Reach)";
+        items[3] = "➕ Insert Blank Space at Beginning";
         for (int i = 0; i < shortcuts.size(); i++) {
-            Shortcut s = shortcuts.get(i);
-            items[i + 3] = "Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty Slot ]" : (s.isFolder() ? "📁 " : "") + s.label);
+            Shortcut sc = shortcuts.get(i);
+            items[i + 4] = "Slot " + (i + 1) + ": " + (sc.isEmpty() ? "[ ✨ Empty Slot ]" : (sc.isFolder() ? "📁 " : "") + sc.label);
         }
         new AlertDialog.Builder(this)
                 .setTitle("🗂️ Organize Grid: " + profName)
@@ -1560,9 +1621,11 @@ public class HomeActivity extends Activity {
                     } else if (which == 1) {
                         packShortcutsToTop();
                     } else if (which == 2) {
+                        pushShortcutsToBottom();
+                    } else if (which == 3) {
                         insertBlankSpaceAt(0);
                     } else {
-                        int slotIdx = which - 3;
+                        int slotIdx = which - 4;
                         showSlotControlDialog(slotIdx);
                     }
                 })
@@ -1847,6 +1910,17 @@ public class HomeActivity extends Activity {
             ImageView icon = v.findViewById(R.id.sc_icon);
             TextView label = v.findViewById(R.id.sc_label);
             TextView badge = v.findViewById(R.id.sc_badge);
+            int iconDp = ShortcutStore.homeIconSize(HomeActivity.this);
+            int iconPx = dp(iconDp);
+            if (icon.getLayoutParams() != null && icon.getLayoutParams().width != iconPx) {
+                icon.getLayoutParams().width = iconPx;
+                icon.getLayoutParams().height = iconPx;
+                View parentFrame = (View) icon.getParent();
+                if (parentFrame != null && parentFrame.getLayoutParams() != null) {
+                    parentFrame.getLayoutParams().width = iconPx;
+                    parentFrame.getLayoutParams().height = iconPx;
+                }
+            }
             if (s.isEmpty()) {
                 icon.setImageResource(R.drawable.slot_empty_target);
                 icon.setAlpha(0.38f);
@@ -1856,7 +1930,8 @@ public class HomeActivity extends Activity {
             } else {
                 icon.setAlpha(1.0f);
                 icon.setImageBitmap(IconUtil.iconFor(HomeActivity.this, s));
-                label.setText(s.label);
+                boolean isLocked = s.isApp() && ShortcutStore.isAppLocked(HomeActivity.this, s.pkg);
+                label.setText((isLocked ? "🔒 " : "") + s.label);
                 label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
                 if (badge != null) {
                     if (LockNotificationListenerService.isBadgesEnabled(HomeActivity.this) && s.isApp()) {

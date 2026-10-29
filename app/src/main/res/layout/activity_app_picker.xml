@@ -35,7 +35,8 @@
             <Button android:id="@+id/chip_media" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="🎬 Media" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
             <Button android:id="@+id/chip_tools" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="🛠️ Tools" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
             <Button android:id="@+id/chip_social" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="💬 Social" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
-            <Button android:id="@+id/chip_system" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="⚙️ System" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" />
+            <Button android:id="@+id/chip_system" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="⚙️ System" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_vault" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="🔒 Vault" android:textSize="11sp" android:textColor="#FFBB55" android:paddingStart="12dp" android:paddingEnd="12dp" />
         </LinearLayout>
     </HorizontalScrollView>
 

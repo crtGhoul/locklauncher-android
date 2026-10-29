@@ -275,6 +275,58 @@
                 android:text="Home Grid Density: 4 Columns (tap to cycle 3, 4, 5)"
                 android:textColor="#FFFFFF" />
 
+            <Button
+                android:id="@+id/btn_home_icon_size"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/btn_ghost"
+                android:text="Home Icon Size: 56dp (Standard)"
+                android:textColor="#FFFFFF" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Align Icons to Bottom (Thumb Reach)"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/switch_home_align_bottom"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Auto-open Keyboard in Drawer"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/switch_drawer_auto_keyboard"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+                android:textColor="#FFFFFF" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

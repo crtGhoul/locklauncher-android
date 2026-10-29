@@ -37,7 +37,11 @@ public class ShortcutStore {
     private static final String KEY_ISLAND_SEPARATE_APPS = "island_separate_apps";
     private static final String KEY_ISLAND_SHORTCUTS = "island_shortcuts";
     private static final String KEY_HOME_CLEAN_MODE = "home_clean_mode";
-    public static final int MAX = 16;
+    private static final String KEY_HOME_ALIGN_BOTTOM = "home_align_bottom";
+    private static final String KEY_HOME_ICON_SIZE = "home_icon_size";
+    private static final String KEY_DRAWER_AUTO_KEYBOARD = "drawer_auto_keyboard";
+    private static final String KEY_LOCKED_APPS = "locked_apps";
+    public static final int MAX = 32;
     public static final int PROFILES = 3;
 
     private static String profileKey(int profile) {
@@ -365,6 +369,50 @@ public class ShortcutStore {
 
     public static void setHomeCleanMode(Context ctx, boolean clean) {
         prefs(ctx).edit().putBoolean(KEY_HOME_CLEAN_MODE, clean).apply();
+    }
+
+    public static boolean isHomeAlignBottom(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_HOME_ALIGN_BOTTOM, false);
+    }
+
+    public static void setHomeAlignBottom(Context ctx, boolean bottom) {
+        prefs(ctx).edit().putBoolean(KEY_HOME_ALIGN_BOTTOM, bottom).apply();
+    }
+
+    public static int homeIconSize(Context ctx) {
+        return prefs(ctx).getInt(KEY_HOME_ICON_SIZE, 56);
+    }
+
+    public static void setHomeIconSize(Context ctx, int sizeDp) {
+        prefs(ctx).edit().putInt(KEY_HOME_ICON_SIZE, sizeDp).apply();
+    }
+
+    public static boolean isDrawerAutoKeyboard(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_DRAWER_AUTO_KEYBOARD, true);
+    }
+
+    public static void setDrawerAutoKeyboard(Context ctx, boolean auto) {
+        prefs(ctx).edit().putBoolean(KEY_DRAWER_AUTO_KEYBOARD, auto).apply();
+    }
+
+    public static java.util.Set<String> getLockedApps(Context ctx) {
+        return new java.util.HashSet<>(prefs(ctx).getStringSet(KEY_LOCKED_APPS, new java.util.HashSet<>()));
+    }
+
+    public static boolean isAppLocked(Context ctx, String pkg) {
+        if (pkg == null || pkg.isEmpty()) return false;
+        return getLockedApps(ctx).contains(pkg);
+    }
+
+    public static void setAppLocked(Context ctx, String pkg, boolean locked) {
+        if (pkg == null || pkg.isEmpty()) return;
+        java.util.Set<String> set = getLockedApps(ctx);
+        if (locked) {
+            set.add(pkg);
+        } else {
+            set.remove(pkg);
+        }
+        prefs(ctx).edit().putStringSet(KEY_LOCKED_APPS, set).apply();
     }
 
     private static SharedPreferences prefs(Context ctx) {

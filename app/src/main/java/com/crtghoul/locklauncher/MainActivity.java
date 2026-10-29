@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         Button add = findViewById(R.id.btn_add);
         add.setOnClickListener(v -> {
             if (shortcuts.size() >= ShortcutStore.MAX) {
-                toast("This profile is full (16 max) — try another profile");
+                toast("This profile is full (" + ShortcutStore.MAX + " max) — try another profile");
                 return;
             }
             showAddChooser();
@@ -116,7 +116,7 @@ public class MainActivity extends Activity {
         if (addWebApp != null) {
             addWebApp.setOnClickListener(v -> {
                 if (shortcuts.size() >= ShortcutStore.MAX) {
-                    toast("This profile is full (16 max) — try another profile");
+                    toast("This profile is full (" + ShortcutStore.MAX + " max) — try another profile");
                     return;
                 }
                 showCustomUrlDialog("", "");
@@ -184,6 +184,48 @@ public class MainActivity extends Activity {
                 if (next > 5) next = 3;
                 ShortcutStore.setHomeGridColumns(this, next);
                 btnGridCols.setText("Home Grid Density: " + next + " Columns (tap to cycle 3, 4, 5)");
+            });
+        }
+
+        Button btnIconSize = findViewById(R.id.btn_home_icon_size);
+        if (btnIconSize != null) {
+            int currentSize = ShortcutStore.homeIconSize(this);
+            btnIconSize.setText("Home Icon Size: " + currentSize + "dp" + (currentSize == 56 ? " (Standard)" : ""));
+            btnIconSize.setOnClickListener(v -> {
+                int[] sizes = {44, 50, 56, 64, 72};
+                String[] labels = {"Small (44dp)", "Medium (50dp)", "Standard (56dp)", "Large (64dp)", "Extra Large (72dp)"};
+                int curIdx = 2;
+                int cSize = ShortcutStore.homeIconSize(this);
+                for (int i = 0; i < sizes.length; i++) {
+                    if (sizes[i] == cSize) { curIdx = i; break; }
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("Select Home Icon Size")
+                        .setSingleChoiceItems(labels, curIdx, (d, which) -> {
+                            int chosen = sizes[which];
+                            ShortcutStore.setHomeIconSize(this, chosen);
+                            btnIconSize.setText("Home Icon Size: " + chosen + "dp" + (chosen == 56 ? " (Standard)" : ""));
+                            d.dismiss();
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            });
+        }
+
+        Switch homeAlignBottomSwitch = findViewById(R.id.switch_home_align_bottom);
+        if (homeAlignBottomSwitch != null) {
+            homeAlignBottomSwitch.setChecked(ShortcutStore.isHomeAlignBottom(this));
+            homeAlignBottomSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setHomeAlignBottom(this, on);
+                Toast.makeText(this, on ? "Icons aligned to bottom (One-Hand Reach)" : "Standard top alignment", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        Switch drawerAutoKeyboardSwitch = findViewById(R.id.switch_drawer_auto_keyboard);
+        if (drawerAutoKeyboardSwitch != null) {
+            drawerAutoKeyboardSwitch.setChecked(ShortcutStore.isDrawerAutoKeyboard(this));
+            drawerAutoKeyboardSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setDrawerAutoKeyboard(this, on);
             });
         }
 
@@ -910,6 +952,20 @@ public class MainActivity extends Activity {
     }
 
     private void showHiddenAppsDialog() {
+        BiometricHelper.authenticate(this, "Unlock Hidden Apps", "Authenticate with fingerprint or PIN to view hidden apps", new BiometricHelper.AuthCallback() {
+            @Override
+            public void onSuccess() {
+                openHiddenAppsDialogInternal();
+            }
+
+            @Override
+            public void onFailure(String error) {
+                toast("Authentication required to view hidden apps");
+            }
+        });
+    }
+
+    private void openHiddenAppsDialogInternal() {
         SharedPreferences prefs = getSharedPreferences("drawer_prefs", MODE_PRIVATE);
         Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
         if (hidden.isEmpty()) {
@@ -1480,7 +1536,7 @@ public class MainActivity extends Activity {
     private void copyShortcutToProfile(Shortcut src, int targetProfile) {
         List<Shortcut> targetList = ShortcutStore.load(this, targetProfile);
         if (targetList.size() >= ShortcutStore.MAX) {
-            toast(ShortcutStore.profileName(this, targetProfile) + " is full (16 max)");
+            toast(ShortcutStore.profileName(this, targetProfile) + " is full (" + ShortcutStore.MAX + " max)");
             return;
         }
         String newId = java.util.UUID.randomUUID().toString();

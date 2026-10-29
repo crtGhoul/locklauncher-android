@@ -76,13 +76,14 @@ public class AppPickerActivity extends Activity {
     }
 
     private final List<AppEntry> all = new ArrayList<>();
+    private final List<AppEntry> hiddenList = new ArrayList<>();
     private final Map<String, AppEntry> selected = new LinkedHashMap<>(); // itemKey -> AppEntry
     private AppAdapter adapter;
     private final MemoizedSearch memoizedSearch = new MemoizedSearch();
     private Button addButton;
     private View scrollSearchActions;
     private Button btnGoogle, btnYoutube, btnPlay, btnWeb;
-    private Button chipAll, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem;
+    private Button chipAll, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault;
     private String currentCategory = "all";
 
     // Powerhouse Calculator & Quick Settings
@@ -126,7 +127,7 @@ public class AppPickerActivity extends Activity {
                     for (LauncherActivityInfo info : activityList) {
                         String pkg = info.getApplicationInfo().packageName;
                         if (pkg.equals(getPackageName())) continue;
-                        if (isDrawerMode && hidden.contains(pkg)) continue;
+                        boolean isAppHidden = isDrawerMode && hidden.contains(pkg);
 
                         AppEntry e = new AppEntry();
                         e.pkg = pkg;
@@ -146,7 +147,11 @@ public class AppPickerActivity extends Activity {
 
                         // Classify category
                         e.category = classifyApp(e.pkg, rawLabel, e.isSystem, e.isClone);
-                        all.add(e);
+                        if (isAppHidden) {
+                            hiddenList.add(e);
+                        } else {
+                            all.add(e);
+                        }
                     }
                 }
             } catch (Exception ignored) {
@@ -161,7 +166,7 @@ public class AppPickerActivity extends Activity {
             for (ResolveInfo ri : pm.queryIntentActivities(main, 0)) {
                 String pkg = ri.activityInfo.packageName;
                 if (pkg.equals(getPackageName())) continue;
-                if (isDrawerMode && hidden.contains(pkg)) continue;
+                boolean isAppHidden = isDrawerMode && hidden.contains(pkg);
                 AppEntry e = new AppEntry();
                 e.pkg = pkg;
                 String customLabel = prefs.getString(getCustomLabelKey(pkg, 0), null);
@@ -169,11 +174,16 @@ public class AppPickerActivity extends Activity {
                 e.icon = ri.loadIcon(pm);
                 e.isSystem = (ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
                 e.category = classifyApp(e.pkg, e.label, e.isSystem, false);
-                all.add(e);
+                if (isAppHidden) {
+                    hiddenList.add(e);
+                } else {
+                    all.add(e);
+                }
             }
         }
 
         Collections.sort(all, (a, c) -> a.label.compareToIgnoreCase(c.label));
+        Collections.sort(hiddenList, (a, c) -> a.label.compareToIgnoreCase(c.label));
 
         // Memoized prefix index, built once per app list.
         List<String> pickerLabels = new ArrayList<>();
@@ -199,6 +209,30 @@ public class AppPickerActivity extends Activity {
         chipTools = findViewById(R.id.chip_tools);
         chipSocial = findViewById(R.id.chip_social);
         chipSystem = findViewById(R.id.chip_system);
+        chipVault = findViewById(R.id.chip_vault);
+        if (chipVault != null) {
+            chipVault.setText("🔒 Vault (" + hiddenList.size() + ")");
+            chipVault.setOnClickListener(v -> {
+                if ("vault".equals(currentCategory)) {
+                    currentCategory = "all";
+                    updateCategoryChipStyles();
+                    adapter.applyFilter();
+                    return;
+                }
+                BiometricHelper.authenticate(this, "Unlock Hidden Vault", "Authenticate with fingerprint or PIN to view hidden apps", new BiometricHelper.AuthCallback() {
+                    @Override
+                    public void onSuccess() {
+                        currentCategory = "vault";
+                        updateCategoryChipStyles();
+                        adapter.applyFilter();
+                    }
+                    @Override
+                    public void onFailure(String error) {
+                        Toast.makeText(AppPickerActivity.this, "Authentication required to open vault", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            });
+        }
 
         cardCalculator = findViewById(R.id.card_calculator);
         textCalcExpr = findViewById(R.id.text_calc_expr);
@@ -254,7 +288,7 @@ public class AppPickerActivity extends Activity {
                     island.set(targetSlot, s);
                 } else {
                     if (island.size() >= ShortcutStore.MAX) {
-                        Toast.makeText(this, "Dynamic Island is full (16 max)", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Dynamic Island is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                         finish();
                         return;
                     }
@@ -273,15 +307,18 @@ public class AppPickerActivity extends Activity {
             });
             list.setOnItemLongClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
+                boolean isLocked = ShortcutStore.isAppLocked(this, e.pkg);
+                boolean inVault = "vault".equals(currentCategory);
                 String[] opts = {
                         "🚀 Launch app",
                         "📌 Pin to Home screen (Main Page)",
                         "📁 Add to Folder...",
                         "➕ Add to Lock Launcher Dock",
                         "🏝️ Add to Dynamic Island",
+                        isLocked ? "🔓 Remove Fingerprint Lock" : "🔒 Lock with Fingerprint",
                         "✏️ Custom Display Name",
                         "ℹ️ App Info",
-                        "🚫 Hide from drawer",
+                        inVault ? "👁️ Unhide from Drawer" : "🚫 Hide from Drawer",
                         "🗑️ Uninstall"
                 };
                 new AlertDialog.Builder(this)
@@ -296,7 +333,7 @@ public class AppPickerActivity extends Activity {
                                     int p = ShortcutStore.activeProfile(this);
                                     List<Shortcut> current = ShortcutStore.load(this, p);
                                     if (current.size() >= ShortcutStore.MAX) {
-                                        Toast.makeText(this, "Home screen is full (16 max)", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(this, "Home screen is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                                     } else {
                                         current.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
                                         ShortcutStore.save(this, p, current);
@@ -310,7 +347,7 @@ public class AppPickerActivity extends Activity {
                                     int curP = ShortcutStore.activeProfile(this);
                                     List<Shortcut> dockList = ShortcutStore.load(this, curP);
                                     if (dockList.size() >= ShortcutStore.MAX) {
-                                        Toast.makeText(this, "Dock is full (16 max)", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(this, "Dock is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                                     } else {
                                         dockList.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
                                         ShortcutStore.save(this, curP, dockList);
@@ -320,7 +357,7 @@ public class AppPickerActivity extends Activity {
                                 case 4:
                                     List<Shortcut> islandList = ShortcutStore.loadIsland(this);
                                     if (islandList.size() >= ShortcutStore.MAX) {
-                                        Toast.makeText(this, "Dynamic Island is full (16 max)", Toast.LENGTH_SHORT).show();
+                                        Toast.makeText(this, "Dynamic Island is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                                     } else {
                                         islandList.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
                                         ShortcutStore.saveIsland(this, islandList);
@@ -329,6 +366,11 @@ public class AppPickerActivity extends Activity {
                                     }
                                     break;
                                 case 5:
+                                    ShortcutStore.setAppLocked(this, e.pkg, !isLocked);
+                                    adapter.notifyDataSetChanged();
+                                    Toast.makeText(this, (!isLocked ? "Locked " : "Unlocked ") + e.label, Toast.LENGTH_SHORT).show();
+                                    break;
+                                case 6:
                                     EditText input = new EditText(this);
                                     input.setText(e.label);
                                     if (e.label != null) input.setSelection(e.label.length());
@@ -375,20 +417,34 @@ public class AppPickerActivity extends Activity {
                                             .setNegativeButton("Cancel", null)
                                             .show();
                                     break;
-                                case 6:
+                                case 7:
                                     Intent info = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                                     info.setData(Uri.parse("package:" + e.pkg));
                                     startActivity(info);
                                     break;
-                                case 7:
-                                    Set<String> curHidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
-                                    curHidden.add(e.pkg);
-                                    prefs.edit().putStringSet("hidden_apps", curHidden).apply();
-                                    all.remove(e);
-                                    adapter.applyFilter();
-                                    Toast.makeText(this, e.label + " hidden from drawer", Toast.LENGTH_SHORT).show();
-                                    break;
                                 case 8:
+                                    Set<String> curHidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
+                                    if (inVault) {
+                                        curHidden.remove(e.pkg);
+                                        prefs.edit().putStringSet("hidden_apps", curHidden).apply();
+                                        hiddenList.remove(e);
+                                        all.add(e);
+                                        Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                        adapter.applyFilter();
+                                        if (chipVault != null) chipVault.setText("🔒 Vault (" + hiddenList.size() + ")");
+                                        Toast.makeText(this, "Unhid " + e.label, Toast.LENGTH_SHORT).show();
+                                    } else {
+                                        curHidden.add(e.pkg);
+                                        prefs.edit().putStringSet("hidden_apps", curHidden).apply();
+                                        all.remove(e);
+                                        hiddenList.add(e);
+                                        Collections.sort(hiddenList, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                        adapter.applyFilter();
+                                        if (chipVault != null) chipVault.setText("🔒 Vault (" + hiddenList.size() + ")");
+                                        Toast.makeText(this, e.label + " hidden from drawer", Toast.LENGTH_SHORT).show();
+                                    }
+                                    break;
+                                case 9:
                                     Intent uninst = new Intent(Intent.ACTION_DELETE);
                                     uninst.setData(Uri.parse("package:" + e.pkg));
                                     startActivity(uninst);
@@ -432,7 +488,8 @@ public class AppPickerActivity extends Activity {
 
         EditText search = findViewById(R.id.search);
         if (isDrawerMode) {
-            search.setHint("Search " + all.size() + " apps, Google, YouTube...");
+            search.setHint("Search " + (all.size() + hiddenList.size()) + " apps, Google, YouTube...");
+            if (ShortcutStore.isDrawerAutoKeyboard(this)) {
             search.requestFocus();
             search.postDelayed(() -> {
                 android.view.inputmethod.InputMethodManager imm =
@@ -440,7 +497,8 @@ public class AppPickerActivity extends Activity {
                 if (imm != null) {
                     imm.showSoftInput(search, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
                 }
-            }, 120);
+            }, 50);
+            }
         }
 
         search.addTextChangedListener(new TextWatcher() {
@@ -622,6 +680,7 @@ public class AppPickerActivity extends Activity {
         if (chipTools != null) chipTools.setBackgroundResource("tools".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
         if (chipSocial != null) chipSocial.setBackgroundResource("social".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
         if (chipSystem != null) chipSystem.setBackgroundResource("system".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (chipVault != null) chipVault.setBackgroundResource("vault".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
     }
 
     private void showAddToFolderDialog(AppEntry e) {
@@ -676,6 +735,24 @@ public class AppPickerActivity extends Activity {
     }
 
     private void launchApp(AppEntry e, LauncherApps launcherApps, View sourceView) {
+        if (ShortcutStore.isAppLocked(this, e.pkg)) {
+            BiometricHelper.authenticate(this, "Unlock " + e.label, "Authenticate with fingerprint or PIN to open app", new BiometricHelper.AuthCallback() {
+                @Override
+                public void onSuccess() {
+                    performLaunchApp(e, launcherApps, sourceView);
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    Toast.makeText(AppPickerActivity.this, "Authentication required to open " + e.label, Toast.LENGTH_SHORT).show();
+                }
+            });
+            return;
+        }
+        performLaunchApp(e, launcherApps, sourceView);
+    }
+
+    private void performLaunchApp(AppEntry e, LauncherApps launcherApps, View sourceView) {
         Bundle opts = null;
         if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
@@ -729,7 +806,8 @@ public class AppPickerActivity extends Activity {
             final String q = filterQuery.trim().toLowerCase();
             final Map<AppEntry, Integer> scores = new HashMap<>();
 
-            for (AppEntry e : all) {
+            List<AppEntry> sourceList = "vault".equals(currentCategory) ? hiddenList : all;
+            for (AppEntry e : sourceList) {
                 if ("clones".equals(currentCategory) && !e.isClone) continue;
                 if ("ai".equals(currentCategory) && !"ai".equals(e.category)) continue;
                 if ("media".equals(currentCategory) && !"media".equals(e.category)) continue;
@@ -818,7 +896,8 @@ public class AppPickerActivity extends Activity {
             TextView profileBadge = v.findViewById(R.id.app_badge_profile);
 
             icon.setImageDrawable(e.icon);
-            name.setText(e.label);
+            boolean isLocked = ShortcutStore.isAppLocked(AppPickerActivity.this, e.pkg);
+            name.setText((isLocked ? "🔒 " : "") + e.label);
 
             if (profileBadge != null) {
                 if (e.isClone) {
