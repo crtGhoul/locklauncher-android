@@ -1,6 +1,10 @@
 package com.crtghoul.locklauncher;
 
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -69,7 +73,12 @@ public class IslandService extends Service {
     public static void start(Context ctx) {
         if (!canShow(ctx)) return;
         try {
-            ctx.startService(new Intent(ctx, IslandService.class));
+            Intent intent = new Intent(ctx, IslandService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(intent);
+            } else {
+                ctx.startService(intent);
+            }
         } catch (Exception ignored) {
         }
     }
@@ -85,7 +94,11 @@ public class IslandService extends Service {
         if (!running) return;
         try {
             Intent i = new Intent(ctx, IslandService.class).setAction(ACTION_REFRESH);
-            ctx.startService(i);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(i);
+            } else {
+                ctx.startService(i);
+            }
         } catch (Exception ignored) {
         }
     }
@@ -100,6 +113,45 @@ public class IslandService extends Service {
                 .edit().putBoolean("island_on", on).apply();
     }
 
+    private static final int NOTIF_ID = 4041;
+    private static final String CHANNEL_ID = "island_service_channel";
+
+    private void ensureForeground() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel chan = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Dynamic Island",
+                    NotificationManager.IMPORTANCE_MIN
+            );
+            chan.setDescription("Dynamic Island overlay service");
+            chan.setShowBadge(false);
+            chan.enableLights(false);
+            chan.enableVibration(false);
+            chan.setSound(null, null);
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.createNotificationChannel(chan);
+            }
+            Notification.Builder nb = new Notification.Builder(this, CHANNEL_ID)
+                    .setContentTitle("Dynamic Island Active")
+                    .setContentText("Tap to configure Island")
+                    .setSmallIcon(R.drawable.ic_launcher)
+                    .setOngoing(true)
+                    .setCategory(Notification.CATEGORY_SERVICE);
+            Intent appIntent = new Intent(this, MainActivity.class);
+            PendingIntent pi = PendingIntent.getActivity(
+                    this, 0, appIntent,
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+            );
+            nb.setContentIntent(pi);
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(NOTIF_ID, nb.build(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            } else {
+                startForeground(NOTIF_ID, nb.build());
+            }
+        }
+    }
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;
@@ -108,6 +160,7 @@ public class IslandService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        ensureForeground();
         mainHandler = new Handler(Looper.getMainLooper());
         registerIslandReceivers();
     }
@@ -115,6 +168,7 @@ public class IslandService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         running = true;
+        ensureForeground();
         if (ACTION_REFRESH.equals(intent != null ? intent.getAction() : "")) {
             rebuild();
         } else if (islandView == null) {
@@ -194,7 +248,8 @@ public class IslandService extends Service {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                        | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                        | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
         p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         p.y = statusBarHeight() + dp(8);
@@ -507,6 +562,18 @@ public class IslandService extends Service {
         card.setLayoutParams(clp);
         card.setOnClickListener(v -> { }); // prevent dismiss on card tap
 
+        // 120Hz GPU Entrance Animation
+        card.setScaleX(0.88f);
+        card.setScaleY(0.88f);
+        card.setAlpha(0.0f);
+        card.animate()
+                .scaleX(1.0f)
+                .scaleY(1.0f)
+                .alpha(1.0f)
+                .setDuration(180)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                .start();
+
         // Header Bar
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -530,6 +597,25 @@ public class IslandService extends Service {
         LinearLayout.LayoutParams splp = new LinearLayout.LayoutParams(0, 1, 1.0f);
         spacer.setLayoutParams(splp);
         header.addView(spacer);
+
+        // [ ⚙️ Organize ] button
+        TextView btnOrg = new TextView(this);
+        btnOrg.setText("⚙️ Organize");
+        btnOrg.setTextColor(0xDDFFFFFF);
+        btnOrg.setTextSize(12);
+        btnOrg.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        GradientDrawable orgBg = new GradientDrawable();
+        orgBg.setColor(0x20FFFFFF);
+        orgBg.setCornerRadius(dp(12));
+        orgBg.setStroke(dp(1), 0x33FFFFFF);
+        btnOrg.setBackground(orgBg);
+        btnOrg.setPadding(dp(8), dp(5), dp(8), dp(5));
+        btnOrg.setOnClickListener(v -> showIslandOrganizerDialog());
+        header.addView(btnOrg);
+
+        View gap = new View(this);
+        gap.setLayoutParams(new LinearLayout.LayoutParams(dp(6), 1));
+        header.addView(gap);
 
         // [ ï¼‹ Add App ] button
         TextView btnAdd = new TextView(this);
@@ -681,7 +767,8 @@ public class IslandService extends Service {
         params = baseParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         params.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
-                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
         islandView = root;
         expanded = true;
         try {
@@ -747,6 +834,85 @@ public class IslandService extends Service {
             IconUtil.fireShortcut(IslandService.this, s);
             showCollapsed();
         }
+    }
+
+    private void showIslandSwapDialog(Shortcut s, int index) {
+        final List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
+        String[] targets = new String[shortcuts.size()];
+        for (int i = 0; i < shortcuts.size(); i++) {
+            targets[i] = "Slot " + (i + 1) + ": " + shortcuts.get(i).label;
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        b.setTitle("Swap " + s.label + " with:");
+        b.setItems(targets, (d, targetIdx) -> {
+            if (targetIdx != index && targetIdx >= 0 && targetIdx < shortcuts.size()) {
+                Shortcut target = shortcuts.get(targetIdx);
+                shortcuts.set(targetIdx, s);
+                shortcuts.set(index, target);
+                ShortcutStore.saveIsland(this, shortcuts);
+                showExpanded();
+                Toast.makeText(this, "Swapped " + s.label + " with " + target.label, Toast.LENGTH_SHORT).show();
+            }
+        });
+        b.setNegativeButton("Cancel", null);
+        AlertDialog dialog = b.create();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        } else {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        try {
+            dialog.show();
+        } catch (Exception ignored) {}
+    }
+
+    private void showIslandOrganizerDialog() {
+        final List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
+        List<String> opts = new ArrayList<>();
+        opts.add("➕ Add Apps to Island");
+        opts.add("🔤 Sort Apps A–Z");
+        opts.add("🗑️ Clear All Island Apps");
+        for (int i = 0; i < shortcuts.size(); i++) {
+            Shortcut sc = shortcuts.get(i);
+            opts.add((i + 1) + ". " + sc.label + " (Manage)");
+        }
+
+        AlertDialog.Builder b = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        b.setTitle("🏝️ Organize Dynamic Island");
+        b.setItems(opts.toArray(new String[0]), (d, which) -> {
+            if (which == 0) {
+                showCollapsed();
+                Intent pick = new Intent(this, AppPickerActivity.class);
+                pick.putExtra(AppPickerActivity.EXTRA_PICK_FOR_ISLAND, true);
+                pick.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(pick);
+            } else if (which == 1) {
+                shortcuts.sort((s1, s2) -> (s1.label != null ? s1.label : "").compareToIgnoreCase(s2.label != null ? s2.label : ""));
+                ShortcutStore.saveIsland(this, shortcuts);
+                showExpanded();
+                Toast.makeText(this, "Island apps sorted A–Z", Toast.LENGTH_SHORT).show();
+            } else if (which == 2) {
+                shortcuts.clear();
+                ShortcutStore.saveIsland(this, shortcuts);
+                showExpanded();
+                Toast.makeText(this, "Cleared Dynamic Island", Toast.LENGTH_SHORT).show();
+            } else {
+                int itemIdx = which - 3;
+                if (itemIdx >= 0 && itemIdx < shortcuts.size()) {
+                    showIslandAppMenu(shortcuts.get(itemIdx), itemIdx);
+                }
+            }
+        });
+        b.setPositiveButton("Done", null);
+        AlertDialog dialog = b.create();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        } else {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        try {
+            dialog.show();
+        } catch (Exception ignored) {}
     }
 
     private void rebuild() {

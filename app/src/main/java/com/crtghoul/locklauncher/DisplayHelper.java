@@ -24,28 +24,13 @@ public class DisplayHelper {
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
 
-            // Android 11+ (API 30+) display mode selection
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Display display = activity.getDisplay();
-                if (display != null) {
-                    Display.Mode[] modes = display.getSupportedModes();
-                    Display.Mode highestFpsMode = null;
-                    for (Display.Mode mode : modes) {
-                        if (highestFpsMode == null || mode.getRefreshRate() > highestFpsMode.getRefreshRate()) {
-                            highestFpsMode = mode;
-                        }
-                    }
-                    if (highestFpsMode != null && highestFpsMode.getRefreshRate() >= 89.0f) {
-                        WindowManager.LayoutParams lp = window.getAttributes();
-                        lp.preferredDisplayModeId = highestFpsMode.getModeId();
-                        lp.preferredRefreshRate = highestFpsMode.getRefreshRate();
-                        window.setAttributes(lp);
-                    }
-                }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                // Android 6.0 - 10.0 preferredRefreshRate
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 WindowManager.LayoutParams lp = window.getAttributes();
                 lp.preferredRefreshRate = 120.0f;
+                try {
+                    lp.getClass().getField("preferredMinDisplayRefreshRate").setFloat(lp, 120.0f);
+                    lp.getClass().getField("preferredMaxDisplayRefreshRate").setFloat(lp, 120.0f);
+                } catch (Throwable ignored) {}
                 window.setAttributes(lp);
             }
         } catch (Exception ignored) {

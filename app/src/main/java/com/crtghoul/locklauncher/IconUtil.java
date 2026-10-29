@@ -1,6 +1,8 @@
 package com.crtghoul.locklauncher;
 
+import android.app.Activity;
 import android.app.ActivityOptions;
+import android.app.KeyguardManager;
 import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
@@ -18,6 +20,7 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Process;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
@@ -567,43 +570,33 @@ public class IconUtil {
     }
 
     public static boolean fireShortcut(Context ctx, Shortcut s, View sourceView) {
+        if (s == null) return false;
         try {
-            Bundle opts = null;
-            if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                try {
-                    int w = Math.max(sourceView.getWidth(), 48);
-                    int h = Math.max(sourceView.getHeight(), 48);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        opts = ActivityOptions.makeClipRevealAnimation(sourceView, 0, 0, w, h).toBundle();
-                    } else {
-                        opts = ActivityOptions.makeScaleUpAnimation(sourceView, 0, 0, w, h).toBundle();
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-
             if (s.isFolder()) {
                 Intent fi = launchIntent(ctx, s);
                 if (fi != null) {
-                    if (opts != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                        ctx.startActivity(fi, opts);
-                    } else {
-                        ctx.startActivity(fi);
-                    }
+                    fi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(fi);
                     return true;
                 }
                 return false;
             }
-            if (s.isApp() && s.profileSerial > 0) {
+            if (s.isApp()) {
+                KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
+                if (km != null && km.isKeyguardLocked() && ctx instanceof Activity) {
+                    try {
+                        km.requestDismissKeyguard((Activity) ctx, null);
+                    } catch (Exception ignored) {}
+                }
                 try {
                     LauncherApps la = (LauncherApps) ctx.getSystemService(Context.LAUNCHER_APPS_SERVICE);
                     UserManager um = (UserManager) ctx.getSystemService(Context.USER_SERVICE);
                     if (la != null && um != null) {
-                        UserHandle uh = um.getUserForSerialNumber(s.profileSerial);
+                        UserHandle uh = (s.profileSerial > 0) ? um.getUserForSerialNumber(s.profileSerial) : Process.myUserHandle();
                         if (uh != null) {
                             List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
-                            if (!acts.isEmpty()) {
-                                la.startMainActivity(acts.get(0).getComponentName(), uh, null, opts);
+                            if (acts != null && !acts.isEmpty()) {
+                                la.startMainActivity(acts.get(0).getComponentName(), uh, null, null);
                                 return true;
                             }
                         }
@@ -625,24 +618,19 @@ public class IconUtil {
             }
             Intent launch = launchIntent(ctx, s);
             if (launch == null) return false;
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            ctx.startActivity(launch);
+            return true;
+        } catch (Exception e) {
             try {
-                if (opts != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                    ctx.startActivity(launch, opts);
-                } else {
-                    ctx.startActivity(launch);
-                }
-                return true;
-            } catch (Exception e) {
-                try {
+                Intent launch = launchIntent(ctx, s);
+                if (launch != null) {
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     ctx.startActivity(launch);
                     return true;
-                } catch (Exception ignored) {
                 }
-                return false;
+            } catch (Exception ignored) {
             }
-        } catch (Exception e) {
             return false;
         }
     }

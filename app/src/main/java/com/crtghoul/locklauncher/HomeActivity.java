@@ -928,6 +928,14 @@ public class HomeActivity extends Activity {
             }
         }
         shortcuts = ShortcutStore.loadPadded(this, currentProfile);
+        final List<Shortcut> warmList = new ArrayList<>(shortcuts);
+        android.os.AsyncTask.THREAD_POOL_EXECUTOR.execute(() -> {
+            for (Shortcut s : warmList) {
+                if (s != null && !s.isEmpty()) {
+                    IconUtil.iconFor(HomeActivity.this, s);
+                }
+            }
+        });
         adapter.notifyDataSetChanged();
         if (emptyHint != null) {
             boolean allEmpty = true;
