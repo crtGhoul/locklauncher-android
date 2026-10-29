@@ -356,6 +356,20 @@ public class IconUtil {
         try {
             if (s.isApp()) {
                 Intent i = ctx.getPackageManager().getLaunchIntentForPackage(s.pkg);
+                if (i == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    try {
+                        LauncherApps la = (LauncherApps) ctx.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+                        if (la != null) {
+                            List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, android.os.Process.myUserHandle());
+                            if (acts != null && !acts.isEmpty()) {
+                                i = new Intent(Intent.ACTION_MAIN);
+                                i.addCategory(Intent.CATEGORY_LAUNCHER);
+                                i.setComponent(acts.get(0).getComponentName());
+                                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
                 if (i != null) {
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     return i;
@@ -611,6 +625,7 @@ public class IconUtil {
             }
             Intent launch = launchIntent(ctx, s);
             if (launch == null) return false;
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             try {
                 if (opts != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
                     ctx.startActivity(launch, opts);

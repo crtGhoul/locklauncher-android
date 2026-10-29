@@ -1,5 +1,4 @@
 package com.crtghoul.locklauncher;
-
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.appwidget.AppWidgetHost;
@@ -41,14 +40,12 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-
 /**
  * Flagship, fully customizable, offline Android home launcher.
  * Supports AppWidgetHost live widgets, interactive 2x2 app folders,
@@ -56,27 +53,22 @@ import java.util.Locale;
  * dynamic grid density, and distraction-free header controls.
  */
 public class HomeActivity extends Activity {
-
     private static final int APPWIDGET_HOST_ID = 1024;
     private static final int REQUEST_PICK_APPWIDGET = 2001;
     private static final int REQUEST_CREATE_APPWIDGET = 2002;
     private static final int REQUEST_PICK_APP_FOR_SLOT = 2005;
     private static final int REQ_PICK_CUSTOM_LOGO = 2006;
     private static final int REQUEST_PICK_APP_FOR_ISLAND = 2007;
-
     private int pendingSlotIndex = -1;
     private Shortcut pendingLogoShortcut = null;
     private int activeDraggedPosition = -1;
     private boolean dragWasDropped = false;
-
     private View dragActionBar;
     private View dragActionRemove;
     private View dragActionOptions;
-
     private View toggleAppsPill;
     private TextView toggleAppsPillText;
     private boolean appsRevealedInCleanMode = false;
-
     private TextView clockView;
     private TextView dateBatteryView;
     private GridView gridView;
@@ -85,13 +77,11 @@ public class HomeActivity extends Activity {
     private Button[] profileTabs = new Button[ShortcutStore.PROFILES];
     private HomeShortcutAdapter adapter;
     private List<Shortcut> shortcuts = new ArrayList<>();
-
     private AppWidgetHost appWidgetHost;
     private AppWidgetManager appWidgetManager;
     private GestureDetector gestureDetector;
     private Shortcut lastRemovedShortcut = null;
     private int lastRemovedIndex = -1;
-
     private final Handler timeHandler = new Handler(Looper.getMainLooper());
     private final Runnable timeRunnable = new Runnable() {
         @Override
@@ -100,13 +90,11 @@ public class HomeActivity extends Activity {
             timeHandler.postDelayed(this, 1000);
         }
     };
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         DisplayHelper.enforceHighRefreshRate(this);
         setContentView(R.layout.activity_home);
-
         // AppWidgetHost Initialization
         appWidgetManager = AppWidgetManager.getInstance(this);
         appWidgetHost = new AppWidgetHost(this, APPWIDGET_HOST_ID);
@@ -114,17 +102,14 @@ public class HomeActivity extends Activity {
             appWidgetHost.startListening();
         } catch (Exception ignored) {
         }
-
         widgetsContainer = findViewById(R.id.home_widgets_container);
         clockView = findViewById(R.id.home_clock);
         dateBatteryView = findViewById(R.id.home_date_battery);
         gridView = findViewById(R.id.home_grid);
         emptyHint = findViewById(R.id.home_empty_hint);
-
         dragActionBar = findViewById(R.id.drag_action_bar);
         dragActionRemove = findViewById(R.id.drag_action_remove);
         dragActionOptions = findViewById(R.id.drag_action_options);
-
         if (dragActionRemove != null) {
             dragActionRemove.setOnDragListener((v, event) -> {
                 switch (event.getAction()) {
@@ -160,7 +145,6 @@ public class HomeActivity extends Activity {
                 return true;
             });
         }
-
         if (dragActionOptions != null) {
             dragActionOptions.setOnDragListener((v, event) -> {
                 switch (event.getAction()) {
@@ -189,11 +173,9 @@ public class HomeActivity extends Activity {
                 return true;
             });
         }
-
         profileTabs[0] = findViewById(R.id.home_tab_p0);
         profileTabs[1] = findViewById(R.id.home_tab_p1);
         profileTabs[2] = findViewById(R.id.home_tab_p2);
-
         for (int i = 0; i < ShortcutStore.PROFILES; i++) {
             final int p = i;
             profileTabs[i].setOnClickListener(v -> switchProfile(p));
@@ -202,22 +184,18 @@ public class HomeActivity extends Activity {
                 return true;
             });
         }
-
         findViewById(R.id.btn_home_settings).setOnClickListener(v -> {
             startActivity(new Intent(this, MainActivity.class));
         });
-
         findViewById(R.id.home_search_bar).setOnClickListener(v -> {
             Intent intent = new Intent(this, AppPickerActivity.class);
             intent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
             startActivity(intent);
             overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
         });
-
         findViewById(R.id.btn_quick_add_web).setOnClickListener(v -> {
             showAddWebAppDialog("", "");
         });
-
         toggleAppsPill = findViewById(R.id.btn_toggle_apps_pill);
         toggleAppsPillText = findViewById(R.id.text_toggle_apps_pill);
         if (toggleAppsPill != null) {
@@ -227,7 +205,6 @@ public class HomeActivity extends Activity {
                 return true;
             });
         }
-
         View.OnLongClickListener bgLongClickListener = v -> {
             showWallpaperMenu();
             return true;
@@ -236,12 +213,10 @@ public class HomeActivity extends Activity {
         if (root != null) root.setOnLongClickListener(bgLongClickListener);
         View header = findViewById(R.id.header_container);
         if (header != null) header.setOnLongClickListener(bgLongClickListener);
-
         // Swipe Gestures: Swipe Up for Drawer, Swipe Down for Notifications, Double-Tap to Lock
         gestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             private static final int SWIPE_THRESHOLD = 120;
             private static final int SWIPE_VELOCITY = 120;
-
             @Override
             public boolean onDoubleTap(MotionEvent e) {
                 if (ShortcutStore.isDoubleTapLock(HomeActivity.this)) {
@@ -255,7 +230,6 @@ public class HomeActivity extends Activity {
                 }
                 return false;
             }
-
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
                 if (e1 == null || e2 == null) return false;
@@ -288,46 +262,11 @@ public class HomeActivity extends Activity {
                 return false;
             }
         });
-
         adapter = new HomeShortcutAdapter();
         gridView.setAdapter(adapter);
-
         gridView.setOnItemClickListener((parent, view, position, id) -> {
-            if (position >= 0 && position < shortcuts.size()) {
-                Shortcut s = shortcuts.get(position);
-                if (s.isEmpty()) {
-                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                    showAddShortcutDialogForSlot(position);
-                    return;
-                }
-                if (s.isFolder()) {
-                    Intent fi = IconUtil.launchIntent(this, s);
-                    if (fi != null) {
-                        startActivity(fi);
-                    } else {
-                        showFolderModal(s);
-                    }
-                    return;
-                }
-                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                view.animate()
-                        .scaleX(0.92f).scaleY(0.92f)
-                        .setDuration(40)
-                        .withEndAction(() -> {
-                            view.animate()
-                                    .scaleX(1.0f).scaleY(1.0f)
-                                    .setDuration(120)
-                                    .setInterpolator(new android.view.animation.OvershootInterpolator(2.0f))
-                                    .start();
-                        }).start();
-
-                boolean ok = IconUtil.fireShortcut(this, s, view);
-                if (!ok) {
-                    Toast.makeText(this, "Could not open " + s.label, Toast.LENGTH_SHORT).show();
-                }
-            }
+            launchOrHandleShortcut(position, view);
         });
-
         gridView.setOnItemLongClickListener((parent, view, position, id) -> {
             if (position >= 0 && position < shortcuts.size()) {
                 Shortcut s = shortcuts.get(position);
@@ -340,7 +279,6 @@ public class HomeActivity extends Activity {
                 activeDraggedPosition = position;
                 dragWasDropped = false;
                 if (dragActionBar != null) dragActionBar.setVisibility(View.VISIBLE);
-
                 ClipData data = ClipData.newPlainText("pos", String.valueOf(position));
                 View.DragShadowBuilder shadow = new View.DragShadowBuilder(view);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -353,12 +291,40 @@ public class HomeActivity extends Activity {
             }
             return false;
         });
-
         loadShortcuts();
         loadWidgets();
         applyDynamicTheming();
     }
-
+    private void launchOrHandleShortcut(int position, View view) {
+        if (position < 0 || position >= shortcuts.size()) return;
+        Shortcut s = shortcuts.get(position);
+        if (s.isEmpty()) {
+            if (view != null) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            showAddShortcutDialogForSlot(position);
+            return;
+        }
+        if (s.isFolder()) {
+            showFolderModal(s);
+            return;
+        }
+        if (view != null) {
+            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            view.animate()
+                    .scaleX(0.92f).scaleY(0.92f)
+                    .setDuration(40)
+                    .withEndAction(() -> {
+                        view.animate()
+                                .scaleX(1.0f).scaleY(1.0f)
+                                .setDuration(120)
+                                .setInterpolator(new android.view.animation.OvershootInterpolator(2.0f))
+                                .start();
+                    }).start();
+        }
+        boolean ok = IconUtil.fireShortcut(this, s, view);
+        if (!ok) {
+            Toast.makeText(this, "Could not open " + s.label, Toast.LENGTH_SHORT).show();
+        }
+    }
     private void applyDynamicTheming() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             try {
@@ -375,7 +341,6 @@ public class HomeActivity extends Activity {
             }
         }
     }
-
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (gestureDetector != null) {
@@ -383,7 +348,6 @@ public class HomeActivity extends Activity {
         }
         return super.dispatchTouchEvent(ev);
     }
-
     private final BroadcastReceiver notificationBadgeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -393,7 +357,6 @@ public class HomeActivity extends Activity {
             updateLiveHeader();
         }
     };
-
     @Override
     protected void onResume() {
         super.onResume();
@@ -416,7 +379,6 @@ public class HomeActivity extends Activity {
         loadWidgets();
         applyDynamicTheming();
     }
-
     @Override
     protected void onPause() {
         super.onPause();
@@ -425,7 +387,6 @@ public class HomeActivity extends Activity {
             unregisterReceiver(notificationBadgeReceiver);
         } catch (Exception ignored) {}
     }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -436,12 +397,10 @@ public class HomeActivity extends Activity {
             }
         }
     }
-
     @Override
     public void onBackPressed() {
         // Native launcher invariant: back does not exit home
     }
-
     private void expandNotificationShade() {
         try {
             Object service = getSystemService("statusbar");
@@ -458,17 +417,14 @@ public class HomeActivity extends Activity {
             }
         }
     }
-
     private void updateLiveHeader() {
         boolean showClock = ShortcutStore.isHomeClock(this);
         boolean showBattery = ShortcutStore.isHomeBattery(this);
         boolean showTabs = ShortcutStore.isHomeProfiles(this);
-
         View tabsContainer = findViewById(R.id.home_tabs_container);
         if (tabsContainer != null) {
             tabsContainer.setVisibility(showTabs ? View.VISIBLE : View.GONE);
         }
-
         if (clockView != null) {
             clockView.setVisibility(showClock ? View.VISIBLE : View.GONE);
             if (showClock) {
@@ -487,12 +443,10 @@ public class HomeActivity extends Activity {
                 dateBatteryView.setText(battery);
             }
         }
-
         // 🌟 At a Glance Smart Bar (100% on-device next alarm, calendar, battery)
         TextView glanceAlarm = findViewById(R.id.glance_alarm);
         TextView glanceEvent = findViewById(R.id.glance_event);
         TextView glanceBattery = findViewById(R.id.glance_battery);
-
         if (glanceAlarm != null) {
             AtAGlanceHelper.GlanceItem alarm = AtAGlanceHelper.getNextAlarm(this);
             if (alarm != null) {
@@ -505,7 +459,6 @@ public class HomeActivity extends Activity {
                 glanceAlarm.setVisibility(View.GONE);
             }
         }
-
         if (glanceEvent != null) {
             AtAGlanceHelper.GlanceItem event = AtAGlanceHelper.getNextCalendarEvent(this);
             if (event != null) {
@@ -518,7 +471,6 @@ public class HomeActivity extends Activity {
                 glanceEvent.setVisibility(View.GONE);
             }
         }
-
         if (glanceBattery != null) {
             AtAGlanceHelper.GlanceItem bat = AtAGlanceHelper.getBatteryStatus(this);
             if (bat != null && showBattery) {
@@ -534,11 +486,9 @@ public class HomeActivity extends Activity {
             }
         }
     }
-
     private void showWallpaperMenu() {
         List<String> opts = new ArrayList<>();
         List<Runnable> acts = new ArrayList<>();
-
         if (lastRemovedShortcut != null) {
             final Shortcut toRestore = lastRemovedShortcut;
             final int restorePos = lastRemovedIndex;
@@ -554,10 +504,8 @@ public class HomeActivity extends Activity {
                 lastRemovedIndex = -1;
             });
         }
-
         opts.add("🗂️ Organize Home Grid (16 Slots)");
         acts.add(this::showGridOrganizerDialog);
-
         boolean clean = ShortcutStore.isHomeCleanMode(this);
         opts.add(clean ? "✨ Clean Mode: Enabled (Tap to Show Apps)" : "✨ Clean Mode: Hide Apps behind Pill");
         acts.add(() -> {
@@ -567,16 +515,12 @@ public class HomeActivity extends Activity {
             applyCleanModeState(true);
             Toast.makeText(this, next ? "Clean Mode active! Tap '🚀 Apps' pill to reveal." : "Clean Mode disabled", Toast.LENGTH_SHORT).show();
         });
-
         opts.add("🏝️ Manage Dynamic Island Apps");
         acts.add(this::showIslandAppManagerDialog);
-
         opts.add("🧩 Add Android Widget");
         acts.add(this::selectWidget);
-
         opts.add("📁 Create New Folder");
         acts.add(this::createNewFolderDialog);
-
         opts.add("🖼️ Change Wallpaper");
         acts.add(() -> {
             try {
@@ -585,27 +529,22 @@ public class HomeActivity extends Activity {
                 Toast.makeText(this, "Wallpaper picker not found", Toast.LENGTH_SHORT).show();
             }
         });
-
         opts.add("🌐 Add Web App");
         acts.add(() -> showAddWebAppDialog("", ""));
-
         opts.add("➕ Add App / Shortcut");
         acts.add(() -> {
             Intent addAppIntent = new Intent(this, AppPickerActivity.class);
             addAppIntent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
             startActivity(addAppIntent);
         });
-
         opts.add("📱 Search & All Apps");
         acts.add(() -> {
             Intent drawer = new Intent(this, AppPickerActivity.class);
             drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
             startActivity(drawer);
         });
-
         opts.add("⚙️ Launcher Settings");
         acts.add(() -> startActivity(new Intent(this, MainActivity.class)));
-
         new AlertDialog.Builder(this)
                 .setTitle("Home Screen")
                 .setItems(opts.toArray(new String[0]), (d, which) -> {
@@ -615,9 +554,7 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     // ---- Widget Management ----
-
     private void selectWidget() {
         if (appWidgetHost == null) return;
         String[] choices = {
@@ -638,7 +575,6 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void bindInternalWidget(Class<?> providerClass) {
         if (appWidgetHost == null || appWidgetManager == null) return;
         int appWidgetId = appWidgetHost.allocateAppWidgetId();
@@ -660,7 +596,6 @@ public class HomeActivity extends Activity {
             startActivityForResult(intent, REQUEST_CREATE_APPWIDGET);
         }
     }
-
     private void launchSystemWidgetPicker() {
         if (appWidgetHost == null) return;
         int appWidgetId = appWidgetHost.allocateAppWidgetId();
@@ -668,7 +603,6 @@ public class HomeActivity extends Activity {
         pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
         startActivityForResult(pickIntent, REQUEST_PICK_APPWIDGET);
     }
-
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -682,7 +616,6 @@ public class HomeActivity extends Activity {
                 long serial = serials != null && serials.length > 0 ? serials[0] : 0;
                 Shortcut sc = new Shortcut(Shortcut.TYPE_APP, pkg, "", label, serial);
                 shortcuts.set(pendingSlotIndex, sc);
-
                 int nextSlot = pendingSlotIndex + 1;
                 for (int i = 1; i < pkgs.size(); i++) {
                     while (nextSlot < shortcuts.size() && !shortcuts.get(nextSlot).isEmpty()) {
@@ -753,7 +686,6 @@ public class HomeActivity extends Activity {
             }
         }
     }
-
     private void configureWidget(Intent data) {
         if (data == null) return;
         int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
@@ -767,7 +699,6 @@ public class HomeActivity extends Activity {
             createWidget(data);
         }
     }
-
     private void createWidget(Intent data) {
         if (data == null) return;
         int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
@@ -777,13 +708,11 @@ public class HomeActivity extends Activity {
         loadWidgets();
         Toast.makeText(this, "Widget added to home screen", Toast.LENGTH_SHORT).show();
     }
-
     private void loadWidgets() {
         if (widgetsContainer == null || appWidgetManager == null || appWidgetHost == null) return;
         widgetsContainer.removeAllViews();
         int profile = ShortcutStore.activeProfile(this);
         List<Integer> widgetIds = ShortcutStore.homeWidgets(this, profile);
-
         for (int i = 0; i < widgetIds.size(); i++) {
             int wId = widgetIds.get(i);
             final int widgetIndex = i;
@@ -797,7 +726,6 @@ public class HomeActivity extends Activity {
                         v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                         List<String> wOpts = new ArrayList<>();
                         List<Runnable> wActs = new ArrayList<>();
-
                         if (widgetIndex > 0) {
                             wOpts.add("⬆️ Move Widget Up");
                             wActs.add(() -> {
@@ -824,13 +752,10 @@ public class HomeActivity extends Activity {
                                 }
                             });
                         }
-
                         wOpts.add("📐 Resize Widget Height");
                         wActs.add(() -> showResizeWidgetDialog(currentWidgetId));
-
                         wOpts.add("➕ Add Another Widget");
                         wActs.add(this::selectWidget);
-
                         wOpts.add("🗑️ Remove Widget");
                         wActs.add(() -> {
                             ShortcutStore.removeHomeWidget(this, profile, currentWidgetId);
@@ -841,19 +766,16 @@ public class HomeActivity extends Activity {
                             loadWidgets();
                             Toast.makeText(this, "Widget removed", Toast.LENGTH_SHORT).show();
                         });
-
                         new AlertDialog.Builder(this)
                                 .setTitle(info.label != null ? info.label : "Widget Controls")
                                 .setItems(wOpts.toArray(new String[0]), (d, which) -> wActs.get(which).run())
                                 .show();
                         return true;
                     });
-
                     int customHeight = ShortcutStore.widgetHeight(this, wId);
                     int heightPx = customHeight == -2
                             ? ViewGroup.LayoutParams.WRAP_CONTENT
                             : (int) (getResources().getDisplayMetrics().density * customHeight);
-
                     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, heightPx);
                     lp.bottomMargin = (int) (getResources().getDisplayMetrics().density * 10);
@@ -863,7 +785,6 @@ public class HomeActivity extends Activity {
             }
         }
     }
-
     private void showResizeWidgetDialog(int widgetId) {
         String[] heights = {
                 "Wrap Content (Auto)",
@@ -883,9 +804,7 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     // ---- Folders ----
-
     private void createNewFolderDialog() {
         EditText input = new EditText(this);
         input.setHint("Folder name (e.g. Agents, Media)");
@@ -909,25 +828,20 @@ public class HomeActivity extends Activity {
                 .setNegativeButton("Cancel", null)
                 .show();
     }
-
     private void showFolderModal(Shortcut folder) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_folder, null);
         TextView titleView = dialogView.findViewById(R.id.folder_title);
         titleView.setText(folder.label);
-
         GridView grid = dialogView.findViewById(R.id.folder_grid);
         View emptyHintView = dialogView.findViewById(R.id.folder_empty_hint);
         Button btnRename = dialogView.findViewById(R.id.btn_folder_rename);
         Button btnAdd = dialogView.findViewById(R.id.btn_folder_add_app);
         Button btnClose = dialogView.findViewById(R.id.btn_folder_close);
-
         List<Shortcut> items = folder.folderItems != null ? folder.folderItems : new ArrayList<>();
         emptyHintView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
-
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dialogView)
                 .create();
-
         BaseAdapter folderAdapter = new BaseAdapter() {
             @Override public int getCount() { return items.size(); }
             @Override public Shortcut getItem(int p) { return items.get(p); }
@@ -943,17 +857,19 @@ public class HomeActivity extends Activity {
                 icon.setImageBitmap(IconUtil.iconFor(HomeActivity.this, child));
                 label.setText(child.label);
                 label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
+                v.setOnClickListener(childView -> {
+                    dialog.dismiss();
+                    IconUtil.fireShortcut(HomeActivity.this, child, childView);
+                });
                 return v;
             }
         };
         grid.setAdapter(folderAdapter);
-
         grid.setOnItemClickListener((parent, view, pos, id) -> {
             Shortcut child = items.get(pos);
             dialog.dismiss();
             IconUtil.fireShortcut(HomeActivity.this, child);
         });
-
         grid.setOnItemLongClickListener((parent, view, pos, id) -> {
             Shortcut child = items.get(pos);
             new AlertDialog.Builder(HomeActivity.this)
@@ -970,7 +886,6 @@ public class HomeActivity extends Activity {
                     .show();
             return true;
         });
-
         btnRename.setOnClickListener(v -> {
             EditText input = new EditText(this);
             input.setText(folder.label);
@@ -989,7 +904,6 @@ public class HomeActivity extends Activity {
                     .setNegativeButton("Cancel", null)
                     .show();
         });
-
         btnAdd.setOnClickListener(v -> {
             dialog.dismiss();
             Intent i = new Intent(this, AppPickerActivity.class);
@@ -997,13 +911,10 @@ public class HomeActivity extends Activity {
             Toast.makeText(this, "Long-press any app in drawer and choose 'Add to Folder'", Toast.LENGTH_LONG).show();
             startActivity(i);
         });
-
         btnClose.setOnClickListener(v -> dialog.dismiss());
         dialog.show();
     }
-
     // ---- Profile & Shortcut Management ----
-
     private void loadShortcuts() {
         int currentProfile = ShortcutStore.activeProfile(this);
         for (int i = 0; i < ShortcutStore.PROFILES; i++) {
@@ -1027,14 +938,12 @@ public class HomeActivity extends Activity {
         }
         applyCleanModeState(false);
     }
-
     private void switchProfile(int profileIndex) {
         ShortcutStore.setActiveProfile(this, profileIndex);
         loadShortcuts();
         loadWidgets();
         applyDynamicTheming();
     }
-
     private void renameProfile(int profileIndex) {
         EditText input = new EditText(this);
         input.setText(ShortcutStore.profileName(this, profileIndex));
@@ -1051,7 +960,6 @@ public class HomeActivity extends Activity {
                 .setNegativeButton("Cancel", null)
                 .show();
     }
-
     private void applyCleanModeState(boolean animate) {
         if (toggleAppsPill == null || gridView == null) return;
         boolean cleanMode = ShortcutStore.isHomeCleanMode(this);
@@ -1092,12 +1000,10 @@ public class HomeActivity extends Activity {
             gridView.setScaleY(1f);
         }
     }
-
     private void toggleCleanModeApps() {
         appsRevealedInCleanMode = !appsRevealedInCleanMode;
         applyCleanModeState(true);
     }
-
     private void showCleanModeOptionsDialog() {
         String[] opts = {
                 ShortcutStore.isHomeCleanMode(this) ? "Disable Clean Mode (Keep apps always visible)" : "Enable Clean Mode (Tuck apps into pill)",
@@ -1121,25 +1027,21 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void showIslandAppManagerDialog() {
         List<Shortcut> island = ShortcutStore.loadIslandPadded(this);
         String[] items = new String[island.size() + 2];
         items[0] = "➕ Add App from Drawer to Island";
         items[1] = "🔄 Copy All Current Home Apps to Island";
-
         for (int i = 0; i < island.size(); i++) {
             Shortcut s = island.get(i);
             items[i + 2] = "Island Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty ]" : (s.isFolder() ? "📁 " : "") + s.label);
         }
-
         new AlertDialog.Builder(this)
                 .setTitle("🏝️ Dynamic Island Apps (Independent)")
                 .setItems(items, (dialog, which) -> {
                     if (which == 0) {
                         Intent pick = new Intent(this, AppPickerActivity.class);
-                        pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
-                        Toast.makeText(this, "Long-press any app in drawer and choose '🏝️ Add to Dynamic Island'", Toast.LENGTH_LONG).show();
+                        pick.putExtra(AppPickerActivity.EXTRA_PICK_FOR_ISLAND, true);
                         startActivity(pick);
                     } else if (which == 1) {
                         List<Shortcut> home = ShortcutStore.load(this);
@@ -1154,7 +1056,6 @@ public class HomeActivity extends Activity {
                 .setPositiveButton("Done", null)
                 .show();
     }
-
     private void showIslandSlotOptions(int slotIdx) {
         List<Shortcut> island = ShortcutStore.loadIslandPadded(this);
         Shortcut s = island.get(slotIdx);
@@ -1164,7 +1065,6 @@ public class HomeActivity extends Activity {
             startActivityForResult(pick, REQUEST_PICK_APP_FOR_ISLAND);
             return;
         }
-
         String[] opts = {
                 "🗑️ Remove from Island",
                 "✏️ Custom Display Name"
@@ -1197,12 +1097,10 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void showShortcutMenu(int position) {
         Shortcut s = shortcuts.get(position);
         List<String> options = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
-
         // Moving & slot reordering (Always at top for instant access)
         if (position > 0) {
             options.add("⬅️ Move Left (to slot " + position + ")");
@@ -1228,7 +1126,6 @@ public class HomeActivity extends Activity {
                 Toast.makeText(this, "Moved to slot " + (position + 2), Toast.LENGTH_SHORT).show();
             });
         }
-
         options.add("🔀 Pick Slot to Move (1 - " + shortcuts.size() + ")");
         actions.add(() -> {
             String[] slotNames = new String[shortcuts.size()];
@@ -1250,7 +1147,6 @@ public class HomeActivity extends Activity {
                     })
                     .show();
         });
-
         options.add("✥ Drag & Drop to any Slot / Folder");
         actions.add(() -> {
             View itemView = gridView.getChildAt(position - gridView.getFirstVisiblePosition());
@@ -1261,14 +1157,12 @@ public class HomeActivity extends Activity {
                 Toast.makeText(this, "Drag and drop onto any slot or folder", Toast.LENGTH_SHORT).show();
             }
         });
-
         if (s.isFolder()) {
             options.add("📂 Open folder");
             actions.add(() -> {
                 Intent fi = IconUtil.launchIntent(this, s);
                 if (fi != null) startActivity(fi); else showFolderModal(s);
             });
-
             options.add("✏️ Rename folder");
             actions.add(() -> {
                 EditText input = new EditText(this);
@@ -1292,7 +1186,6 @@ public class HomeActivity extends Activity {
         } else {
             options.add("🚀 Launch app");
             actions.add(() -> IconUtil.fireShortcut(this, s));
-
             options.add("✏️ Rename App / Custom Label");
             actions.add(() -> {
                 EditText input = new EditText(this);
@@ -1321,7 +1214,6 @@ public class HomeActivity extends Activity {
                         .setNegativeButton("Cancel", null)
                         .show();
             });
-
             // Query dynamic app shortcuts published by the target app (API 25+)
             if (s.isApp() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
                 try {
@@ -1361,15 +1253,11 @@ public class HomeActivity extends Activity {
                 } catch (Exception ignored) {
                 }
             }
-
-
-
             options.add("📌 Pin to Home screen (Main Page)");
             actions.add(() -> {
                 boolean pinned = IconUtil.pinShortcutToHomeScreen(this, s);
                 Toast.makeText(this, pinned ? "Pinned " + s.label + " to Home screen" : "Pinning not supported", Toast.LENGTH_SHORT).show();
             });
-
             options.add("🏝️ Add to Dynamic Island");
             actions.add(() -> {
                 List<Shortcut> isl = ShortcutStore.loadIsland(this);
@@ -1382,15 +1270,12 @@ public class HomeActivity extends Activity {
                     Toast.makeText(this, "Added " + s.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
                 }
             });
-
             if (Shortcut.TYPE_URL.equals(s.type)) {
                 options.add("🎨 Change Web App Logo");
                 actions.add(() -> showWebLogoPickerDialog(s));
-
                 options.add("✏️ Edit Web App");
                 actions.add(() -> showEditWebAppDialog(s));
             }
-
             options.add("📁 Move to Folder...");
             actions.add(() -> {
                 List<Shortcut> folders = new ArrayList<>();
@@ -1402,7 +1287,6 @@ public class HomeActivity extends Activity {
                     folderChoices.add("📁 " + f.label);
                 }
                 folderChoices.add("➕ Create New Folder...");
-
                 new AlertDialog.Builder(this)
                         .setTitle("Add to Folder")
                         .setItems(folderChoices.toArray(new String[0]), (fd, whichF) -> {
@@ -1442,7 +1326,6 @@ public class HomeActivity extends Activity {
                         .show();
             });
         }
-
         int currentProfile = ShortcutStore.activeProfile(this);
         for (int p = 0; p < ShortcutStore.PROFILES; p++) {
             if (p != currentProfile) {
@@ -1460,7 +1343,6 @@ public class HomeActivity extends Activity {
                 });
             }
         }
-
         options.add("🗑️ Remove from home");
         actions.add(() -> {
             lastRemovedShortcut = s;
@@ -1472,7 +1354,6 @@ public class HomeActivity extends Activity {
             DockService.refresh(this);
             Toast.makeText(this, "Removed " + s.label + " (Tap wallpaper -> Undo)", Toast.LENGTH_LONG).show();
         });
-
         new AlertDialog.Builder(this)
                 .setTitle(s.label)
                 .setItems(options.toArray(new String[0]), (d, which) -> {
@@ -1482,16 +1363,13 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void showAddWebAppDialog(String defaultUrl, String defaultTitle) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_url, null);
         EditText editName = dialogView.findViewById(R.id.url_name);
         EditText editUrl = dialogView.findViewById(R.id.url_value);
         CheckBox chkPin = dialogView.findViewById(R.id.chk_pin_home);
-
         if (defaultUrl != null && !defaultUrl.isEmpty()) editUrl.setText(defaultUrl);
         if (defaultTitle != null && !defaultTitle.isEmpty()) editName.setText(defaultTitle);
-
         new AlertDialog.Builder(this)
                 .setTitle("Add Web App")
                 .setView(dialogView)
@@ -1511,10 +1389,8 @@ public class HomeActivity extends Activity {
                         }
                     }
                     if (n == null || n.isEmpty()) n = "Web App";
-
                     int p = ShortcutStore.activeProfile(this);
                     Shortcut sc = new Shortcut(Shortcut.TYPE_URL, "", u, n);
-
                     if (pendingSlotIndex >= 0 && pendingSlotIndex < shortcuts.size()) {
                         shortcuts.set(pendingSlotIndex, sc);
                         pendingSlotIndex = -1;
@@ -1532,14 +1408,12 @@ public class HomeActivity extends Activity {
                             return;
                         }
                     }
-
                     Bitmap brand = WebLogoHelper.getBuiltinBrandLogo(this, u);
                     if (brand != null) {
                         IconUtil.saveCustomIcon(this, sc.id, brand);
                     } else {
                         WebLogoHelper.fetchFaviconAsync(this, u, sc.id, (logo) -> loadShortcuts());
                     }
-
                     ShortcutStore.save(this, p, shortcuts);
                     loadShortcuts();
                     BaseDockWidget.refreshAll(this);
@@ -1552,22 +1426,18 @@ public class HomeActivity extends Activity {
                 .setNegativeButton("Cancel", null)
                 .show();
     }
-
     private void showAddShortcutDialogForSlot(int slotIndex) {
         pendingSlotIndex = slotIndex;
         List<String> options = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
-
         options.add("📱 Add App to Slot " + (slotIndex + 1));
         actions.add(() -> {
             Intent pick = new Intent(this, AppPickerActivity.class);
             pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, false);
             startActivityForResult(pick, REQUEST_PICK_APP_FOR_SLOT);
         });
-
         options.add("🌐 Add Web App to Slot " + (slotIndex + 1));
         actions.add(() -> showAddWebAppDialog("", ""));
-
         options.add("📁 Create Folder in Slot " + (slotIndex + 1));
         actions.add(() -> {
             EditText input = new EditText(this);
@@ -1587,7 +1457,6 @@ public class HomeActivity extends Activity {
                     .setNegativeButton("Cancel", null)
                     .show();
         });
-
         // 📲 Move an Existing App Here
         List<Integer> existingIndices = new ArrayList<>();
         for (int i = 0; i < shortcuts.size(); i++) {
@@ -1618,13 +1487,10 @@ public class HomeActivity extends Activity {
                         .show();
             });
         }
-
         options.add("🗂️ Open Visual Grid Organizer");
         actions.add(this::showGridOrganizerDialog);
-
         options.add("🧹 Pack All Apps to Top (Fill Gaps)");
         actions.add(this::packShortcutsToTop);
-
         new AlertDialog.Builder(this)
                 .setTitle("Slot " + (slotIndex + 1) + " (Empty)")
                 .setItems(options.toArray(new String[0]), (dialog, which) -> {
@@ -1634,7 +1500,6 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void showGridOrganizerDialog() {
         int currentProfile = ShortcutStore.activeProfile(this);
         String profName = ShortcutStore.profileName(this, currentProfile);
@@ -1642,12 +1507,10 @@ public class HomeActivity extends Activity {
         items[0] = "🔤 Sort Non-Empty Apps A–Z";
         items[1] = "🧹 Compact All Apps to Top (Fill Gaps)";
         items[2] = "➕ Insert Blank Space at Beginning";
-
         for (int i = 0; i < shortcuts.size(); i++) {
             Shortcut s = shortcuts.get(i);
             items[i + 3] = "Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty Slot ]" : (s.isFolder() ? "📁 " : "") + s.label);
         }
-
         new AlertDialog.Builder(this)
                 .setTitle("🗂️ Organize Grid: " + profName)
                 .setItems(items, (dialog, which) -> {
@@ -1665,21 +1528,18 @@ public class HomeActivity extends Activity {
                 .setPositiveButton("Done", null)
                 .show();
     }
-
     private void showSlotControlDialog(int slotIdx) {
         Shortcut s = shortcuts.get(slotIdx);
         if (s.isEmpty()) {
             showAddShortcutDialogForSlot(slotIdx);
             return;
         }
-
         String[] slotOpts = {
                 "🔀 Move to another Slot...",
                 "🔄 Swap with another Slot...",
                 "➕ Insert Blank Space Before this",
                 "🗑️ Clear Slot (Leave Empty)"
         };
-
         new AlertDialog.Builder(this)
                 .setTitle("Slot " + (slotIdx + 1) + ": " + s.label)
                 .setItems(slotOpts, (d, opt) -> {
@@ -1702,7 +1562,6 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void pickSlotTarget(int fromSlot, boolean swap) {
         String[] targets = new String[shortcuts.size()];
         for (int i = 0; i < shortcuts.size(); i++) {
@@ -1732,7 +1591,6 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void sortShortcutsAZ() {
         List<Shortcut> nonEmpties = new ArrayList<>();
         for (Shortcut s : shortcuts) {
@@ -1754,7 +1612,6 @@ public class HomeActivity extends Activity {
         DockService.refresh(this);
         Toast.makeText(this, "Sorted A–Z", Toast.LENGTH_SHORT).show();
     }
-
     private void insertBlankSpaceAt(int index) {
         if (index < 0 || index >= shortcuts.size()) return;
         shortcuts.add(index, Shortcut.createEmpty());
@@ -1767,7 +1624,6 @@ public class HomeActivity extends Activity {
         DockService.refresh(this);
         Toast.makeText(this, "Inserted space at slot " + (index + 1), Toast.LENGTH_SHORT).show();
     }
-
     private void packShortcutsToTop() {
         List<Shortcut> nonEmpties = new ArrayList<>();
         for (Shortcut s : shortcuts) {
@@ -1786,7 +1642,6 @@ public class HomeActivity extends Activity {
         DockService.refresh(this);
         Toast.makeText(this, "Packed icons to top", Toast.LENGTH_SHORT).show();
     }
-
     private void showWebLogoPickerDialog(Shortcut s) {
         pendingLogoShortcut = s;
         String[] opts = {
@@ -1829,7 +1684,6 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void showPresetBrandLogoDialog(Shortcut s) {
         List<WebLogoHelper.PresetLogo> presets = WebLogoHelper.getPresetList();
         String[] names = new String[presets.size()];
@@ -1854,7 +1708,6 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void showIconPackLogoPicker(Shortcut s) {
         String activePack = IconPackManager.getActiveIconPack(this);
         if (activePack == null || activePack.isEmpty()) {
@@ -1900,16 +1753,13 @@ public class HomeActivity extends Activity {
                 })
                 .show();
     }
-
     private void showEditWebAppDialog(Shortcut s) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_url, null);
         EditText editName = dialogView.findViewById(R.id.url_name);
         EditText editUrl = dialogView.findViewById(R.id.url_value);
         CheckBox chkPin = dialogView.findViewById(R.id.chk_pin_home);
-
         if (s.url != null) editUrl.setText(s.url);
         if (s.label != null) editName.setText(s.label);
-
         new AlertDialog.Builder(this)
                 .setTitle("Edit Web App")
                 .setView(dialogView)
@@ -1943,12 +1793,10 @@ public class HomeActivity extends Activity {
                 .setNegativeButton("Cancel", null)
                 .show();
     }
-
     class HomeShortcutAdapter extends BaseAdapter {
         @Override public int getCount() { return shortcuts.size(); }
         @Override public Shortcut getItem(int p) { return shortcuts.get(p); }
         @Override public long getItemId(int p) { return p; }
-
         @Override
         public View getView(int pos, View v, ViewGroup parent) {
             if (v == null) {
@@ -1958,7 +1806,6 @@ public class HomeActivity extends Activity {
             ImageView icon = v.findViewById(R.id.sc_icon);
             TextView label = v.findViewById(R.id.sc_label);
             TextView badge = v.findViewById(R.id.sc_badge);
-
             if (s.isEmpty()) {
                 icon.setImageResource(R.drawable.slot_empty_target);
                 icon.setAlpha(0.38f);
@@ -1970,7 +1817,6 @@ public class HomeActivity extends Activity {
                 icon.setImageBitmap(IconUtil.iconFor(HomeActivity.this, s));
                 label.setText(s.label);
                 label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
-
                 if (badge != null) {
                     if (LockNotificationListenerService.isBadgesEnabled(HomeActivity.this) && s.isApp()) {
                         int count = LockNotificationListenerService.getCount(s.pkg);
@@ -1985,10 +1831,11 @@ public class HomeActivity extends Activity {
                     }
                 }
             }
-
             final int itemPos = pos;
             v.setTag(itemPos);
-
+            v.setOnClickListener(childView -> {
+                launchOrHandleShortcut(itemPos, childView);
+            });
             // Fluid native drag initiation directly on long-press
             v.setOnLongClickListener(childView -> {
                 if (s.isEmpty()) {
@@ -2000,7 +1847,6 @@ public class HomeActivity extends Activity {
                 activeDraggedPosition = itemPos;
                 dragWasDropped = false;
                 if (dragActionBar != null) dragActionBar.setVisibility(View.VISIBLE);
-
                 ClipData data = ClipData.newPlainText("pos", String.valueOf(itemPos));
                 View.DragShadowBuilder shadow = new View.DragShadowBuilder(childView);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -2011,7 +1857,6 @@ public class HomeActivity extends Activity {
                 childView.animate().scaleX(0.85f).scaleY(0.85f).alpha(0.45f).setDuration(120).start();
                 return true;
             });
-
             v.setOnDragListener((targetView, event) -> {
                 switch (event.getAction()) {
                     case DragEvent.ACTION_DRAG_STARTED:
@@ -2021,7 +1866,6 @@ public class HomeActivity extends Activity {
                             icon.setAlpha(0.65f);
                         }
                         return true;
-
                     case DragEvent.ACTION_DRAG_ENTERED:
                         targetView.animate().scaleX(1.15f).scaleY(1.15f).setDuration(100).start();
                         if (s.isEmpty()) {
@@ -2029,7 +1873,6 @@ public class HomeActivity extends Activity {
                             icon.setAlpha(1.0f);
                         }
                         return true;
-
                     case DragEvent.ACTION_DRAG_EXITED:
                         targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start();
                         if (s.isEmpty()) {
@@ -2037,7 +1880,6 @@ public class HomeActivity extends Activity {
                             icon.setAlpha(0.40f);
                         }
                         return true;
-
                     case DragEvent.ACTION_DROP:
                         targetView.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(100).start();
                         int sourcePos = -1;
@@ -2047,14 +1889,12 @@ public class HomeActivity extends Activity {
                                 sourcePos = Integer.parseInt(cd.getItemAt(0).getText().toString());
                             }
                         } catch (Exception ignored) {}
-
                         if (sourcePos >= 0 && sourcePos < shortcuts.size() && itemPos >= 0 && itemPos < shortcuts.size()) {
                             dragWasDropped = true;
                             if (sourcePos != itemPos) {
                                 targetView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                                 Shortcut source = shortcuts.get(sourcePos);
                                 Shortcut target = shortcuts.get(itemPos);
-
                                 if (target.isFolder() && !source.isFolder()) {
                                     if (target.folderItems == null) target.folderItems = new ArrayList<>();
                                     target.folderItems.add(source);
@@ -2079,7 +1919,6 @@ public class HomeActivity extends Activity {
                             }
                         }
                         return true;
-
                     case DragEvent.ACTION_DRAG_ENDED:
                         targetView.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(100).start();
                         if (dragActionBar != null) dragActionBar.setVisibility(View.GONE);
@@ -2096,7 +1935,6 @@ public class HomeActivity extends Activity {
                 }
                 return true;
             });
-
             return v;
         }
     }

@@ -1,5 +1,6 @@
 package com.crtghoul.locklauncher;
 
+import android.app.AlertDialog;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -8,6 +9,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
@@ -30,14 +32,15 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Dynamic Floating Island overlay with multiple states:
- * 1. Idle Dock: 2–6 shortcuts + battery stat
+ * 1. Minimalist Collapsed Capsule: Sleek black pill with battery / island glyph (no cluttering app icons)
  * 2. Media Playback: Track title, artist, live play/pause & skip controls
  * 3. Charging Pulse: Connected wattage/battery indicator
- * 4. Expanded Card: Full 16-slot profile grid
+ * 4. Expanded Island Deck: High-res symmetrical grid of chosen Island apps with add, remove, and reorder controls
  */
 public class IslandService extends Service {
     public static final String ACTION_REFRESH =
@@ -166,7 +169,7 @@ public class IslandService extends Service {
     }
 
     private void triggerChargingPulse() {
-        lastChargingMsg = "⚡ " + IconUtil.getLiveBatteryInfo(this) + " (Charging)";
+        lastChargingMsg = "âš¡ " + IconUtil.getLiveBatteryInfo(this) + " (Charging)";
         rebuild();
         mainHandler.postDelayed(() -> {
             lastChargingMsg = null;
@@ -245,7 +248,7 @@ public class IslandService extends Service {
             return;
         }
 
-        // Default State: Shortcuts Dock
+        // Default State: Clean Minimalist Island Capsule
         showDockPill();
     }
 
@@ -263,7 +266,7 @@ public class IslandService extends Service {
         tv.setGravity(Gravity.CENTER);
         pill.addView(tv);
 
-        attachPillView(pill, null, null);
+        attachPillView(pill);
     }
 
     private void showMediaPill(MediaController mc) {
@@ -274,7 +277,7 @@ public class IslandService extends Service {
         pill.setPadding(dp(14), dp(6), dp(14), dp(6));
 
         TextView musicIcon = new TextView(this);
-        musicIcon.setText("🎵 ");
+        musicIcon.setText("ðŸŽµ ");
         musicIcon.setTextSize(14);
         pill.addView(musicIcon);
 
@@ -285,7 +288,7 @@ public class IslandService extends Service {
             String t = meta.getString(MediaMetadata.METADATA_KEY_TITLE);
             if (t != null && !t.isEmpty()) title = t;
             String a = meta.getString(MediaMetadata.METADATA_KEY_ARTIST);
-            if (a != null && !a.isEmpty()) artist = " · " + a;
+            if (a != null && !a.isEmpty()) artist = " Â· " + a;
         }
 
         TextView textInfo = new TextView(this);
@@ -300,7 +303,7 @@ public class IslandService extends Service {
 
         // Play/Pause control
         TextView btnPlayPause = new TextView(this);
-        btnPlayPause.setText("⏸️");
+        btnPlayPause.setText("â¸ï¸");
         btnPlayPause.setTextSize(15);
         btnPlayPause.setPadding(dp(4), 0, dp(6), 0);
         btnPlayPause.setOnClickListener(v -> {
@@ -313,7 +316,7 @@ public class IslandService extends Service {
 
         // Next Track control
         TextView btnNext = new TextView(this);
-        btnNext.setText("⏭️");
+        btnNext.setText("â­ï¸");
         btnNext.setTextSize(15);
         btnNext.setPadding(dp(4), 0, dp(2), 0);
         btnNext.setOnClickListener(v -> {
@@ -332,56 +335,54 @@ public class IslandService extends Service {
             } catch (Exception ignored) {}
         });
 
-        attachPillView(pill, null, null);
+        attachPillView(pill);
     }
 
+    /**
+     * Minimalist Collapsed Capsule Pill:
+     * Does NOT display app icons inside the collapsed pill!
+     * Tap anywhere on the pill smoothly expands the Dynamic Island.
+     */
     private void showDockPill() {
-        List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
-
         LinearLayout pill = new LinearLayout(this);
         pill.setOrientation(LinearLayout.HORIZONTAL);
-        pill.setGravity(Gravity.CENTER_VERTICAL);
-        pill.setBackgroundResource(R.drawable.dock_card);
-        int pad = dp(8);
-        pill.setPadding(pad * 2, pad, pad * 2, pad);
+        pill.setGravity(Gravity.CENTER);
 
-        int targetCount = ShortcutStore.islandIconsCount(this);
-        int shown = Math.min(targetCount, shortcuts.size());
-        final ImageView[] iconViews = new ImageView[shown];
-        final Shortcut[] shownShortcuts = new Shortcut[shown];
+        GradientDrawable pillBg = new GradientDrawable();
+        pillBg.setColor(0xF2000000); // Pure deep obsidian black
+        pillBg.setCornerRadius(dp(17));
+        pillBg.setStroke(dp(1), 0x33FFFFFF); // Sleek subtle frosted border
+        pill.setBackground(pillBg);
 
+        int padH = dp(14);
+        int padV = dp(6);
+        pill.setPadding(padH, padV, padH, padV);
+        pill.setMinimumWidth(dp(92));
+        pill.setMinimumHeight(dp(32));
+
+        TextView glyph = new TextView(this);
+        glyph.setText("â—");
+        glyph.setTextColor(0x7AFFFFFF);
+        glyph.setTextSize(9);
+        glyph.setPadding(0, 0, dp(5), 0);
+        pill.addView(glyph);
+
+        TextView label = new TextView(this);
         if (ShortcutStore.isIslandBattery(this)) {
-            TextView bat = new TextView(this);
-            bat.setText(IconUtil.getLiveBatteryInfo(this));
-            bat.setTextColor(0xFF00E676);
-            bat.setTextSize(11);
-            bat.setPadding(0, 0, dp(6), 0);
-            pill.addView(bat);
+            label.setText(IconUtil.getLiveBatteryInfo(this));
+            label.setTextColor(0xFF00E676);
+        } else {
+            label.setText("Island");
+            label.setTextColor(0xDDFFFFFF);
         }
+        label.setTextSize(12);
+        label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        pill.addView(label);
 
-        for (int i = 0; i < shown; i++) {
-            ImageView iv = new ImageView(this);
-            int s = dp(34);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(s, s);
-            lp.setMargins(dp(3), 0, dp(3), 0);
-            iv.setLayoutParams(lp);
-            iv.setImageBitmap(IconUtil.iconFor(this, shortcuts.get(i)));
-            pill.addView(iv);
-            iconViews[i] = iv;
-            shownShortcuts[i] = shortcuts.get(i);
-        }
-        if (shown == 0) {
-            TextView t = new TextView(this);
-            t.setText("＋ Lock Launcher");
-            t.setTextColor(0xFFFFFFFF);
-            t.setTextSize(13);
-            pill.addView(t);
-        }
-
-        attachPillView(pill, iconViews, shownShortcuts);
+        attachPillView(pill);
     }
 
-    private void attachPillView(LinearLayout pill, ImageView[] iconViews, Shortcut[] shownShortcuts) {
+    private void attachPillView(LinearLayout pill) {
         final View pillView = pill;
         params = baseParams(WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT);
@@ -436,31 +437,8 @@ public class IslandService extends Service {
                     }
 
                     if (!moved[0]) {
-                        int tapX = (int) e.getX();
-                        int tapY = (int) e.getY();
-                        boolean launched = false;
-                        if (iconViews != null && shownShortcuts != null) {
-                            android.graphics.Rect rect = new android.graphics.Rect();
-                            for (int i = 0; i < iconViews.length; i++) {
-                                if (iconViews[i] != null) {
-                                    iconViews[i].getHitRect(rect);
-                                    if (rect.contains(tapX, tapY)) {
-                                        v.performClick();
-                                        if (!IconUtil.fireShortcut(IslandService.this, shownShortcuts[i])) {
-                                            Toast.makeText(IslandService.this,
-                                                    "Couldn't open " + shownShortcuts[i].label,
-                                                    Toast.LENGTH_SHORT).show();
-                                        }
-                                        launched = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (!launched) {
-                            v.performClick();
-                            showExpanded();
-                        }
+                        v.performClick();
+                        showExpanded();
                     } else {
                         iprefs.edit()
                                 .putInt("island_x", params.x)
@@ -496,86 +474,211 @@ public class IslandService extends Service {
         return Math.max(statusBarHeight() + dp(4), Math.min(h - dp(160), y));
     }
 
+    /**
+     * Expanded Dynamic Island Deck:
+     * Fullscreen translucent backdrop dismisses on outside tap.
+     * High-res symmetrical 4-column deck of user's chosen Island apps with quick actions.
+     */
     private void showExpanded() {
         removeView();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
+        List<Shortcut> allShortcuts = ShortcutStore.loadIsland(this);
+        final List<Shortcut> shortcuts = new ArrayList<>();
+        for (Shortcut s : allShortcuts) {
+            if (s != null && !s.isEmpty()) shortcuts.add(s);
+        }
 
         FrameLayout root = new FrameLayout(this);
         root.setOnClickListener(v -> showCollapsed());
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackgroundResource(R.drawable.dock_card);
-        card.setPadding(dp(12), dp(12), dp(12), dp(12));
-        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setColor(0xF40D1117); // Obsidian Glass
+        cardBg.setCornerRadius(dp(22));
+        cardBg.setStroke(dp(1), 0x3DFFFFFF);
+        card.setBackground(cardBg);
+        card.setPadding(dp(16), dp(14), dp(16), dp(16));
+
+        int cardW = Math.min(getResources().getDisplayMetrics().widthPixels - dp(32), dp(360));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(cardW, FrameLayout.LayoutParams.WRAP_CONTENT);
         clp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         clp.topMargin = statusBarHeight() + dp(8);
         card.setLayoutParams(clp);
-        card.setOnClickListener(v -> { });
-        card.setOnLongClickListener(v -> {
-            hideIsland();
-            return true;
-        });
+        card.setOnClickListener(v -> { }); // prevent dismiss on card tap
+
+        // Header Bar
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, dp(10));
 
         TextView title = new TextView(this);
-        title.setText("🏝️ Dynamic Island Apps  ·  Tap outside to close");
-        title.setTextColor(0x8AFFFFFF);
-        title.setTextSize(11);
-        title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 0, 0, dp(6));
-        card.addView(title);
+        title.setText("ðŸï¸ Dynamic Island");
+        title.setTextColor(0xFFFFFFFF);
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        header.addView(title);
 
-        GridLayout grid = new GridLayout(this);
-        grid.setColumnCount(4);
-        int cell = dp(72);
-        for (int i = 0; i < shortcuts.size(); i++) {
-            final Shortcut s = shortcuts.get(i);
-            LinearLayout cell2 = new LinearLayout(this);
-            cell2.setOrientation(LinearLayout.VERTICAL);
-            cell2.setGravity(Gravity.CENTER);
-            GridLayout.LayoutParams glp = new GridLayout.LayoutParams();
-            glp.width = cell;
-            glp.height = cell + dp(18);
-            cell2.setLayoutParams(glp);
+        TextView badge = new TextView(this);
+        badge.setText("  " + shortcuts.size() + " apps");
+        badge.setTextColor(0x8AFFFFFF);
+        badge.setTextSize(11);
+        header.addView(badge);
 
-            ImageView iv = new ImageView(this);
-            LinearLayout.LayoutParams ilp =
-                    new LinearLayout.LayoutParams(dp(48), dp(48));
-            iv.setLayoutParams(ilp);
-            iv.setImageBitmap(IconUtil.iconFor(this, s));
-            cell2.addView(iv);
+        View spacer = new View(this);
+        LinearLayout.LayoutParams splp = new LinearLayout.LayoutParams(0, 1, 1.0f);
+        spacer.setLayoutParams(splp);
+        header.addView(spacer);
 
-            TextView label = new TextView(this);
-            label.setText(s.label);
-            label.setTextColor(0xD8FFFFFF);
-            label.setTextSize(10);
-            label.setMaxLines(1);
-            label.setGravity(Gravity.CENTER);
-            cell2.addView(label);
+        // [ ï¼‹ Add App ] button
+        TextView btnAdd = new TextView(this);
+        btnAdd.setText("ï¼‹ Add App");
+        btnAdd.setTextColor(0xFFFFFFFF);
+        btnAdd.setTextSize(12);
+        btnAdd.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        GradientDrawable btnBg = new GradientDrawable();
+        btnBg.setColor(0x28FFFFFF);
+        btnBg.setCornerRadius(dp(12));
+        btnBg.setStroke(dp(1), 0x4DFFFFFF);
+        btnAdd.setBackground(btnBg);
+        btnAdd.setPadding(dp(10), dp(5), dp(10), dp(5));
+        btnAdd.setOnClickListener(v -> {
+            showCollapsed();
+            Intent pick = new Intent(this, AppPickerActivity.class);
+            pick.putExtra(AppPickerActivity.EXTRA_PICK_FOR_ISLAND, true);
+            pick.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(pick);
+        });
+        header.addView(btnAdd);
 
-            cell2.setOnClickListener(v -> {
-                if (IconUtil.fireShortcut(IslandService.this, s)) {
-                    showCollapsed();
-                } else {
-                    Toast.makeText(IslandService.this,
-                            "Couldn't open " + s.label, Toast.LENGTH_SHORT).show();
-                }
+        // [ âœ• ] close button
+        TextView btnClose = new TextView(this);
+        btnClose.setText(" âœ• ");
+        btnClose.setTextColor(0x8AFFFFFF);
+        btnClose.setTextSize(16);
+        btnClose.setPadding(dp(8), dp(4), dp(2), dp(4));
+        btnClose.setOnClickListener(v -> showCollapsed());
+        header.addView(btnClose);
+
+        card.addView(header);
+
+        // Divider
+        View div = new View(this);
+        div.setBackgroundColor(0x1FFFFFFF);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        dlp.bottomMargin = dp(10);
+        div.setLayoutParams(dlp);
+        card.addView(div);
+
+        if (shortcuts.isEmpty()) {
+            LinearLayout emptyBox = new LinearLayout(this);
+            emptyBox.setOrientation(LinearLayout.VERTICAL);
+            emptyBox.setGravity(Gravity.CENTER);
+            emptyBox.setPadding(dp(12), dp(24), dp(12), dp(24));
+
+            TextView emptyGlyph = new TextView(this);
+            emptyGlyph.setText("ðŸï¸");
+            emptyGlyph.setTextSize(32);
+            emptyGlyph.setGravity(Gravity.CENTER);
+            emptyBox.addView(emptyGlyph);
+
+            TextView emptyText = new TextView(this);
+            emptyText.setText("Dynamic Island is Empty");
+            emptyText.setTextColor(0xFFFFFFFF);
+            emptyText.setTextSize(14);
+            emptyText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            emptyText.setGravity(Gravity.CENTER);
+            emptyText.setPadding(0, dp(6), 0, dp(4));
+            emptyBox.addView(emptyText);
+
+            TextView emptySub = new TextView(this);
+            emptySub.setText("Add your favorite apps to launch them directly from the island.");
+            emptySub.setTextColor(0x8AFFFFFF);
+            emptySub.setTextSize(12);
+            emptySub.setGravity(Gravity.CENTER);
+            emptySub.setPadding(0, 0, 0, dp(14));
+            emptyBox.addView(emptySub);
+
+            TextView btnAddBig = new TextView(this);
+            btnAddBig.setText("  ï¼‹ Add Apps to Island  ");
+            btnAddBig.setTextColor(0xFF000000);
+            btnAddBig.setTextSize(13);
+            btnAddBig.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            GradientDrawable bBigBg = new GradientDrawable();
+            bBigBg.setColor(0xFFFFFFFF);
+            bBigBg.setCornerRadius(dp(14));
+            btnAddBig.setBackground(bBigBg);
+            btnAddBig.setPadding(dp(16), dp(8), dp(16), dp(8));
+            btnAddBig.setOnClickListener(v -> {
+                showCollapsed();
+                Intent pick = new Intent(this, AppPickerActivity.class);
+                pick.putExtra(AppPickerActivity.EXTRA_PICK_FOR_ISLAND, true);
+                pick.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(pick);
             });
-            grid.addView(cell2);
+            emptyBox.addView(btnAddBig);
+            card.addView(emptyBox);
+        } else {
+            GridLayout grid = new GridLayout(this);
+            grid.setColumnCount(4);
+            int colW = (cardW - dp(32)) / 4;
+
+            for (int i = 0; i < shortcuts.size(); i++) {
+                final int index = i;
+                final Shortcut s = shortcuts.get(i);
+                LinearLayout cell = new LinearLayout(this);
+                cell.setOrientation(LinearLayout.VERTICAL);
+                cell.setGravity(Gravity.CENTER);
+                GridLayout.LayoutParams glp = new GridLayout.LayoutParams();
+                glp.width = colW;
+                glp.height = dp(76);
+                cell.setLayoutParams(glp);
+                cell.setPadding(dp(2), dp(4), dp(2), dp(4));
+
+                ImageView iv = new ImageView(this);
+                LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(44), dp(44));
+                iv.setLayoutParams(ilp);
+                iv.setImageBitmap(IconUtil.iconFor(this, s));
+                cell.addView(iv);
+
+                TextView label = new TextView(this);
+                label.setText(s.label);
+                label.setTextColor(0xD8FFFFFF);
+                label.setTextSize(10);
+                label.setMaxLines(1);
+                label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                label.setGravity(Gravity.CENTER);
+                label.setPadding(0, dp(3), 0, 0);
+                cell.addView(label);
+
+                cell.setOnClickListener(v -> {
+                    if (IconUtil.fireShortcut(IslandService.this, s)) {
+                        showCollapsed();
+                    } else {
+                        Toast.makeText(IslandService.this, "Couldn't open " + s.label, Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                cell.setOnLongClickListener(v -> {
+                    showIslandAppMenu(s, index);
+                    return true;
+                });
+
+                grid.addView(cell);
+            }
+
+            ScrollView scroll = new ScrollView(this);
+            scroll.addView(grid);
+            LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    Math.min(dp(280), dp(84 * ((shortcuts.size() + 3) / 4))));
+            scroll.setLayoutParams(slp);
+            card.addView(scroll);
         }
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(grid);
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(320));
-        scroll.setLayoutParams(slp);
-        card.addView(scroll);
 
         root.addView(card);
-        params = baseParams(WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT);
+        params = baseParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         params.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
@@ -587,6 +690,65 @@ public class IslandService extends Service {
         }
     }
 
+    private void showIslandAppMenu(Shortcut s, int index) {
+        if (islandView == null) return;
+        final List<Shortcut> shortcuts = ShortcutStore.loadIsland(this);
+        String[] opts = {
+                "ðŸš€ Launch App",
+                "ðŸ—‘ï¸ Remove from Island",
+                (index > 0 ? "â¬…ï¸ Move Left" : "â¬…ï¸ (Already First)"),
+                (index < shortcuts.size() - 1 ? "âž¡ï¸ Move Right" : "âž¡ï¸ (Already Last)")
+        };
+
+        AlertDialog.Builder b = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        b.setTitle("ðŸï¸ " + s.label);
+        b.setItems(opts, (d, which) -> {
+            switch (which) {
+                case 0:
+                    IconUtil.fireShortcut(IslandService.this, s);
+                    showCollapsed();
+                    break;
+                case 1:
+                    shortcuts.remove(index);
+                    ShortcutStore.saveIsland(IslandService.this, shortcuts);
+                    showExpanded();
+                    Toast.makeText(IslandService.this, "Removed " + s.label, Toast.LENGTH_SHORT).show();
+                    break;
+                case 2:
+                    if (index > 0) {
+                        Shortcut prev = shortcuts.get(index - 1);
+                        shortcuts.set(index - 1, s);
+                        shortcuts.set(index, prev);
+                        ShortcutStore.saveIsland(IslandService.this, shortcuts);
+                        showExpanded();
+                    }
+                    break;
+                case 3:
+                    if (index < shortcuts.size() - 1) {
+                        Shortcut next = shortcuts.get(index + 1);
+                        shortcuts.set(index + 1, s);
+                        shortcuts.set(index, next);
+                        ShortcutStore.saveIsland(IslandService.this, shortcuts);
+                        showExpanded();
+                    }
+                    break;
+            }
+        });
+        b.setNegativeButton("Close", null);
+        AlertDialog dialog = b.create();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        } else {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        try {
+            dialog.show();
+        } catch (Exception e) {
+            IconUtil.fireShortcut(IslandService.this, s);
+            showCollapsed();
+        }
+    }
+
     private void rebuild() {
         if (expanded) showExpanded();
         else showCollapsed();
@@ -595,7 +757,7 @@ public class IslandService extends Service {
     /** Long-press hides the island; the in-app toggle brings it back. */
     private void hideIsland() {
         setIslandOn(this, false);
-        Toast.makeText(this, "Island hidden — turn it back on in Lock Launcher",
+        Toast.makeText(this, "Island hidden â€” turn it back on in Lock Launcher",
                 Toast.LENGTH_LONG).show();
         stopSelf();
     }

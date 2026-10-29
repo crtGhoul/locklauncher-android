@@ -1526,42 +1526,77 @@ public class MainActivity extends Activity {
     }
 
     private void showManageIslandAppsDialog() {
-        List<Shortcut> island = ShortcutStore.loadIslandPadded(this);
-        String[] items = new String[island.size() + 2];
-        items[0] = "➕ Add App from Drawer to Island";
-        items[1] = "🔄 Copy All Current Home Apps to Island";
-
+        List<Shortcut> island = ShortcutStore.loadIsland(this);
+        List<String> items = new ArrayList<>();
+        items.add("➕ Add App to Dynamic Island");
+        items.add("🔄 Copy All Home Apps to Island");
+        if (!island.isEmpty()) {
+            items.add("🗑️ Clear All Island Apps");
+        }
         for (int i = 0; i < island.size(); i++) {
             Shortcut s = island.get(i);
-            items[i + 2] = "Island Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty ]" : (s.isFolder() ? "📁 " : "") + s.label);
+            items.add("Slot " + (i + 1) + ": " + (s.isEmpty() ? "[ ✨ Empty ]" : (s.isFolder() ? "📁 " : "") + s.label));
         }
 
         new AlertDialog.Builder(this)
-                .setTitle("🏝️ Dynamic Island Apps (16 Slots)")
-                .setItems(items, (dialog, which) -> {
+                .setTitle("🏝️ Dynamic Island Apps (" + island.size() + ")")
+                .setItems(items.toArray(new String[0]), (dialog, which) -> {
                     if (which == 0) {
                         Intent pick = new Intent(this, AppPickerActivity.class);
-                        pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
-                        Toast.makeText(this, "Long-press any app in drawer and choose '🏝️ Add to Dynamic Island'", Toast.LENGTH_LONG).show();
+                        pick.putExtra(AppPickerActivity.EXTRA_PICK_FOR_ISLAND, true);
                         startActivity(pick);
                     } else if (which == 1) {
                         List<Shortcut> home = ShortcutStore.load(this);
-                        ShortcutStore.saveIsland(this, home);
+                        List<Shortcut> clean = new ArrayList<>();
+                        for (Shortcut h : home) {
+                            if (!h.isEmpty()) clean.add(h);
+                        }
+                        ShortcutStore.saveIsland(this, clean);
                         IslandService.refresh(this);
-                        Toast.makeText(this, "Copied home apps to Dynamic Island", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Copied home apps to Dynamic Island (" + clean.size() + " apps)", Toast.LENGTH_SHORT).show();
+                        showManageIslandAppsDialog();
+                    } else if (!island.isEmpty() && which == 2) {
+                        ShortcutStore.saveIsland(this, new ArrayList<>());
+                        IslandService.refresh(this);
+                        Toast.makeText(this, "Cleared Dynamic Island apps", Toast.LENGTH_SHORT).show();
                     } else {
-                        int slotIdx = which - 2;
-                        Shortcut s = island.get(slotIdx);
-                        if (s.isEmpty()) {
-                            Intent pick = new Intent(this, AppPickerActivity.class);
-                            pick.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
-                            Toast.makeText(this, "Long-press an app to add to Island", Toast.LENGTH_SHORT).show();
-                            startActivity(pick);
-                        } else {
-                            island.set(slotIdx, Shortcut.createEmpty());
-                            ShortcutStore.saveIsland(this, island);
-                            IslandService.refresh(this);
-                            Toast.makeText(this, "Cleared slot " + (slotIdx + 1), Toast.LENGTH_SHORT).show();
+                        int offset = (!island.isEmpty() ? 3 : 2);
+                        int slotIdx = which - offset;
+                        if (slotIdx >= 0 && slotIdx < island.size()) {
+                            Shortcut s = island.get(slotIdx);
+                            String[] actions = {"🔄 Replace App", "🗑️ Remove from Island", "⬅ Move Earlier", "➡ Move Later"};
+                            new AlertDialog.Builder(this)
+                                    .setTitle(s.label)
+                                    .setItems(actions, (ad, aw) -> {
+                                        if (aw == 0) {
+                                            Intent pick = new Intent(this, AppPickerActivity.class);
+                                            pick.putExtra(AppPickerActivity.EXTRA_PICK_FOR_ISLAND, true);
+                                            pick.putExtra(AppPickerActivity.EXTRA_ISLAND_SLOT_INDEX, slotIdx);
+                                            startActivity(pick);
+                                        } else if (aw == 1) {
+                                            island.remove(slotIdx);
+                                            ShortcutStore.saveIsland(this, island);
+                                            IslandService.refresh(this);
+                                            Toast.makeText(this, "Removed " + s.label, Toast.LENGTH_SHORT).show();
+                                            showManageIslandAppsDialog();
+                                        } else if (aw == 2 && slotIdx > 0) {
+                                            Shortcut prev = island.get(slotIdx - 1);
+                                            island.set(slotIdx - 1, s);
+                                            island.set(slotIdx, prev);
+                                            ShortcutStore.saveIsland(this, island);
+                                            IslandService.refresh(this);
+                                            showManageIslandAppsDialog();
+                                        } else if (aw == 3 && slotIdx < island.size() - 1) {
+                                            Shortcut next = island.get(slotIdx + 1);
+                                            island.set(slotIdx + 1, s);
+                                            island.set(slotIdx, next);
+                                            ShortcutStore.saveIsland(this, island);
+                                            IslandService.refresh(this);
+                                            showManageIslandAppsDialog();
+                                        }
+                                    })
+                                    .setNegativeButton("Cancel", null)
+                                    .show();
                         }
                     }
                 })

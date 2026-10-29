@@ -60,6 +60,8 @@ public class AppPickerActivity extends Activity {
     public static final String EXTRA_LABELS = "labels"; // multi-select
     public static final String EXTRA_PROFILE_SERIALS = "profile_serials"; // multi-select clone serials
     public static final String EXTRA_DRAWER_MODE = "drawer_mode";
+    public static final String EXTRA_PICK_FOR_ISLAND = "pick_for_island";
+    public static final String EXTRA_ISLAND_SLOT_INDEX = "island_slot_index";
 
     public static String getCustomLabelKey(String pkg, long profileSerial) {
         if (pkg == null) return "";
@@ -231,7 +233,33 @@ public class AppPickerActivity extends Activity {
         if (chipSocial != null) chipSocial.setOnClickListener(chipListener);
         if (chipSystem != null) chipSystem.setOnClickListener(chipListener);
 
-        if (isDrawerMode) {
+        boolean isPickForIsland = getIntent().getBooleanExtra(EXTRA_PICK_FOR_ISLAND, false);
+        if (isPickForIsland) {
+            addButton.setVisibility(View.GONE);
+            EditText sView = findViewById(R.id.search);
+            if (sView != null) sView.setHint("Tap app to add to Dynamic Island...");
+            list.setOnItemClickListener((parent, view, pos, id) -> {
+                AppEntry e = adapter.getItem(pos);
+                if (e == null) return;
+                List<Shortcut> island = ShortcutStore.loadIsland(this);
+                Shortcut s = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                int targetSlot = getIntent().getIntExtra(EXTRA_ISLAND_SLOT_INDEX, -1);
+                if (targetSlot >= 0 && targetSlot < island.size()) {
+                    island.set(targetSlot, s);
+                } else {
+                    if (island.size() >= ShortcutStore.MAX) {
+                        Toast.makeText(this, "Dynamic Island is full (16 max)", Toast.LENGTH_SHORT).show();
+                        finish();
+                        return;
+                    }
+                    island.add(s);
+                }
+                ShortcutStore.saveIsland(this, island);
+                IslandService.refresh(this);
+                Toast.makeText(this, "Added " + e.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
+                finish();
+            });
+        } else if (isDrawerMode) {
             addButton.setVisibility(View.GONE);
             list.setOnItemClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
