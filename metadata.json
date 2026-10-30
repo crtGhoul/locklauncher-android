@@ -1,0 +1,5 @@
+{
+  "name": "Lock Launcher Workbench & Simulator",
+  "description": "Interactive Android launcher simulator, WebAppActivity container preview, and AdBlockEngine security workbench for Lock Launcher (OnePlus 13 / OxygenOS 15).",
+  "requestFramePermissions": []
+}

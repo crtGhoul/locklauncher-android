@@ -28,6 +28,29 @@ public class DisplayHelper {
                 WindowManager.LayoutParams lp = window.getAttributes();
                 lp.preferredRefreshRate = 120.0f;
                 try {
+                    Display display = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                            ? activity.getDisplay()
+                            : activity.getWindowManager().getDefaultDisplay();
+                    if (display != null) {
+                        Display.Mode currentMode = display.getMode();
+                        Display.Mode[] modes = display.getSupportedModes();
+                        Display.Mode bestMode = null;
+                        float maxHz = 0f;
+                        for (Display.Mode m : modes) {
+                            if (currentMode != null
+                                    && m.getPhysicalWidth() == currentMode.getPhysicalWidth()
+                                    && m.getPhysicalHeight() == currentMode.getPhysicalHeight()
+                                    && m.getRefreshRate() > maxHz) {
+                                maxHz = m.getRefreshRate();
+                                bestMode = m;
+                            }
+                        }
+                        if (bestMode != null) {
+                            lp.preferredDisplayModeId = bestMode.getModeId();
+                        }
+                    }
+                } catch (Throwable ignored) {}
+                try {
                     lp.getClass().getField("preferredMinDisplayRefreshRate").setFloat(lp, 120.0f);
                     lp.getClass().getField("preferredMaxDisplayRefreshRate").setFloat(lp, 120.0f);
                 } catch (Throwable ignored) {}

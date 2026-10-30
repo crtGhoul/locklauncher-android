@@ -1,6 +1,6 @@
 # Lock Launcher for Android
 
-[![Release](https://img.shields.io/badge/Release-v2.12-7C5CFF.svg)](https://github.com/crtGhoul/locklauncher-android/releases)
+[![Release](https://img.shields.io/badge/Release-v2.17-7C5CFF.svg)](https://github.com/crtGhoul/locklauncher-android/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Zero Ads](https://img.shields.io/badge/Ads-0%25%20Offline-00E676.svg)](README.md)
 [![Refresh Rate](https://img.shields.io/badge/Display-120Hz%20LTPO-FF6F00.svg)](README.md)
@@ -36,14 +36,16 @@ No ads. No telemetry. No background phoning home. Zero network trackers. The lau
 - Bypasses OEM transition stalls and clip-reveal animation freezes.
 
 ### 🚀 Buttery Smooth 120Hz LTPO GPU Acceleration
-- **GPU Hardware Accelerated**: Overlay windows rendered with `WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED` for true 120 FPS frame delivery on LTPO AMOLED displays (e.g. OnePlus 13).
+- **GPU Hardware Accelerated**: Overlay windows and `WebView` instances rendered with `FLAG_HARDWARE_ACCELERATED` and `LAYER_TYPE_HARDWARE` for true 120 FPS frame delivery on LTPO AMOLED displays (e.g. OnePlus 13).
 - **Background Pre-Warming**: Pre-caches shortcut bitmaps in memory via `AsyncTask.THREAD_POOL_EXECUTOR` so grid binding never drops a single frame.
-- **High-Refresh Display Lock**: Automatically locks display refresh rate to 120.0f without mode switching jitter.
+- **High-Refresh Display Mode Lock**: Automatically locks `preferredDisplayModeId` and `preferredRefreshRate` to 120.0f without mode switching jitter.
 
-### 🌐 Standalone Ad-Free Web Apps
-- Turn any website into a standalone native app window with dark glass styling and independent Recents task card.
-- Built-in `AdBlockEngine` stripping banner frames, intrusive popups, and ad domains locally.
-- Auto-fetches high-res brand icons (YouTube, X, Reddit, Spotify, etc.) or custom logos from gallery.
+### 🌐 Standalone Ad-Free Web Apps (v2.17)
+- Turn any website (YouTube, YouTube Music, ChatGPT, Reddit) into a standalone native app window with a floating frosted-glass navigation bar and independent Recents task card.
+- **Screen-Off & Background Audio Playback**: Spoofs the Page Visibility API (`document.hidden = false`), maintains `AudioFocusRequest(AUDIOFOCUS_GAIN)`, and locks `WebView.RENDERER_PRIORITY_IMPORTANT` (`waivedWhenNotVisible = false`) so YouTube and YouTube Music keep playing when the screen is locked or backgrounded.
+- **Player-Safe `AdBlockEngine`**: Surgically intercepts pre-roll/mid-roll ad endpoints (`/pagead/`, `/api/stats/ads`, `/ptracking`, `/get_midroll_`) and fast-forwards/skips active ads non-destructively without removing `.video-ads` DOM nodes.
+- **Multi-Account OAuth Persistence**: Synchronizes 3rd-party cookies, `DOMStorage`, and `CookieManager.flush()` across `onCreateWindow` popup transports for seamless Google account switching.
+- Auto-fetches high-res brand icons or custom logos from gallery.
 
 ### 👥 Cloned Apps & Multi-User Profile Isolation
 - Full support for dual/cloned apps (e.g. OxygenOS Parallel Apps, Work Profiles) with user profile serial isolation (`profileSerial`), allowing identical apps to exist simultaneously with independent custom labels.
