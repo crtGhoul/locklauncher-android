@@ -2,21 +2,32 @@ package com.crtghoul.locklauncher;
 
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.DownloadManager;
+import android.content.ContentValues;
+import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
+import android.webkit.MimeTypeMap;
+import android.webkit.URLUtil;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -28,6 +39,11 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 
 /**
  * Standalone Immersive 100% Ad-Free Web App Container.
@@ -65,6 +81,27 @@ public class WebAppActivity extends Activity {
     private boolean isImmersiveFullscreen = false;
     private boolean isLoading = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
+
+    // File chooser (was missing from WebAppActivity through v2.15, so
+    // <input type=file> taps did nothing in WebView: Android WebView
+    // shows no picker on its own; Chrome does this itself.)
+    private static final int REQ_FILE_CHOOSER = 4101;
+    private ValueCallback<Uri[]> fileUploadCallback;
+
+    // Blob-download saver state. DownloadManager cannot fetch blob:/data:
+    // URLs (they live inside the page), so a blob download is fetched by
+    // page JS, split into base64 chunks, and written here to Downloads.
+    // The interface methods are gated on pendingBlobActive: a page can
+    // only write a file while a real download the user triggered is in
+    // progress, and only to Downloads, under a sanitized filename.
+    private boolean pendingBlobActive = false;
+    private boolean pendingBlobStarted = false;
+    private String pendingBlobMime;
+    private String pendingBlobFilename;
+    private OutputStream pendingBlobOut;
+    private Uri pendingBlobUri;
+    private File pendingBlobLegacyFile;
+    private int pendingBlobReceived = 0;
     private Object backCallback;
 
     @Override
@@ -246,7 +283,47 @@ public class WebAppActivity extends Activity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         }
 
+        // Blob-download bridge. Registered before any page loads; every
+        // method is gated on pendingBlobActive (see BlobSaver).
+        webView.addJavascriptInterface(new BlobSaver(), "LLBlobSaver");
+
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view,
+                    ValueCallback<Uri[]> callback,
+                    WebChromeClient.FileChooserParams params) {
+                if (fileUploadCallback != null) {
+                    fileUploadCallback.onReceiveValue(null);
+                    fileUploadCallback = null;
+                }
+                fileUploadCallback = callback;
+                try {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    String type = "*/*";
+                    String[] accept = params != null
+                            ? params.getAcceptTypes() : null;
+                    if (accept != null && accept.length == 1
+                            && accept[0] != null && !accept[0].isEmpty()
+                            && !accept[0].contains(",")
+                            && !accept[0].startsWith(".")) {
+                        type = accept[0];
+                    }
+                    intent.setType(type);
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,
+                            params != null && params.getMode()
+                                    == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE);
+                    startActivityForResult(intent, REQ_FILE_CHOOSER);
+                } catch (Exception e) {
+                    fileUploadCallback = null;
+                    callback.onReceiveValue(null);
+                    Toast.makeText(WebAppActivity.this,
+                            "Couldn't open the file picker",
+                            Toast.LENGTH_SHORT).show();
+                }
+                return true;
+            }
+
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 if (newProgress < 100) {
@@ -485,8 +562,304 @@ public class WebAppActivity extends Activity {
             }
         });
 
+        webView.setDownloadListener((dlUrl, userAgent, contentDisposition,
+                mimeType, contentLength) -> {
+            if (dlUrl == null) return;
+            String scheme = null;
+            try {
+                scheme = Uri.parse(dlUrl).getScheme();
+            } catch (Exception ignored) {
+            }
+            if ("blob".equals(scheme)) {
+                // Client-side output (ffmpeg.wasm, canvas, fflate ZIP):
+                // DownloadManager cannot fetch blob: URLs.
+                startBlobDownload(dlUrl, mimeType, contentDisposition);
+                return;
+            }
+            if ("data".equals(scheme)) {
+                saveDataUrlDownload(dlUrl, mimeType, contentDisposition);
+                return;
+            }
+            if (!"http".equals(scheme) && !"https".equals(scheme)) {
+                Toast.makeText(this,
+                        "This download type needs a full browser",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                DownloadManager dm = (DownloadManager)
+                        getSystemService(Context.DOWNLOAD_SERVICE);
+                if (dm == null) throw new IllegalStateException("no DM");
+                String filename = filenameForDownload(
+                        dlUrl, contentDisposition, mimeType);
+                DownloadManager.Request req =
+                        new DownloadManager.Request(Uri.parse(dlUrl));
+                req.setTitle(filename);
+                req.setDescription("Downloading via Lock Launcher");
+                if (mimeType != null) req.setMimeType(mimeType);
+                if (userAgent != null) {
+                    req.addRequestHeader("User-Agent", userAgent);
+                }
+                String cookies = CookieManager.getInstance().getCookie(dlUrl);
+                if (cookies != null) {
+                    req.addRequestHeader("Cookie", cookies);
+                }
+                if (webView.getUrl() != null) {
+                    req.addRequestHeader("Referer", webView.getUrl());
+                }
+                req.setDestinationInExternalPublicDir(
+                        Environment.DIRECTORY_DOWNLOADS, filename);
+                req.setNotificationVisibility(
+                        DownloadManager.Request
+                                .VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                dm.enqueue(req);
+                Toast.makeText(this, "Downloading " + filename,
+                        Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Couldn't start download",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+
         webView.loadUrl(url);
         updateNavState();
+    }
+
+    private static String jsString(String s) {
+        if (s == null) return "''";
+        return "'" + s.replace("\\", "\\\\").replace("'", "\\'")
+                .replace("\n", "\\n").replace("\r", "\\r") + "'";
+    }
+
+    private static String sanitizeFilename(String name) {
+        if (name == null || name.isEmpty()) return "download";
+        name = name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        if (name.length() > 100) name = name.substring(0, 100);
+        if (name.isEmpty() || name.equals(".") || name.equals("..")) {
+            return "download";
+        }
+        return name;
+    }
+
+    private static String filenameForDownload(String url,
+            String contentDisposition, String mimeType) {
+        String name = sanitizeFilename(
+                URLUtil.guessFileName(url, contentDisposition, mimeType));
+        if (!name.contains(".")) {
+            String ext = mimeType != null
+                    ? MimeTypeMap.getSingleton()
+                            .getExtensionFromMimeType(mimeType) : null;
+            if (ext != null && !ext.isEmpty()) name += "." + ext;
+        }
+        return name;
+    }
+
+    private OutputStream openDownloadsOutput(String filename, String mime)
+            throws IOException {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+            if (mime != null) {
+                values.put(MediaStore.Downloads.MIME_TYPE, mime);
+            }
+            values.put(MediaStore.Downloads.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS);
+            Uri uri = getContentResolver().insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) {
+                throw new IOException("MediaStore insert failed");
+            }
+            pendingBlobUri = uri;
+            OutputStream out = getContentResolver().openOutputStream(uri);
+            if (out == null) {
+                throw new IOException("openOutputStream failed");
+            }
+            return out;
+        } else {
+            File dir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS);
+            if (!dir.exists()) dir.mkdirs();
+            File file = new File(dir, filename);
+            pendingBlobLegacyFile = file;
+            return new FileOutputStream(file);
+        }
+    }
+
+    private void abortPendingBlob() {
+        pendingBlobActive = false;
+        pendingBlobStarted = false;
+        if (pendingBlobOut != null) {
+            try {
+                pendingBlobOut.close();
+            } catch (IOException ignored) {
+            }
+            pendingBlobOut = null;
+        }
+        try {
+            if (pendingBlobUri != null) {
+                getContentResolver().delete(pendingBlobUri, null, null);
+            } else if (pendingBlobLegacyFile != null) {
+                pendingBlobLegacyFile.delete();
+            }
+        } catch (Exception ignored) {
+        }
+        pendingBlobUri = null;
+        pendingBlobLegacyFile = null;
+        pendingBlobReceived = 0;
+    }
+
+    private void startBlobDownload(String blobUrl, String mimeType,
+            String contentDisposition) {
+        abortPendingBlob();
+        pendingBlobActive = true;
+        pendingBlobStarted = false;
+        pendingBlobMime = mimeType;
+        pendingBlobFilename = filenameForDownload(
+                blobUrl, contentDisposition, mimeType);
+        String js = "(function(){"
+                + "fetch(" + jsString(blobUrl) + ")"
+                + ".then(function(r){return r.blob();})"
+                + ".then(function(b){return new Promise(function(res,rej){"
+                + "var fr=new FileReader();"
+                + "fr.onload=function(){res(fr.result);};"
+                + "fr.onerror=function(){rej(new Error('read failed'));};"
+                + "fr.readAsDataURL(b);});})"
+                + ".then(function(dataUrl){"
+                + "var base64=(dataUrl.split(',')[1]||'');"
+                + "var CH=1000000;"
+                + "var total=Math.ceil(base64.length/CH);"
+                + "window.LLBlobSaver.begin("
+                + jsString(pendingBlobFilename) + ",total);"
+                + "for(var i=0;i<total;i++){"
+                + "window.LLBlobSaver.chunk(i,"
+                + "base64.substring(i*CH,Math.min(base64.length,(i+1)*CH)));}"
+                + "window.LLBlobSaver.end();})"
+                + ".catch(function(e){"
+                + "window.LLBlobSaver.error(String(e));});"
+                + "})();";
+        webView.evaluateJavascript(js, null);
+    }
+
+    private void saveDataUrlDownload(String dataUrl, String mimeType,
+            String contentDisposition) {
+        try {
+            int comma = dataUrl.indexOf(',');
+            if (comma < 0) throw new IOException("bad data URL");
+            String header = dataUrl.substring(5, comma);
+            String dataPart = dataUrl.substring(comma + 1);
+            String mime = mimeType;
+            if (mime == null && !header.isEmpty()) {
+                mime = header.split(";")[0];
+                if (mime.isEmpty()) mime = null;
+            }
+            byte[] bytes;
+            if (header.contains(";base64")) {
+                bytes = Base64.decode(dataPart, Base64.DEFAULT);
+            } else {
+                bytes = Uri.decode(dataPart).getBytes("UTF-8");
+            }
+            String filename = filenameForDownload(
+                    dataUrl, contentDisposition, mime);
+            OutputStream out = openDownloadsOutput(filename, mime);
+            try {
+                out.write(bytes);
+            } finally {
+                out.close();
+            }
+            pendingBlobUri = null;
+            pendingBlobLegacyFile = null;
+            Toast.makeText(this, "Saved to Downloads: " + filename,
+                    Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            pendingBlobUri = null;
+            pendingBlobLegacyFile = null;
+            Toast.makeText(this, "Download failed",
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Page-side blob saver. Called only while a user-triggered download
+     * is pending (pendingBlobActive); stray calls are ignored, and the
+     * only destination is Downloads under a sanitized filename.
+     */
+    private final class BlobSaver {
+        @JavascriptInterface
+        public void begin(String filename, int totalChunks) {
+            if (!pendingBlobActive) return;
+            try {
+                String safe = sanitizeFilename(filename);
+                if (!safe.isEmpty()) pendingBlobFilename = safe;
+                pendingBlobOut = openDownloadsOutput(
+                        pendingBlobFilename, pendingBlobMime);
+                pendingBlobStarted = true;
+                pendingBlobReceived = 0;
+                if (totalChunks <= 0) end();
+            } catch (Exception e) {
+                failBlob();
+            }
+        }
+
+        @JavascriptInterface
+        public void chunk(int index, String base64Chunk) {
+            if (!pendingBlobActive || !pendingBlobStarted
+                    || pendingBlobOut == null || base64Chunk == null) {
+                return;
+            }
+            try {
+                byte[] bytes = Base64.decode(base64Chunk, Base64.DEFAULT);
+                pendingBlobOut.write(bytes);
+                pendingBlobReceived++;
+            } catch (Exception e) {
+                failBlob();
+            }
+        }
+
+        @JavascriptInterface
+        public void end() {
+            if (!pendingBlobActive) return;
+            try {
+                if (pendingBlobOut != null) pendingBlobOut.close();
+            } catch (IOException ignored) {
+            }
+            pendingBlobOut = null;
+            // Finished file: clear the URI so a later abort won't delete it.
+            pendingBlobUri = null;
+            pendingBlobLegacyFile = null;
+            pendingBlobActive = false;
+            pendingBlobStarted = false;
+            final String name = pendingBlobFilename;
+            handler.post(() -> Toast.makeText(WebAppActivity.this,
+                    "Saved to Downloads: " + name,
+                    Toast.LENGTH_LONG).show());
+        }
+
+        @JavascriptInterface
+        public void error(String message) {
+            failBlob();
+        }
+
+        private void failBlob() {
+            try {
+                if (pendingBlobOut != null) pendingBlobOut.close();
+            } catch (IOException ignored) {
+            }
+            pendingBlobOut = null;
+            try {
+                if (pendingBlobUri != null) {
+                    getContentResolver().delete(pendingBlobUri, null, null);
+                } else if (pendingBlobLegacyFile != null) {
+                    pendingBlobLegacyFile.delete();
+                }
+            } catch (Exception ignored) {
+            }
+            pendingBlobUri = null;
+            pendingBlobLegacyFile = null;
+            pendingBlobActive = false;
+            pendingBlobStarted = false;
+            handler.post(() -> Toast.makeText(WebAppActivity.this,
+                    "Download failed", Toast.LENGTH_SHORT).show());
+        }
     }
 
     private void updateNavState() {
@@ -589,7 +962,35 @@ public class WebAppActivity extends Activity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode,
+            Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_FILE_CHOOSER || fileUploadCallback == null) {
+            return;
+        }
+        Uri[] results = null;
+        if (resultCode == Activity.RESULT_OK && data != null) {
+            android.content.ClipData clip = data.getClipData();
+            if (clip != null && clip.getItemCount() > 0) {
+                results = new Uri[clip.getItemCount()];
+                for (int i = 0; i < clip.getItemCount(); i++) {
+                    results[i] = clip.getItemAt(i).getUri();
+                }
+            } else if (data.getData() != null) {
+                results = new Uri[]{data.getData()};
+            }
+        }
+        fileUploadCallback.onReceiveValue(results);
+        fileUploadCallback = null;
+    }
+
+    @Override
     protected void onDestroy() {
+        if (fileUploadCallback != null) {
+            fileUploadCallback.onReceiveValue(null);
+            fileUploadCallback = null;
+        }
+        abortPendingBlob();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backCallback != null) {
             try {
                 getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((android.window.OnBackInvokedCallback) backCallback);
