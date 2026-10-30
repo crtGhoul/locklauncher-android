@@ -346,4 +346,15 @@ public class SpringAnimator {
             return true;
         }
     }
+    /**
+     * Subtle tactile scale pulse feedback for button taps and drop targets.
+     */
+    public static void scalePulse(View v) {
+        if (v == null) return;
+        v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(70).withEndAction(new Runnable() {
+            @Override public void run() {
+                v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start();
+            }
+        }).start();
+    }
 }
