@@ -15,8 +15,8 @@ if [ -f "$PROJ/version.properties" ]; then
   VERSION_CODE=$(grep '^versionCode=' "$PROJ/version.properties" | cut -d= -f2)
   VERSION_NAME=$(grep '^versionName=' "$PROJ/version.properties" | cut -d= -f2)
 fi
-VERSION_CODE=${VERSION_CODE:-56}
-VERSION_NAME=${VERSION_NAME:-2.18}
+VERSION_CODE=${VERSION_CODE:-58}
+VERSION_NAME=${VERSION_NAME:-2.20}
 OUT=$PROJ/build-out
 GEN=$OUT/gen
 CLS=$OUT/classes

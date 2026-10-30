@@ -45,777 +45,1562 @@
             </LinearLayout>
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btn_open_home"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/btn_accent"
-            android:text="Open Home Launcher Screen"
-            android:textColor="#FFFFFF"
-            android:layout_marginTop="10dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="DOCK PROFILES (long-press to rename)"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="12dp"
-            android:paddingBottom="6dp" />
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:layout_marginTop="10dp">
 
-            <Button android:id="@+id/tab_p0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/btn_accent" android:text="Default" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/tab_p1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="Profile 2" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/tab_p2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:background="@drawable/btn_ghost" android:text="Profile 3" android:textColor="#FFFFFF" />
+            <Button
+                android:id="@+id/btn_open_home"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/btn_accent"
+                android:text="Open Home Screen"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btn_rerun_onboarding"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="4dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:background="@drawable/btn_ghost"
+                android:text="Setup Wizard"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF" />
         </LinearLayout>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="DOCK PREVIEW"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="12dp"
-            android:paddingBottom="6dp" />
-
+        <!-- Everything-Launcher-Inspired Category Tab Bar -->
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/row_card"
-            android:padding="10dp">
+            android:scrollbars="none"
+            android:paddingTop="12dp"
+            android:paddingBottom="4dp">
 
             <LinearLayout
-                android:id="@+id/dock_preview"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical" />
+                android:orientation="horizontal">
+
+                <Button android:id="@+id/cat_tab_all" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginEnd="6dp" android:paddingStart="14dp" android:paddingEnd="14dp" android:background="@drawable/btn_accent" android:text="All" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/cat_tab_glass" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginEnd="6dp" android:paddingStart="14dp" android:paddingEnd="14dp" android:background="@drawable/btn_ghost" android:text="Glass &amp; blur" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/cat_tab_appearance" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginEnd="6dp" android:paddingStart="14dp" android:paddingEnd="14dp" android:background="@drawable/btn_ghost" android:text="Appearance" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/cat_tab_home" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginEnd="6dp" android:paddingStart="14dp" android:paddingEnd="14dp" android:background="@drawable/btn_ghost" android:text="Home screen" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/cat_tab_dock" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginEnd="6dp" android:paddingStart="14dp" android:paddingEnd="14dp" android:background="@drawable/btn_ghost" android:text="Dock &amp; Island" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="12sp" />
+                <Button android:id="@+id/cat_tab_general" android:layout_width="wrap_content" android:layout_height="36dp" android:paddingStart="14dp" android:paddingEnd="14dp" android:background="@drawable/btn_ghost" android:text="General" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="12sp" />
+            </LinearLayout>
         </HorizontalScrollView>
 
+        <!-- ==================== SECTION: DOCK & SHORTCUTS ==================== -->
         <LinearLayout
+            android:id="@+id/sec_group_dock_top"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="@drawable/row_card"
-            android:padding="12dp"
-            android:layout_marginTop="10dp">
+            android:orientation="vertical">
 
             <TextView
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Lock-screen dock"
-                android:textColor="@color/text"
-                android:textSize="16sp" />
+                android:text="DOCK PROFILES (long-press to rename)"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="12dp"
+                android:paddingBottom="6dp" />
 
-            <Switch
-                android:id="@+id/switch_dock"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="@drawable/row_card"
-            android:padding="12dp"
-            android:layout_marginTop="10dp">
+                <Button android:id="@+id/tab_p0" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/btn_accent" android:text="Default" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/tab_p1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="Profile 2" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/tab_p2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:background="@drawable/btn_ghost" android:text="Profile 3" android:textColor="#FFFFFF" />
+            </LinearLayout>
 
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Round icon backgrounds"
-                android:textColor="@color/text"
-                android:textSize="16sp" />
-
-            <Switch
-                android:id="@+id/switch_round"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="APPEARANCE"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="14dp"
-            android:paddingBottom="6dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/row_card"
-            android:padding="12dp"
-            android:layout_marginBottom="8dp">
-
-            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:text="LIVE GLASS DOCK PREVIEW"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="12dp"
+                android:paddingBottom="6dp" />
 
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Show Home Clock &amp; Date"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
+            <HorizontalScrollView
+                android:id="@+id/dock_preview_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/row_card"
+                android:padding="10dp">
 
-                <Switch
-                    android:id="@+id/switch_home_clock"
+                <LinearLayout
+                    android:id="@+id/dock_preview"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical" />
+            </HorizontalScrollView>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Show Battery in Home Header"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_home_battery"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Show Profile Tabs on Home Screen"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_home_profiles"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Hide App Labels on Home Screen"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_home_hide_labels"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Clean Mode (Hide apps behind 'Apps' pill)"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_home_clean_mode"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btn_home_grid_density"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/btn_ghost"
-                android:text="Home Grid Density: 4 Columns (tap to cycle 3, 4, 5)"
-                android:textColor="#FFFFFF" />
-
-            <Button
-                android:id="@+id/btn_home_icon_size"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/btn_ghost"
-                android:text="Home Icon Size: 56dp (Standard)"
-                android:textColor="#FFFFFF" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Align Icons to Bottom (Thumb Reach)"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_home_align_bottom"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Auto-open Keyboard in Drawer"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_drawer_auto_keyboard"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Double-Tap Wallpaper to Lock Screen"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_double_tap_lock"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Monochrome / Minimalist Detox Icons"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_monochrome_icons"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Inline Math &amp; Calculator in Search"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_search_calculator"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Notification Dots &amp; Numeric Badges"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_notification_badges"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Auto-fetch web favicons (network, off by default)"
-                    android:textColor="@color/text"
-                    android:textSize="15sp" />
-
-                <Switch
-                    android:id="@+id/switch_favicon_fetch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
+                android:background="@drawable/row_card"
+                android:padding="12dp"
                 android:layout_marginTop="10dp">
 
-                <Button
-                    android:id="@+id/btn_icon_pack"
+                <TextView
                     android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Lock-screen dock"
+                    android:textColor="@color/text"
+                    android:textSize="16sp" />
+
+                <Switch
+                    android:id="@+id/switch_dock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ==================== SECTION: GLASS AND BLUR ==================== -->
+        <LinearLayout
+            android:id="@+id/sec_group_glass"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="GLASS AND BLUR (ISLAND · SIDEBAR · DOCK)"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp">
+
+                <!-- 3 Mode Cards: Liquid glass, Classic, Frosted glass -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_glass_mode_liquid"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Liquid glass"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_glass_mode_classic"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Classic"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_glass_mode_frosted"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/btn_accent"
+                        android:text="Frosted glass"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <!-- Sub-Theme Pills: Light, Dark, Colored, Glow -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Surface theme"
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp"
+                    android:paddingTop="10dp"
+                    android:paddingBottom="4dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btn_subtheme_light" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Light" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_subtheme_dark" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_accent" android:text="Dark" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_subtheme_colored" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Colored" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_subtheme_glow" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="3dp" android:background="@drawable/btn_ghost" android:text="Glow" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- Wallpaper Accent Switch -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="10dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Wallpaper accent (Monet color)"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <Switch
+                        android:id="@+id/switch_wallpaper_accent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- Blur Radius Slider + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="10dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Blur"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/val_glass_blur"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="6"
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/reset_glass_blur"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/seek_glass_blur"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="25" />
+
+                <!-- Surface Opacity Slider + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Surface opacity"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/val_glass_opacity_pct"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="%18"
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/reset_glass_opacity"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/seek_opacity"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <!-- Darkness Slider + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Darkness"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/val_glass_darkness"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0.50"
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/reset_glass_darkness"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/seek_glass_darkness"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="100" />
+
+                <!-- Theme Color Hue Slider + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Theme color (Accent Hue)"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/val_glass_hue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="200°"
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/reset_glass_hue"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/seek_glass_hue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="360" />
+
+                <!-- Saturation Slider + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Saturation"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/val_glass_sat"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0.50"
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/reset_glass_sat"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/seek_glass_sat"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="100" />
+
+                <!-- Icon Size Inside Glass Slider + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Icon size inside glass"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/val_glass_icon_scale"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="%100"
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/reset_glass_icon_scale"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/seek_glass_icon_scale"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="60" />
+
+                <Button
+                    android:id="@+id/btn_reset_all_glass"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="↺  Reset All Glass &amp; Blur Settings"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ==================== SECTION: APPEARANCE & BADGES ==================== -->
+        <LinearLayout
+            android:id="@+id/sec_group_appearance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="ICONS &amp; APPEARANCE"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp">
+
+                <!-- Original vs Minimal Icon Mode -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingBottom="6dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Icons (Minimal removes app background)"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/reset_icon_style"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_icons_original"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/btn_accent"
+                        android:text="Original"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/btn_icons_minimal"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Minimal"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <!-- Glass backgrounds for icons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="10dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Glass backgrounds for icons"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_glass_icon_bg"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- Adaptive icon shape -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="10dp"
+                    android:paddingBottom="4dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Adaptive icon shape"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/reset_icon_shape"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btn_shape_system" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@drawable/btn_accent" android:text="System" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_shape_circle" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Circle" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_shape_square" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Square" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_shape_rounded" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="3dp" android:background="@drawable/btn_ghost" android:text="Rounded" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Round icon backgrounds"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_round"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Monochrome / Minimalist Detox Icons"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_monochrome_icons"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="10dp">
+
+                    <Button
+                        android:id="@+id/btn_icon_pack"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Choose Icon Pack"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_hidden_apps"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Hidden Apps Vault"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- NOTIFICATION BADGES CARD (Off / Dot / Number + Size + Color + Per-App) -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="NOTIFICATION BADGES"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingBottom="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Notification Dots &amp; Numeric Badges"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_notification_badges"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- 3 Visual Style Cards: Off, Dot, Number -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_badge_style_off"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Off"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_badge_style_dot"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="●  Dot"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+
+                    <Button
+                        android:id="@+id/btn_badge_style_number"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/btn_accent"
+                        android:text="12  Number"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <!-- Badge Size Slider + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="10dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Badge size"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/val_badge_size"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="%100"
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/reset_badge_size"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/seek_badge_size"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="100" />
+
+                <!-- Badge Color Swatches -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Badge color"
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="4dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button android:id="@+id/btn_badge_col_0" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="🔴 Red" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_badge_col_1" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="🩷 Pink" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_badge_col_2" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="🔵 Blue" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_badge_col_3" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_accent" android:text="🟢 Green" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                    <Button android:id="@+id/btn_badge_col_4" android:layout_width="0dp" android:layout_height="34dp" android:layout_weight="1" android:layout_marginStart="3dp" android:background="@drawable/btn_ghost" android:text="⚪ White" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="11sp" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_badge_select_apps"
+                    android:layout_width="match_parent"
                     android:layout_height="40dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="Select apps (Apps that show badges)  ›"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ==================== SECTION: HOME SCREEN ==================== -->
+        <LinearLayout
+            android:id="@+id/sec_group_home"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="HOME SCREEN &amp; GRID"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp"
+                android:layout_marginBottom="8dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Show Home Clock &amp; Date"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_home_clock"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Show Battery in Home Header"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_home_battery"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Show Profile Tabs on Home Screen"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_home_profiles"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Hide App Labels on Home Screen"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_home_hide_labels"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Clean Mode (Hide apps behind 'Apps' pill)"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_home_clean_mode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- Home Grid Density + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <Button
+                        android:id="@+id/btn_home_grid_density"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Home Grid Density: 4 Columns"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF" />
+
+                    <TextView
+                        android:id="@+id/reset_home_grid_cols"
+                        android:layout_width="34dp"
+                        android:layout_height="40dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="15sp" />
+                </LinearLayout>
+
+                <!-- Home Icon Size + Reset -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <Button
+                        android:id="@+id/btn_home_icon_size"
+                        android:layout_width="0dp"
+                        android:layout_height="40dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Home Icon Size: 56dp (Standard)"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF" />
+
+                    <TextView
+                        android:id="@+id/reset_home_icon_size"
+                        android:layout_width="34dp"
+                        android:layout_height="40dp"
+                        android:gravity="center"
+                        android:background="@drawable/btn_ghost"
+                        android:text="↺"
+                        android:textColor="#FFFFFF"
+                        android:textSize="15sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Align Icons to Bottom (Thumb Reach)"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_home_align_bottom"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Auto-open Keyboard in Drawer"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_drawer_auto_keyboard"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Double-Tap Wallpaper to Lock Screen"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_double_tap_lock"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Inline Math &amp; Calculator in Search"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_search_calculator"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Auto-fetch web favicons (network, off by default)"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_favicon_fetch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ==================== SECTION: DOCK MEMO & SHORTCUTS ==================== -->
+        <LinearLayout
+            android:id="@+id/sec_group_dock_bottom"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Lock screen memo (optional)"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <EditText
+                    android:id="@+id/edit_memo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="e.g. {battery} · {date}"
+                    android:textColorHint="@color/text_dim"
+                    android:textColor="@color/text"
+                    android:inputType="text"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Insert live stat tokens:"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp"
+                    android:paddingTop="4dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="4dp">
+
+                    <Button android:id="@+id/btn_token_battery" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Battery" android:textSize="9sp" android:textColor="#FFFFFF" />
+                    <Button android:id="@+id/btn_token_date" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Date" android:textSize="9sp" android:textColor="#FFFFFF" />
+                    <Button android:id="@+id/btn_token_time" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Time" android:textSize="9sp" android:textColor="#FFFFFF" />
+                    <Button android:id="@+id/btn_token_profile" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:background="@drawable/btn_ghost" android:text="+ Profile" android:textSize="9sp" android:textColor="#FFFFFF" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="4dp">
+
+                    <Button android:id="@+id/btn_token_alarms" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Alarms" android:textSize="9sp" android:textColor="#FFFFFF" />
+                    <Button android:id="@+id/btn_token_next" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:background="@drawable/btn_ghost" android:text="+ Next Event" android:textSize="9sp" android:textColor="#FFFFFF" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="SHORTCUTS"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_add"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/btn_accent"
+                    android:text="+ Add shortcut"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btn_add_webapp"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/btn_accent"
+                    android:text="+ Add Web App"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_search_apps"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/btn_ghost"
+                android:text="Search &amp; Launch All Apps"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <Button android:id="@+id/btn_sort" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Sort A–Z" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_swap" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Swap" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_prune" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Clean up" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_clear" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="3dp" android:background="@drawable/btn_ghost" android:text="Clear" android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <ListView
+                android:id="@+id/shortcut_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:divider="@null"
+                android:dividerHeight="8dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="FLOATING ISLAND &amp; EDGE SIDEBAR"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Floating island bar"
+                    android:textColor="@color/text"
+                    android:textSize="16sp" />
+
+                <Switch
+                    android:id="@+id/switch_island"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Edge sidebar (Glass pull-tab on screen edge)"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/switch_edge_sidebar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/row_card"
+                android:padding="12dp"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Show live battery in island"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/switch_island_battery"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_island_count"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/btn_ghost"
+                android:text="Island icon count: 4 (tap to cycle 2–6)"
+                android:textColor="#FFFFFF" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Separate Island Apps from Home"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <Switch
+                    android:id="@+id/switch_island_separate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_manage_island_apps"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/btn_ghost"
+                android:text="Manage Island Apps (16 Slots)"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btn_island_perm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/btn_ghost"
+                android:text="Allow 'Display over other apps'"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+
+        <!-- ==================== SECTION: GENERAL, WIDGETS & BACKUP ==================== -->
+        <LinearLayout
+            android:id="@+id/sec_group_general"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="PIN TO SYSTEM"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <Button
+                android:id="@+id/btn_set_home"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/btn_ghost"
+                android:text="Set as Default Home Launcher (Optional)"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="6dp" />
+
+            <Button
+                android:id="@+id/btn_pin_tiles"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/btn_ghost"
+                android:text="Pin Quick Settings tiles"
+                android:textColor="#FFFFFF" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <Button android:id="@+id/btn_pin_w1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="1×1" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_pin_w2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="2×1" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_pin_w4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="4×1" android:textColor="#FFFFFF" />
+                <Button android:id="@+id/btn_pin_w44" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:background="@drawable/btn_ghost" android:text="4×4" android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="BACKUP"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_backup_export"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginEnd="4dp"
                     android:background="@drawable/btn_ghost"
-                    android:text="Icon Pack"
-                    android:textColor="#FFFFFF"
-                    android:textSize="12sp" />
+                    android:text="Export backup"
+                    android:textColor="#FFFFFF" />
 
                 <Button
-                    android:id="@+id/btn_hidden_apps"
+                    android:id="@+id/btn_backup_import"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="4dp"
                     android:background="@drawable/btn_ghost"
-                    android:text="Hidden Apps"
-                    android:textColor="#FFFFFF"
-                    android:textSize="12sp" />
+                    android:text="Restore backup"
+                    android:textColor="#FFFFFF" />
             </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/row_card"
-            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Glass card opacity"
-                android:textColor="@color/text"
-                android:textSize="14sp" />
-
-            <SeekBar
-                android:id="@+id/seek_opacity"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Lock screen memo (optional)"
-                android:textColor="@color/text"
-                android:textSize="14sp"
-                android:paddingTop="8dp" />
-
-            <EditText
-                android:id="@+id/edit_memo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="e.g. {battery} · {date}"
-                android:textColorHint="@color/text_dim"
-                android:textColor="@color/text"
-                android:inputType="text"
-                android:maxLines="1" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Insert live stat tokens:"
+                android:text="ONE-TIME SETUP"
                 android:textColor="@color/text_dim"
                 android:textSize="11sp"
-                android:paddingTop="4dp" />
+                android:letterSpacing="0.2"
+                android:paddingTop="14dp"
+                android:paddingBottom="6dp" />
 
-            <LinearLayout
+            <Button
+                android:id="@+id/btn_setup_notif"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingTop="4dp">
+                android:background="@drawable/btn_ghost"
+                android:text="1. Allow notifications"
+                android:textColor="#FFFFFF" />
 
-                <Button android:id="@+id/btn_token_battery" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Battery" android:textSize="9sp" android:textColor="#FFFFFF" />
-                <Button android:id="@+id/btn_token_date" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Date" android:textSize="9sp" android:textColor="#FFFFFF" />
-                <Button android:id="@+id/btn_token_time" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Time" android:textSize="9sp" android:textColor="#FFFFFF" />
-                <Button android:id="@+id/btn_token_profile" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:background="@drawable/btn_ghost" android:text="+ Profile" android:textSize="9sp" android:textColor="#FFFFFF" />
-            </LinearLayout>
-
-            <LinearLayout
+            <Button
+                android:id="@+id/btn_setup_lockscreen"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingTop="4dp">
-
-                <Button android:id="@+id/btn_token_alarms" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="2dp" android:background="@drawable/btn_ghost" android:text="+ Alarms" android:textSize="9sp" android:textColor="#FFFFFF" />
-                <Button android:id="@+id/btn_token_next" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginStart="2dp" android:background="@drawable/btn_ghost" android:text="+ Next Event" android:textSize="9sp" android:textColor="#FFFFFF" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="SHORTCUTS"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="14dp"
-            android:paddingBottom="6dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btn_add"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:background="@drawable/btn_accent"
-                android:text="+ Add shortcut"
-                android:textColor="#FFFFFF" />
-
-            <Button
-                android:id="@+id/btn_add_webapp"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:background="@drawable/btn_accent"
-                android:text="+ Add Web App"
-                android:textColor="#FFFFFF" />
-        </LinearLayout>
-
-        <Button
-            android:id="@+id/btn_search_apps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/btn_ghost"
-            android:text="Search &amp; Launch All Apps"
-            android:textColor="#FFFFFF"
-            android:layout_marginTop="6dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
-
-            <Button android:id="@+id/btn_sort" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Sort A–Z" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/btn_swap" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Swap" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/btn_prune" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:background="@drawable/btn_ghost" android:text="Clean up" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/btn_clear" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="3dp" android:background="@drawable/btn_ghost" android:text="Clear" android:textColor="#FFFFFF" />
-        </LinearLayout>
-
-        <ListView
-            android:id="@+id/shortcut_list"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:divider="@null"
-            android:dividerHeight="8dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="PIN TO SYSTEM"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="8dp"
-            android:paddingBottom="6dp" />
-
-        <Button
-            android:id="@+id/btn_set_home"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/btn_ghost"
-            android:text="Set as Default Home Launcher"
-            android:textColor="#FFFFFF"
-            android:layout_marginBottom="6dp" />
-
-        <Button
-            android:id="@+id/btn_pin_tiles"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/btn_ghost"
-            android:text="Pin Quick Settings tiles"
-            android:textColor="#FFFFFF" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
-
-            <Button android:id="@+id/btn_pin_w1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="1×1" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/btn_pin_w2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="2×1" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/btn_pin_w4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:layout_marginEnd="4dp" android:background="@drawable/btn_ghost" android:text="4×1" android:textColor="#FFFFFF" />
-            <Button android:id="@+id/btn_pin_w44" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:background="@drawable/btn_ghost" android:text="4×4" android:textColor="#FFFFFF" />
-        </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="FLOATING ISLAND"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="14dp"
-            android:paddingBottom="6dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="@drawable/row_card"
-            android:padding="12dp">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Floating island bar"
-                android:textColor="@color/text"
-                android:textSize="16sp" />
-
-            <Switch
-                android:id="@+id/switch_island"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="@drawable/row_card"
-            android:padding="12dp"
-            android:layout_marginTop="8dp">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Show live battery in island"
-                android:textColor="@color/text"
-                android:textSize="15sp" />
-
-            <Switch
-                android:id="@+id/switch_island_battery"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <Button
-            android:id="@+id/btn_island_count"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/btn_ghost"
-            android:text="Island icon count: 4 (tap to cycle 2–6)"
-            android:textColor="#FFFFFF" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingTop="8dp">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Separate Island Apps from Home"
-                android:textColor="@color/text"
-                android:textSize="15sp" />
-
-            <Switch
-                android:id="@+id/switch_island_separate"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-        </LinearLayout>
-
-        <Button
-            android:id="@+id/btn_manage_island_apps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/btn_ghost"
-            android:text="Manage Island Apps (16 Slots)"
-            android:textColor="#FFFFFF" />
-
-        <Button
-            android:id="@+id/btn_island_perm"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/btn_ghost"
-            android:text="Allow 'Display over other apps'"
-            android:textColor="#FFFFFF" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="BACKUP"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="14dp"
-            android:paddingBottom="6dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btn_backup_export"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/btn_ghost"
-                android:text="Export backup"
+                android:text="2. Show notifications on lock screen"
                 android:textColor="#FFFFFF" />
 
             <Button
-                android:id="@+id/btn_backup_import"
-                android:layout_width="0dp"
+                android:id="@+id/btn_setup_battery"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/btn_ghost"
-                android:text="Restore backup"
+                android:text="3. Battery: unrestricted"
                 android:textColor="#FFFFFF" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Tip: long-press any shortcut in the list to delete it. Drag the floating island anywhere (e.g. up by the camera); long-press it to hide it, the toggle in the app brings it back. Add a “Switch dock profile” shortcut to flip profiles from the lock screen. Tap any shortcut's icon in the list to change it: app icon, letter tile, emoji, or your own photo."
+                android:textColor="@color/text_dim"
+                android:textSize="13sp"
+                android:paddingTop="14dp"
+                android:paddingBottom="8dp" />
         </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="ONE-TIME SETUP"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp"
-            android:letterSpacing="0.2"
-            android:paddingTop="14dp"
-            android:paddingBottom="6dp" />
-
-        <Button
-            android:id="@+id/btn_setup_notif"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/btn_ghost"
-            android:text="1. Allow notifications"
-            android:textColor="#FFFFFF" />
-
-        <Button
-            android:id="@+id/btn_setup_lockscreen"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/btn_ghost"
-            android:text="2. Show notifications on lock screen"
-            android:textColor="#FFFFFF" />
-
-        <Button
-            android:id="@+id/btn_setup_battery"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/btn_ghost"
-            android:text="3. Battery: unrestricted"
-            android:textColor="#FFFFFF" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Tip: long-press any shortcut in the list to delete it. Drag the floating island anywhere (e.g. up by the camera); long-press it to hide it, the toggle in the app brings it back. Add a “Switch dock profile” shortcut to flip profiles from the lock screen. Tap any shortcut's icon in the list to change it: app icon, letter tile, emoji, or your own photo."
-            android:textColor="@color/text_dim"
-            android:textSize="13sp"
-            android:paddingTop="14dp"
-            android:paddingBottom="8dp" />
     </LinearLayout>
 </ScrollView>

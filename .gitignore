@@ -2,7 +2,9 @@ build-out/
 *.idsig
 debug.keystore
 *.zip
+*.apk
 screencap*.png
 node_modules/
 dist/
+public/assets/aistudio/
 .env

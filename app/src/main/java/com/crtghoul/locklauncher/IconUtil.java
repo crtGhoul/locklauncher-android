@@ -90,8 +90,11 @@ public class IconUtil {
         if (s == null) return letterIcon("?", -1);
         String cacheKey = (s.id != null ? s.id : "") + "_" + (s.pkg != null ? s.pkg : "") + "_" + (s.type != null ? s.type : "")
                 + "_" + (s.iconMode != null ? s.iconMode : "") + "_" + s.iconColor + "_" + (s.iconEmoji != null ? s.iconEmoji : "")
-                + "_" + s.profileSerial + "_" + ShortcutStore.isRoundIcons(ctx) + "_" + ShortcutStore.isMonochromeIcons(ctx)
-                + "_" + IconPackManager.getActiveIconPack(ctx);
+                + "_" + s.profileSerial + "_" + ShortcutStore.getIconShape(ctx) + "_" + ShortcutStore.isMinimalIcons(ctx)
+                + "_" + ShortcutStore.isGlassIconBackgrounds(ctx) + "_" + GlassThemeHelper.getMode(ctx)
+                + "_" + GlassThemeHelper.getSubTheme(ctx) + "_" + GlassThemeHelper.getSurfaceOpacityPct(ctx)
+                + "_" + GlassThemeHelper.getDarknessPct(ctx) + "_" + GlassThemeHelper.getAccentHue(ctx)
+                + "_" + GlassThemeHelper.getIconScalePct(ctx) + "_" + IconPackManager.getActiveIconPack(ctx);
 
         Bitmap cached = sIconLru.get(cacheKey);
         if (cached != null && !cached.isRecycled()) {
@@ -99,17 +102,18 @@ public class IconUtil {
         }
 
         if (s.isFolder()) {
-            Bitmap fb = finishIcon(ctx, folderBitmap(ctx, s));
+            Bitmap fb = finishIcon(ctx, folderBitmap(ctx, s), false);
             sIconLru.put(cacheKey, fb);
             return fb;
         }
         Bitmap custom = loadCustomIcon(ctx, s.id);
         if (custom != null) {
-            Bitmap cb = finishIcon(ctx, custom);
+            Bitmap cb = finishIcon(ctx, custom, true);
             sIconLru.put(cacheKey, cb);
             return cb;
         }
         Bitmap b;
+        boolean alreadyMinimalForeground = false;
         if (Shortcut.ICON_EMOJI.equals(s.iconMode)) {
             b = emojiBitmap(
                     s.iconEmoji == null || s.iconEmoji.isEmpty() ? "\uD83D\uDE80" : s.iconEmoji,
@@ -126,8 +130,14 @@ public class IconUtil {
                             if (uh != null) {
                                 List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
                                 if (!acts.isEmpty()) {
-                                    b = drawableToBitmap(acts.get(0).getBadgedIcon(0));
-                                    Bitmap finished = finishIcon(ctx, b);
+                                    Drawable cloneDrawable = acts.get(0).getBadgedIcon(0);
+                                    if (ShortcutStore.isMinimalIcons(ctx)) {
+                                        b = renderMinimalDrawable(ctx, cloneDrawable);
+                                        alreadyMinimalForeground = true;
+                                    } else {
+                                        b = drawableToBitmap(cloneDrawable);
+                                    }
+                                    Bitmap finished = finishIcon(ctx, b, !alreadyMinimalForeground);
                                     sIconLru.put(cacheKey, finished);
                                     return finished;
                                 }
@@ -143,7 +153,12 @@ public class IconUtil {
                     } else {
                         PackageManager pm = ctx.getPackageManager();
                         Drawable d = pm.getApplicationIcon(s.pkg);
-                        b = drawableToBitmap(d);
+                        if (ShortcutStore.isMinimalIcons(ctx)) {
+                            b = renderMinimalDrawable(ctx, d);
+                            alreadyMinimalForeground = true;
+                        } else {
+                            b = drawableToBitmap(d);
+                        }
                     }
                 } catch (Exception e) {
                     b = letterIcon("?", s.iconColor);
@@ -162,22 +177,113 @@ public class IconUtil {
                 b = letterIcon(label, s.iconColor);
             }
         }
-        Bitmap finished = finishIcon(ctx, b);
+        Bitmap finished = finishIcon(ctx, b, !alreadyMinimalForeground);
         sIconLru.put(cacheKey, finished);
         return finished;
+    }
+
+    /**
+     * Renders an app Drawable in Everything Launcher's "Minimal" icon style:
+     * strips the solid background plate of AdaptiveIconDrawables and renders only
+     * the monochrome/foreground logo glyph (optionally over a translucent glass tile
+     * if "Glass backgrounds for icons" is enabled).
+     */
+    public static Bitmap renderMinimalDrawable(Context ctx, Drawable d) {
+        Bitmap out = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        boolean glassBg = ShortcutStore.isGlassIconBackgrounds(ctx);
+        float scaleFrac = GlassThemeHelper.getIconScalePct(ctx) / 100f;
+
+        if (glassBg) {
+            drawGlassTilePlate(ctx, c);
+        }
+
+        if (d != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && d instanceof android.graphics.drawable.AdaptiveIconDrawable) {
+            android.graphics.drawable.AdaptiveIconDrawable aid =
+                    (android.graphics.drawable.AdaptiveIconDrawable) d;
+            Drawable fg = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                try {
+                    fg = aid.getMonochrome();
+                } catch (Exception ignored) {}
+            }
+            if (fg == null) {
+                fg = aid.getForeground();
+            }
+            if (fg != null) {
+                Drawable mutated = fg.mutate();
+                // Adaptive foreground layers have 18% safe-zone inset built in
+                int inset = (int) (SIZE * (0.04f + (1f - scaleFrac) * 0.18f));
+                Bitmap fgBmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+                Canvas fgCanvas = new Canvas(fgBmp);
+                mutated.setBounds(-inset, -inset, SIZE + inset, SIZE + inset);
+                mutated.draw(fgCanvas);
+
+                // Desaturate and boost luminance for crisp minimal glyph appearance
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix(new float[]{
+                        0.35f, 0.55f, 0.10f, 0, 55,
+                        0.35f, 0.55f, 0.10f, 0, 55,
+                        0.35f, 0.55f, 0.10f, 0, 60,
+                        0,     0,     0,     1, 0
+                });
+                p.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
+                c.drawBitmap(fgBmp, 0, 0, p);
+                return shapeMask(ctx, out);
+            }
+        }
+
+        // Fallback for non-adaptive drawables: desaturate & scale cleanly inside the tile
+        Bitmap raw = drawableToBitmap(d);
+        Bitmap mono = toMonochrome(raw);
+        if (mono != null) {
+            int pad = (int) (SIZE * (glassBg ? 0.18f : 0.08f) / Math.max(0.75f, scaleFrac));
+            pad = Math.max(4, Math.min(SIZE / 3, pad));
+            c.drawBitmap(mono, null, new RectF(pad, pad, SIZE - pad, SIZE - pad),
+                    new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
+        }
+        return shapeMask(ctx, out);
+    }
+
+    private static void drawGlassTilePlate(Context ctx, Canvas c) {
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        int surfaceColor = GlassThemeHelper.resolveSurfaceFillColor(ctx);
+        fill.setColor(surfaceColor);
+        RectF rect = new RectF(2, 2, SIZE - 2, SIZE - 2);
+        String shape = ShortcutStore.getIconShape(ctx);
+        if (ShortcutStore.SHAPE_CIRCLE.equals(shape)) {
+            c.drawOval(rect, fill);
+        } else if (ShortcutStore.SHAPE_SQUARE.equals(shape)) {
+            c.drawRoundRect(rect, SIZE * 0.12f, SIZE * 0.12f, fill);
+        } else {
+            c.drawRoundRect(rect, SIZE * 0.28f, SIZE * 0.28f, fill);
+        }
+
+        Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
+        border.setStyle(Paint.Style.STROKE);
+        border.setStrokeWidth(3f);
+        border.setColor(0x48FFFFFF);
+        if (ShortcutStore.SHAPE_CIRCLE.equals(shape)) {
+            c.drawOval(rect, border);
+        } else if (ShortcutStore.SHAPE_SQUARE.equals(shape)) {
+            c.drawRoundRect(rect, SIZE * 0.12f, SIZE * 0.12f, border);
+        } else {
+            c.drawRoundRect(rect, SIZE * 0.28f, SIZE * 0.28f, border);
+        }
     }
 
     public static Bitmap folderBitmap(Context ctx, Shortcut folder) {
         Bitmap out = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(out);
         Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(0xEE1B1F31);
+        bg.setColor(GlassThemeHelper.resolveSurfaceFillColor(ctx));
         float rad = SIZE * 0.28f;
         canvas.drawRoundRect(new RectF(0, 0, SIZE, SIZE), rad, rad, bg);
         Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
         stroke.setStyle(Paint.Style.STROKE);
-        stroke.setStrokeWidth(SIZE * 0.04f);
-        stroke.setColor(0x44FFFFFF);
+        stroke.setStrokeWidth(SIZE * 0.035f);
+        stroke.setColor(0x52FFFFFF);
         canvas.drawRoundRect(new RectF(2, 2, SIZE - 2, SIZE - 2), rad, rad, stroke);
 
         List<Shortcut> items = folder.folderItems;
@@ -236,14 +342,50 @@ public class IconUtil {
         }
     }
 
-    private static Bitmap finishIcon(Context ctx, Bitmap b) {
-        if (ShortcutStore.isRoundIcons(ctx)) {
-            b = circleCrop(b);
-        }
-        if (ShortcutStore.isMonochromeIcons(ctx)) {
+    private static Bitmap finishIcon(Context ctx, Bitmap b, boolean applyMonochromeAndGlassWrap) {
+        if (b == null) return letterIcon("?", -1);
+        if (applyMonochromeAndGlassWrap && ShortcutStore.isMinimalIcons(ctx)) {
             b = toMonochrome(b);
         }
-        return b;
+        if (applyMonochromeAndGlassWrap && ShortcutStore.isGlassIconBackgrounds(ctx)
+                && (!IconPackManager.getActiveIconPack(ctx).isEmpty() || ShortcutStore.isMinimalIcons(ctx))) {
+            Bitmap wrapped = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(wrapped);
+            drawGlassTilePlate(ctx, c);
+            float scale = GlassThemeHelper.getIconScalePct(ctx) / 100f;
+            int pad = Math.max(6, Math.min(SIZE / 3, (int) (SIZE * (0.16f / Math.max(0.75f, scale)))));
+            c.drawBitmap(b, null, new RectF(pad, pad, SIZE - pad, SIZE - pad),
+                    new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
+            b = wrapped;
+        }
+        return shapeMask(ctx, b);
+    }
+
+    private static Bitmap shapeMask(Context ctx, Bitmap src) {
+        if (src == null) return null;
+        String shape = ShortcutStore.getIconShape(ctx);
+        if (ShortcutStore.SHAPE_CIRCLE.equals(shape) || ShortcutStore.isRoundIcons(ctx)) {
+            return circleCrop(src);
+        }
+        if (ShortcutStore.SHAPE_SQUARE.equals(shape)) {
+            return roundedRectCrop(src, SIZE * 0.12f);
+        }
+        if (ShortcutStore.SHAPE_ROUNDED.equals(shape)) {
+            return roundedRectCrop(src, SIZE * 0.28f);
+        }
+        return src;
+    }
+
+    private static Bitmap roundedRectCrop(Bitmap src, float radius) {
+        Bitmap scaled = Bitmap.createScaledBitmap(src, SIZE, SIZE, true);
+        Bitmap out = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        c.drawRoundRect(new RectF(0, 0, SIZE, SIZE), radius, radius, p);
+        p.setXfermode(new android.graphics.PorterDuffXfermode(
+                android.graphics.PorterDuff.Mode.SRC_IN));
+        c.drawBitmap(scaled, 0, 0, p);
+        return out;
     }
 
     public static Bitmap toMonochrome(Bitmap src) {
@@ -820,10 +962,16 @@ public class IconUtil {
         }
     }
 
-    /** Applies the glass opacity slider to the card background ImageView. */
+    /** Applies the unified Glass & Blur theme to the RemoteViews card background ImageView. */
     public static void applyCardStyle(Context ctx, RemoteViews rv) {
         try {
-            rv.setInt(R.id.card_bg, "setImageAlpha", ShortcutStore.glassOpacity(ctx));
+            Bitmap glassBmp = GlassThemeHelper.buildRemoteViewsCardBitmap(ctx, 340, 140, 20);
+            if (glassBmp != null) {
+                rv.setImageViewBitmap(R.id.card_bg, glassBmp);
+                rv.setInt(R.id.card_bg, "setImageAlpha", 255);
+            } else {
+                rv.setInt(R.id.card_bg, "setImageAlpha", ShortcutStore.glassOpacity(ctx));
+            }
         } catch (Exception ignored) {
         }
     }

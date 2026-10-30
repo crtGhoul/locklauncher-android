@@ -62,6 +62,10 @@ public class IslandService extends Service {
     private boolean mediaDismissed = false;
     private String lastChargingMsg = null;
 
+    private View sidebarView;
+    private WindowManager.LayoutParams sidebarParams;
+    private boolean sidebarExpanded = false;
+
     private Handler mainHandler;
     private BroadcastReceiver batteryReceiver;
 
@@ -94,7 +98,13 @@ public class IslandService extends Service {
     }
 
     public static void refresh(Context ctx) {
-        if (!running) return;
+        if (!canShow(ctx)) return;
+        if (!running) {
+            if (isIslandOn(ctx) || ShortcutStore.isEdgeSidebarOn(ctx)) {
+                start(ctx);
+            }
+            return;
+        }
         try {
             Intent i = new Intent(ctx, IslandService.class).setAction(ACTION_REFRESH);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -123,10 +133,10 @@ public class IslandService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel chan = new NotificationChannel(
                     CHANNEL_ID,
-                    "Dynamic Island",
+                    "Dynamic Island & Edge Sidebar",
                     NotificationManager.IMPORTANCE_MIN
             );
-            chan.setDescription("Dynamic Island overlay service");
+            chan.setDescription("Dynamic Island & Edge Sidebar overlay service");
             chan.setShowBadge(false);
             chan.enableLights(false);
             chan.enableVibration(false);
@@ -136,8 +146,8 @@ public class IslandService extends Service {
                 nm.createNotificationChannel(chan);
             }
             Notification.Builder nb = new Notification.Builder(this, CHANNEL_ID)
-                    .setContentTitle("Dynamic Island Active")
-                    .setContentText("Tap to configure Island")
+                    .setContentTitle("Dynamic Island & Sidebar Active")
+                    .setContentText("Tap to configure Glass & Overlays")
                     .setSmallIcon(R.drawable.ic_launcher)
                     .setOngoing(true)
                     .setCategory(Notification.CATEGORY_SERVICE);
@@ -172,11 +182,11 @@ public class IslandService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         running = true;
         ensureForeground();
-        if (ACTION_REFRESH.equals(intent != null ? intent.getAction() : "")) {
-            rebuild();
-        } else if (islandView == null) {
-            showCollapsed();
+        if (!isIslandOn(this) && !ShortcutStore.isEdgeSidebarOn(this)) {
+            stopSelf();
+            return START_NOT_STICKY;
         }
+        rebuild();
         return START_STICKY;
     }
 
@@ -185,6 +195,7 @@ public class IslandService extends Service {
         running = false;
         unregisterIslandReceivers();
         removeView();
+        removeSidebar();
         super.onDestroy();
     }
 
@@ -197,9 +208,7 @@ public class IslandService extends Service {
                     if (Intent.ACTION_POWER_CONNECTED.equals(action)) {
                         triggerChargingPulse();
                     } else if (LockNotificationListenerService.ACTION_NOTIFICATIONS_CHANGED.equals(action)) {
-                        if (!expanded) {
-                            showCollapsed();
-                        }
+                        rebuild();
                     }
                 }
             };
@@ -268,6 +277,7 @@ public class IslandService extends Service {
                 PixelFormat.TRANSLUCENT);
         p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         p.y = statusBarHeight() + dp(8);
+        GlassThemeHelper.applyWindowBlurIfSupported(this, p);
         return p;
     }
 
@@ -303,6 +313,7 @@ public class IslandService extends Service {
 
     private void showCollapsed() {
         removeView();
+        if (!isIslandOn(this)) return;
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         // Check 1: Charging Pulse State
@@ -326,7 +337,7 @@ public class IslandService extends Service {
         LinearLayout pill = new LinearLayout(this);
         pill.setOrientation(LinearLayout.HORIZONTAL);
         pill.setGravity(Gravity.CENTER_VERTICAL);
-        pill.setBackgroundResource(R.drawable.dock_card);
+        GlassThemeHelper.applyToView(this, pill, 18f);
         pill.setPadding(dp(16), dp(8), dp(16), dp(8));
 
         TextView tv = new TextView(this);
@@ -344,7 +355,7 @@ public class IslandService extends Service {
         LinearLayout pill = new LinearLayout(this);
         pill.setOrientation(LinearLayout.HORIZONTAL);
         pill.setGravity(Gravity.CENTER_VERTICAL);
-        pill.setBackgroundResource(R.drawable.dock_card);
+        GlassThemeHelper.applyToView(this, pill, 18f);
         pill.setPadding(dp(14), dp(6), dp(14), dp(6));
 
         TextView musicIcon = new TextView(this);
@@ -419,7 +430,7 @@ public class IslandService extends Service {
 
     /**
      * Minimalist Collapsed Capsule Pill:
-     * Does NOT display app icons inside the collapsed pill!
+     * Styled with the unified Glass & Blur theme (Frosted, Liquid, or Classic).
      * Tap anywhere on the pill smoothly expands the Dynamic Island.
      */
     private void showDockPill() {
@@ -427,11 +438,7 @@ public class IslandService extends Service {
         pill.setOrientation(LinearLayout.HORIZONTAL);
         pill.setGravity(Gravity.CENTER);
 
-        GradientDrawable pillBg = new GradientDrawable();
-        pillBg.setColor(0xF2000000); // Pure deep obsidian black
-        pillBg.setCornerRadius(dp(17));
-        pillBg.setStroke(dp(1), 0x33FFFFFF); // Sleek subtle frosted border
-        pill.setBackground(pillBg);
+        GlassThemeHelper.applyToView(this, pill, 17f);
 
         int padH = dp(14);
         int padV = dp(6);
@@ -452,7 +459,7 @@ public class IslandService extends Service {
         
         TextView glyph = new TextView(this);
         glyph.setText("● ");
-        glyph.setTextColor(0x7AFFFFFF);
+        glyph.setTextColor(GlassThemeHelper.resolveAccentColor(this));
         glyph.setTextSize(9);
         glyph.setPadding(0, 0, dp(5), 0);
         pill.addView(glyph);
@@ -463,7 +470,7 @@ public class IslandService extends Service {
             label.setTextColor(0xFF00E676);
         } else {
             label.setText("Island");
-            label.setTextColor(0xDDFFFFFF);
+            label.setTextColor(0xEEFFFFFF);
         }
         label.setTextSize(12);
         label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -570,11 +577,15 @@ public class IslandService extends Service {
      * High-res symmetrical 4-column deck of user's chosen Island apps with quick actions.
      */
     private void showExpanded() {
+        if (!isIslandOn(this)) return;
         // True FLIP needs the pill alive: do NOT removeView() yet.
         // Only morph from a collapsed pill; if already expanded, the
         // current view is a deck root, not a pill, so skip the morph.
         final boolean wasExpanded = expanded;
         final View pillToMorph = wasExpanded ? null : islandView;
+        if (wasExpanded) {
+            removeView();
+        }
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         List<Shortcut> allShortcuts = ShortcutStore.loadIsland(this);
         final List<Shortcut> shortcuts = new ArrayList<>();
@@ -587,11 +598,7 @@ public class IslandService extends Service {
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        // AMOLED deck: layered obsidian + specular + ambient glow
-        // tinted from the first island app's dominant icon colour.
-        int deckAccent = shortcuts.isEmpty() ? 0xFF5865F2
-                : IslandGlowHelper.dominantColor(IconUtil.iconFor(this, shortcuts.get(0)));
-        card.setBackground(IslandGlowHelper.deckBackground(deckAccent, dp(22)));
+        GlassThemeHelper.applyToView(this, card, 22f);
         card.setPadding(dp(16), dp(14), dp(16), dp(16));
 
         int cardW = Math.min(getResources().getDisplayMetrics().widthPixels - dp(32), dp(360));
@@ -600,10 +607,6 @@ public class IslandService extends Service {
         clp.topMargin = statusBarHeight() + dp(8);
         card.setLayoutParams(clp);
         card.setOnClickListener(v -> { }); // prevent dismiss on card tap
-        // Old 180ms Decelerate entrance REMOVED: it would fight the
-        // spring morph/entrance applied after the card is added below.
-        // Backdrop tap now collapses with a spring exit, not an
-        // immediate rebuild.
         root.setOnClickListener(v -> IslandMorphHelper.collapse(card, () -> showCollapsed()));
 
         // Header Bar
@@ -741,6 +744,7 @@ public class IslandService extends Service {
             GridLayout grid = new GridLayout(this);
             grid.setColumnCount(4);
             int colW = (cardW - dp(32)) / 4;
+            int iconPx = dp(Math.max(32, Math.min(58, (int) (44 * (GlassThemeHelper.getIconScalePct(this) / 100f)))));
 
             for (int i = 0; i < shortcuts.size(); i++) {
                 final int index = i;
@@ -750,15 +754,32 @@ public class IslandService extends Service {
                 cell.setGravity(Gravity.CENTER);
                 GridLayout.LayoutParams glp = new GridLayout.LayoutParams();
                 glp.width = colW;
-                glp.height = dp(76);
+                glp.height = dp(78);
                 cell.setLayoutParams(glp);
                 cell.setPadding(dp(2), dp(4), dp(2), dp(4));
 
+                FrameLayout iconWrap = new FrameLayout(this);
+                LinearLayout.LayoutParams fwLp = new LinearLayout.LayoutParams(iconPx + dp(8), iconPx + dp(4));
+                iconWrap.setLayoutParams(fwLp);
+
                 ImageView iv = new ImageView(this);
-                LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(44), dp(44));
+                FrameLayout.LayoutParams ilp = new FrameLayout.LayoutParams(iconPx, iconPx, Gravity.CENTER);
                 iv.setLayoutParams(ilp);
                 iv.setImageBitmap(IconUtil.iconFor(this, s));
-                cell.addView(iv);
+                iconWrap.addView(iv);
+
+                if (s.isApp()) {
+                    TextView notifBadge = new TextView(this);
+                    FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.WRAP_CONTENT,
+                            FrameLayout.LayoutParams.WRAP_CONTENT,
+                            Gravity.TOP | Gravity.END);
+                    notifBadge.setLayoutParams(blp);
+                    LockNotificationListenerService.bindBadgeView(this, notifBadge, s.pkg);
+                    iconWrap.addView(notifBadge);
+                }
+
+                cell.addView(iconWrap);
 
                 TextView label = new TextView(this);
                 label.setText(s.label);
@@ -767,7 +788,7 @@ public class IslandService extends Service {
                 label.setMaxLines(1);
                 label.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 label.setGravity(Gravity.CENTER);
-                label.setPadding(0, dp(3), 0, 0);
+                label.setPadding(0, dp(2), 0, 0);
                 cell.addView(label);
 
                 cell.setOnClickListener(v -> {
@@ -801,6 +822,7 @@ public class IslandService extends Service {
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                 | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
+        GlassThemeHelper.applyWindowBlurIfSupported(this, params);
         islandView = root;
         expanded = true;
         try {
@@ -827,6 +849,183 @@ public class IslandService extends Service {
                 }
             }
         });
+    }
+
+    // ---------- Edge Sidebar (Glass Theme) ----------
+
+    private void removeSidebar() {
+        if (wm != null && sidebarView != null) {
+            try {
+                wm.removeView(sidebarView);
+            } catch (Exception ignored) {
+            }
+        }
+        sidebarView = null;
+        sidebarExpanded = false;
+    }
+
+    private void showOrUpdateSidebar() {
+        removeSidebar();
+        if (!ShortcutStore.isEdgeSidebarOn(this) || !canShow(this)) return;
+        wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        if (sidebarExpanded) {
+            showExpandedSidebar();
+        } else {
+            showCollapsedSidebarHandle();
+        }
+    }
+
+    private void showCollapsedSidebarHandle() {
+        FrameLayout handleWrap = new FrameLayout(this);
+        handleWrap.setPadding(dp(4), dp(8), dp(2), dp(8));
+
+        View bar = new View(this);
+        GlassThemeHelper.applyToView(this, bar, 8f);
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(dp(6), dp(72), Gravity.CENTER_VERTICAL | Gravity.END);
+        bar.setLayoutParams(blp);
+        handleWrap.addView(bar);
+
+        sidebarParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                        | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                PixelFormat.TRANSLUCENT);
+        sidebarParams.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        sidebarParams.y = getSharedPreferences("dock", MODE_PRIVATE).getInt("sidebar_y", 0);
+
+        final int[] startY = new int[2];
+        final boolean[] dragged = new boolean[1];
+        handleWrap.setOnTouchListener((v, e) -> {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startY[0] = sidebarParams.y;
+                    startY[1] = (int) e.getRawY();
+                    dragged[0] = false;
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    int dy = (int) e.getRawY() - startY[1];
+                    if (Math.abs(dy) > dp(10)) {
+                        dragged[0] = true;
+                        sidebarParams.y = startY[0] + dy;
+                        try { wm.updateViewLayout(sidebarView, sidebarParams); } catch (Exception ignored) {}
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if (!dragged[0]) {
+                        sidebarExpanded = true;
+                        showOrUpdateSidebar();
+                    } else {
+                        getSharedPreferences("dock", MODE_PRIVATE).edit().putInt("sidebar_y", sidebarParams.y).apply();
+                    }
+                    return true;
+            }
+            return false;
+        });
+
+        sidebarView = handleWrap;
+        try {
+            wm.addView(sidebarView, sidebarParams);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void showExpandedSidebar() {
+        FrameLayout backdrop = new FrameLayout(this);
+        backdrop.setOnClickListener(v -> {
+            sidebarExpanded = false;
+            showOrUpdateSidebar();
+        });
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(Gravity.CENTER_HORIZONTAL);
+        GlassThemeHelper.applyToView(this, panel, 24f);
+        panel.setPadding(dp(10), dp(14), dp(10), dp(14));
+        panel.setOnClickListener(v -> {});
+
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(
+                dp(68), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.END | Gravity.CENTER_VERTICAL);
+        plp.rightMargin = dp(8);
+        panel.setLayoutParams(plp);
+
+        List<Shortcut> list = ShortcutStore.load(this);
+        ScrollView sv = new ScrollView(this);
+        sv.setVerticalScrollBarEnabled(false);
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        int iconPx = dp(Math.max(32, Math.min(54, (int) (42 * (GlassThemeHelper.getIconScalePct(this) / 100f)))));
+        for (Shortcut s : list) {
+            if (s == null || s.isEmpty()) continue;
+            FrameLayout itemWrap = new FrameLayout(this);
+            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(iconPx + dp(8), iconPx + dp(10));
+            itemWrap.setLayoutParams(ilp);
+
+            ImageView iv = new ImageView(this);
+            FrameLayout.LayoutParams ivLp = new FrameLayout.LayoutParams(iconPx, iconPx, Gravity.CENTER);
+            iv.setLayoutParams(ivLp);
+            iv.setImageBitmap(IconUtil.iconFor(this, s));
+            itemWrap.addView(iv);
+
+            if (s.isApp()) {
+                TextView nb = new TextView(this);
+                FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        Gravity.TOP | Gravity.END);
+                nb.setLayoutParams(blp);
+                LockNotificationListenerService.bindBadgeView(this, nb, s.pkg);
+                itemWrap.addView(nb);
+            }
+
+            itemWrap.setOnClickListener(v -> {
+                sidebarExpanded = false;
+                showOrUpdateSidebar();
+                IconUtil.fireShortcut(this, s);
+            });
+            col.addView(itemWrap);
+        }
+        sv.addView(col);
+        LinearLayout.LayoutParams svLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                Math.min(dp(360), dp(54 * Math.max(1, col.getChildCount()))));
+        sv.setLayoutParams(svLp);
+        panel.addView(sv);
+
+        TextView closeBtn = new TextView(this);
+        closeBtn.setText("✕");
+        closeBtn.setTextColor(0xAAFFFFFF);
+        closeBtn.setTextSize(13);
+        closeBtn.setGravity(Gravity.CENTER);
+        closeBtn.setPadding(0, dp(8), 0, dp(2));
+        closeBtn.setOnClickListener(v -> {
+            sidebarExpanded = false;
+            showOrUpdateSidebar();
+        });
+        panel.addView(closeBtn);
+
+        backdrop.addView(panel);
+
+        sidebarParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                PixelFormat.TRANSLUCENT);
+        GlassThemeHelper.applyWindowBlurIfSupported(this, sidebarParams);
+        sidebarView = backdrop;
+        try {
+            wm.addView(sidebarView, sidebarParams);
+        } catch (Exception ignored) {
+        }
     }
 
     private void showIslandAppMenu(Shortcut s, int index) {
@@ -972,8 +1171,13 @@ public class IslandService extends Service {
     }
 
     private void rebuild() {
-        if (expanded) showExpanded();
-        else showCollapsed();
+        if (isIslandOn(this)) {
+            if (expanded) showExpanded();
+            else showCollapsed();
+        } else {
+            removeView();
+        }
+        showOrUpdateSidebar();
     }
 
     /** Long-press hides the island; the in-app toggle brings it back. */
@@ -981,6 +1185,10 @@ public class IslandService extends Service {
         setIslandOn(this, false);
         Toast.makeText(this, "Island hidden — turn it back on in Lock Launcher",
                 Toast.LENGTH_LONG).show();
-        stopSelf();
+        if (!ShortcutStore.isEdgeSidebarOn(this)) {
+            stopSelf();
+        } else {
+            removeView();
+        }
     }
 }

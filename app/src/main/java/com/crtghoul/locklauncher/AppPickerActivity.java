@@ -917,7 +917,15 @@ public class AppPickerActivity extends Activity {
             TextView badge = v.findViewById(R.id.app_badge);
             TextView profileBadge = v.findViewById(R.id.app_badge_profile);
 
-            icon.setImageDrawable(e.icon);
+            if (ShortcutStore.isMinimalIcons(AppPickerActivity.this)
+                    || ShortcutStore.isGlassIconBackgrounds(AppPickerActivity.this)
+                    || ShortcutStore.isMonochromeIcons(AppPickerActivity.this)
+                    || !IconPackManager.getActiveIconPack(AppPickerActivity.this).isEmpty()) {
+                Shortcut tmp = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                icon.setImageBitmap(IconUtil.iconFor(AppPickerActivity.this, tmp));
+            } else {
+                icon.setImageDrawable(e.icon);
+            }
             boolean isLocked = ShortcutStore.isAppLocked(AppPickerActivity.this, e.pkg);
             name.setText((isLocked ? "🔒 " : "") + e.label);
 
@@ -939,17 +947,7 @@ public class AppPickerActivity extends Activity {
             }
 
             if (badge != null) {
-                if (LockNotificationListenerService.isBadgesEnabled(AppPickerActivity.this)) {
-                    int count = LockNotificationListenerService.getCount(e.pkg);
-                    if (count > 0) {
-                        badge.setText(count > 99 ? "99+" : String.valueOf(count));
-                        badge.setVisibility(View.VISIBLE);
-                    } else {
-                        badge.setVisibility(View.GONE);
-                    }
-                } else {
-                    badge.setVisibility(View.GONE);
-                }
+                LockNotificationListenerService.bindBadgeView(AppPickerActivity.this, badge, e.pkg);
             }
 
             if (check != null) {

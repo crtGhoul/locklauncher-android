@@ -1,0 +1,483 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg"
+    android:padding="20dp">
+
+    <!-- Top Progress Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="10dp">
+
+        <TextView
+            android:id="@+id/onb_brand_label"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Lock Launcher Setup"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/onb_step_dots"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="━  •  •  •"
+            android:textColor="@color/accent"
+            android:textSize="14sp"
+            android:letterSpacing="0.15" />
+
+        <TextView
+            android:id="@+id/btn_onb_skip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Skip"
+            android:textColor="@color/text_dim"
+            android:textSize="13sp"
+            android:paddingStart="16dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp" />
+    </LinearLayout>
+
+    <!-- Step Tag & Title -->
+    <TextView
+        android:id="@+id/onb_step_tag"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="01 / APPEARANCE"
+        android:textColor="@color/accent"
+        android:textSize="11sp"
+        android:letterSpacing="0.2"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/onb_step_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Choose your glass &amp; icon style."
+        android:textColor="@color/text"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:paddingTop="4dp" />
+
+    <TextView
+        android:id="@+id/onb_step_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Applies together to Dynamic Island, Edge Sidebar, and Lock Dock. You can change any of these later in Settings."
+        android:textColor="@color/text_dim"
+        android:textSize="13sp"
+        android:paddingTop="4dp"
+        android:paddingBottom="12dp" />
+
+    <!-- Live Interactive Glass Preview Banner -->
+    <FrameLayout
+        android:id="@+id/onb_preview_backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/row_card"
+        android:padding="14dp"
+        android:layout_marginBottom="12dp">
+
+        <LinearLayout
+            android:id="@+id/onb_preview_glass_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingBottom="8dp">
+
+                <TextView
+                    android:id="@+id/onb_preview_pill_label"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="●  Island · Edge Sidebar · Dock"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/onb_preview_mode_tag"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="FROSTED GLASS"
+                    android:textColor="#BBFFFFFF"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/onb_preview_icons_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Scrollable Step Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="none">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <!-- STEP 1: APPEARANCE -->
+            <LinearLayout
+                android:id="@+id/onb_panel_appearance"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="SURFACE STYLE"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.18"
+                    android:paddingBottom="6dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_mode_frosted"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/btn_accent"
+                    android:text="◉  Frosted Glass  (Blurred surface + soft specular rim)"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_mode_liquid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="○  Liquid Glass  (Refractive crystal sheen + highlight)"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_mode_classic"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="○  Classic  (Solid clean surface with wallpaper accent)"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ICON APPEARANCE"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.18"
+                    android:paddingTop="14dp"
+                    android:paddingBottom="6dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_onb_icons_original"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/btn_accent"
+                        android:text="Original (Full Color)"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF" />
+
+                    <Button
+                        android:id="@+id/btn_onb_icons_minimal"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/btn_ghost"
+                        android:text="Minimal (Logo Only)"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/row_card"
+                    android:padding="12dp"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Glass backgrounds behind icons"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+
+                    <Switch
+                        android:id="@+id/switch_onb_glass_icons"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- STEP 2: WALLPAPER -->
+            <LinearLayout
+                android:id="@+id/onb_panel_wallpaper"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/row_card"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="System &amp; Photo Wallpaper"
+                        android:textColor="@color/text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Pick an image from your gallery or system wallpaper picker to show behind your glass surfaces, or keep your current wallpaper."
+                        android:textColor="@color/text_dim"
+                        android:textSize="13sp"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="12dp" />
+
+                    <Button
+                        android:id="@+id/btn_onb_pick_wallpaper"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/btn_accent"
+                        android:text="Choose from My Photos / System Wallpaper →"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Use wallpaper accent color (Monet)"
+                            android:textColor="@color/text"
+                            android:textSize="14sp" />
+
+                        <Switch
+                            android:id="@+id/switch_onb_wallpaper_accent"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- STEP 3: PERMISSIONS -->
+            <LinearLayout
+                android:id="@+id/onb_panel_permissions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="100% offline — permissions are used strictly on-device for the features you choose to turn on."
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp"
+                    android:background="@drawable/row_card"
+                    android:padding="12dp"
+                    android:layout_marginBottom="10dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_perm_notif"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/btn_ghost"
+                    android:text="Notifications (Lock-Screen Dock)  →"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_perm_overlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="Display Over Other Apps (Island &amp; Edge Sidebar)  →"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_perm_listener"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="Notification &amp; Media Access (Badges &amp; Now Playing)  →"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_perm_accessibility"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="Screen Gestures (Accessibility for Double-Tap Lock)  →"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_perm_calendar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="Calendar Access (At-a-Glance Next Event)  →"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_perm_battery"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="Unrestricted Battery (Keep Dock &amp; Island Alive)  →"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp" />
+            </LinearLayout>
+
+            <!-- STEP 4: LAUNCHER MODE -->
+            <LinearLayout
+                android:id="@+id/onb_panel_launcher"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/btn_onb_keep_overlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/btn_accent"
+                    android:text="◉  Keep Current Default Launcher (Recommended)\nUse Lock Launcher as an overlay Island, Edge Sidebar, Lock Dock &amp; Widgets on top of your existing home screen."
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:padding="14dp" />
+
+                <Button
+                    android:id="@+id/btn_onb_choose_home"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/btn_ghost"
+                    android:text="○  Open System Default Home Selector\nOptionally use Lock Launcher's Home Screen as your default launcher."
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:gravity="start|center_vertical"
+                    android:padding="14dp" />
+            </LinearLayout>
+        </FrameLayout>
+    </ScrollView>
+
+    <!-- Bottom Navigation Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="12dp">
+
+        <Button
+            android:id="@+id/btn_onb_back"
+            android:layout_width="64dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/btn_ghost"
+            android:text="←"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btn_onb_next"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/btn_accent"
+            android:text="Continue with this look →"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>

@@ -80,7 +80,7 @@ const INITIAL_SHORTCUTS: AppShortcut[] = [
     url: 'https://github.com/crtGhoul/locklauncher-android',
     category: 'web',
     code: 'GH',
-    subtitle: 'Auto-Release v2.18 · Blob Saver',
+    subtitle: 'Auto-Release v2.20 · Blob Saver',
   },
   {
     id: 'dialer',
@@ -291,7 +291,7 @@ export default function App() {
           >
             LOCK LAUNCHER
           </a>
-          <span className="text-xs font-mono text-zinc-500 tabular-nums">v2.18 · BUILD 56</span>
+          <span className="text-xs font-mono text-zinc-500 tabular-nums">v2.20 · BUILD 58</span>
         </div>
 
         <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-zinc-400">
@@ -999,7 +999,7 @@ export default function App() {
 
                   <div className="pt-3 border-t border-zinc-900 flex items-center justify-between text-[11px] text-zinc-400">
                     <span>Tap YT Music or YouTube to open WebApp</span>
-                    <span className="font-mono tabular-nums">v2.18</span>
+                    <span className="font-mono tabular-nums">v2.20</span>
                   </div>
                 </div>
               )}
@@ -1015,11 +1015,11 @@ export default function App() {
                 RELEASE READY · GITHUB ACTIONS AUTO-APK SYNC
               </span>
               <span className="text-xs font-mono text-zinc-400 tabular-nums">
-                versionCode=56 · versionName=2.18
+                versionCode=58 · versionName=2.20
               </span>
             </div>
             <h1 className="text-2xl font-bold text-white font-display tracking-tight">
-              Lock Launcher v2.18 Architecture & De-AI Workbench
+              Lock Launcher v2.20 Architecture & Everything-Inspired Workbench
             </h1>
             <p className="text-sm text-zinc-300 mt-2 leading-relaxed">
               Updated across <code className="text-zinc-100">AdBlockEngine.java</code>,{' '}
@@ -1133,7 +1133,7 @@ export default function App() {
               {/* New Features & De-AI Summary Matrix */}
               <div className="pt-4 border-t border-zinc-800">
                 <h3 className="text-base font-semibold text-white font-display mb-3">
-                  02. What Was Added & De-AI'd in v2.18
+                  02. What Was Added in v2.20 (Build 58)
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
@@ -1147,35 +1147,35 @@ export default function App() {
                     <tbody className="divide-y divide-zinc-800/70 text-zinc-300">
                       <tr>
                         <td className="py-3 pr-4 font-medium text-white">
-                          SponsorBlock Auto-Skip
+                          Guided 4-Step First-Run Onboarding
                         </td>
                         <td className="py-3 px-4">
-                          In-video sponsor reads, intros, outros, and non-music skits inside YouTube & YT Music tracks
+                          Appearance & Icon Style, Wallpaper Picker, Optional Permissions, and Overlay vs Home role setup
                         </td>
                         <td className="py-3 pl-4 font-mono text-[11px]">
-                          sponsor.ajay.app/api/skipSegments in AdBlockEngine.java
+                          OnboardingActivity.java + activity_onboarding.xml
                         </td>
                       </tr>
                       <tr>
                         <td className="py-3 pr-4 font-medium text-white">
-                          WebApp Power Menu (PiP, Sleep Timer, OLED Audio)
+                          Unified Glass Theme System + Icon Packs
                         </td>
                         <td className="py-3 px-4">
-                          Floating video when going Home, timed auto-stop at night, and zero-brightness OLED battery saving
+                          Synchronized Blur (0-25px), Opacity, Darkness & Accent across Island, Sidebar & Dock + ADW/Nova Icon Packs & Minimal Mode
                         </td>
                         <td className="py-3 pl-4 font-mono text-[11px]">
-                          Tap domain bar in WebAppActivity.java
+                          GlassThemeHelper.java + IconPackManager.java
                         </td>
                       </tr>
                       <tr>
                         <td className="py-3 pr-4 font-medium text-white">
-                          De-AI Native & Workbench UI
+                          Notification Badges (Off / Dot / Number) + Grouped Settings
                         </td>
                         <td className="py-3 px-4">
-                          Removed emoji spam on every button/dialog, fixed stray XML on line 328 of activity_main.xml
+                          Per-app badge toggles and Everything-style 5-tab Settings with per-setting ↺ reset buttons
                         </td>
                         <td className="py-3 pl-4 font-mono text-[11px]">
-                          HomeActivity, MainActivity, AppPickerActivity
+                          MainActivity, HomeActivity, EdgeSidebarService
                         </td>
                       </tr>
                       <tr>
@@ -1183,10 +1183,10 @@ export default function App() {
                           Auto APK Commit + GitHub Release
                         </td>
                         <td className="py-3 px-4">
-                          Syncing to GitHub automatically compiles v2.18 APK, updates locklauncher.apk in repo, and publishes release
+                          Syncing to GitHub automatically compiles v2.20 APK, updates locklauncher.apk in repo, and publishes release
                         </td>
                         <td className="py-3 pl-4 font-mono text-[11px]">
-                          .github/workflows/release.yml (v2.18 / code 56)
+                          .github/workflows/release.yml (v2.20 / code 58)
                         </td>
                       </tr>
                     </tbody>

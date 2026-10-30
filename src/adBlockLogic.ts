@@ -390,5 +390,5 @@ on:
 
 # Builds locklauncher.apk via aapt2 + javac + d8 + zipalign + apksigner,
 # commits the compiled locklauncher.apk back to the branch ([skip ci]),
-# and publishes LockLauncher-v2.18.apk to GitHub Releases automatically.`,
+# and publishes LockLauncher-v2.20.apk to GitHub Releases automatically.`,
 };

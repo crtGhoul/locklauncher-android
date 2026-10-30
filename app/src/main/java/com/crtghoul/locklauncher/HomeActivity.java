@@ -380,42 +380,31 @@ public class HomeActivity extends Activity {
         Toast.makeText(this, "Pushed icons to bottom for one-hand reach", Toast.LENGTH_SHORT).show();
     }
     private void applyDynamicTheming() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            try {
+        try {
+            View searchBar = findViewById(R.id.home_search_bar);
+            if (searchBar != null) {
+                GlassThemeHelper.applyToView(this, searchBar, 24f);
+            }
+            View nowPlaying = findViewById(R.id.home_now_playing_bar);
+            if (nowPlaying != null) {
+                GlassThemeHelper.applyToView(this, nowPlaying, 20f);
+            }
+            View pill = findViewById(R.id.btn_toggle_apps_pill);
+            if (pill != null) {
+                GlassThemeHelper.applyToView(this, pill, 20f);
+            }
+            View tabs = findViewById(R.id.home_tabs_container);
+            if (tabs != null) {
+                GlassThemeHelper.applyToView(this, tabs, 20f);
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 DynamicThemeHelper.ThemeColors theme = DynamicThemeHelper.extractTheme(this);
-                View searchBar = findViewById(R.id.home_search_bar);
-                if (searchBar != null && searchBar.getBackground() != null) {
-                    searchBar.getBackground().setTint(theme.subtleGlassTint);
-                }
-                // Monochromatic wallpaper tint, contrast-checked
-                // (>= 4.5): monochrome background for the search-bar
-                // surface, contrast-checked text for its text children.
-                // The island deck keeps its own obsidian background.
-                int[] mono = WallpaperTintHelper.monochromePair(this);
-                if (searchBar != null && searchBar.getBackground() != null) {
-                    searchBar.getBackground().setTint(mono[0]);
-                }
-                if (searchBar instanceof ViewGroup) {
-                    ViewGroup sg = (ViewGroup) searchBar;
-                    for (int i = 0; i < sg.getChildCount(); i++) {
-                        View c = sg.getChildAt(i);
-                        if (c instanceof TextView) ((TextView) c).setTextColor(mono[1]);
-                    }
-                }
                 Button btnAddWeb = findViewById(R.id.btn_quick_add_web);
                 if (btnAddWeb != null && btnAddWeb.getBackground() != null) {
                     btnAddWeb.getBackground().setTint(theme.primaryAccent);
                 }
-                View pill = findViewById(R.id.btn_toggle_apps_pill);
-                if (pill != null && pill.getBackground() != null) {
-                    pill.getBackground().setTint(theme.subtleGlassTint);
-                }
-                View tabs = findViewById(R.id.home_tabs_container);
-                if (tabs != null && tabs.getBackground() != null) {
-                    tabs.getBackground().setTint(theme.subtleGlassTint);
-                }
-            } catch (Exception ignored) {
             }
+        } catch (Exception ignored) {
         }
     }
     @Override
@@ -686,6 +675,27 @@ public class HomeActivity extends Activity {
             Intent drawer = new Intent(this, AppPickerActivity.class);
             drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
             startActivity(drawer);
+        });
+        String curGlass = GlassThemeHelper.getGlassMode(this);
+        opts.add("Glass & Blur Style (" + curGlass.toUpperCase(Locale.ROOT) + ") — Cycle Frosted / Liquid / Classic");
+        acts.add(() -> {
+            String nextMode = GlassThemeHelper.MODE_FROSTED.equals(curGlass)
+                    ? GlassThemeHelper.MODE_LIQUID
+                    : (GlassThemeHelper.MODE_LIQUID.equals(curGlass) ? GlassThemeHelper.MODE_CLASSIC : GlassThemeHelper.MODE_FROSTED);
+            GlassThemeHelper.setGlassMode(this, nextMode);
+            GlassThemeHelper.refreshAllSurfaces(this);
+            applyDynamicTheming();
+            loadShortcuts();
+            Toast.makeText(this, "Glass theme: " + nextMode, Toast.LENGTH_SHORT).show();
+        });
+        boolean minIcons = ShortcutStore.isMinimalIcons(this);
+        opts.add(minIcons ? "Icons: Minimal (Switch to Original)" : "Icons: Original (Switch to Minimal)");
+        acts.add(() -> {
+            ShortcutStore.setMinimalIcons(this, !minIcons);
+            IconUtil.clearCache();
+            loadShortcuts();
+            GlassThemeHelper.refreshAllSurfaces(this);
+            Toast.makeText(this, !minIcons ? "Minimal icons enabled" : "Original icons restored", Toast.LENGTH_SHORT).show();
         });
         opts.add("Launcher Settings");
         acts.add(() -> startActivity(new Intent(this, MainActivity.class)));
@@ -1093,9 +1103,17 @@ public class HomeActivity extends Activity {
                 Shortcut child = getItem(pos);
                 ImageView icon = v.findViewById(R.id.sc_icon);
                 TextView label = v.findViewById(R.id.sc_label);
+                TextView badge = v.findViewById(R.id.sc_badge);
                 icon.setImageBitmap(IconUtil.iconFor(HomeActivity.this, child));
                 label.setText(child.label);
                 label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
+                if (badge != null) {
+                    if (child.isApp()) {
+                        LockNotificationListenerService.bindBadgeView(HomeActivity.this, badge, child.pkg);
+                    } else {
+                        badge.setVisibility(View.GONE);
+                    }
+                }
                 v.setOnClickListener(childView -> {
                     dialog.dismiss();
                     if (!IconUtil.fireShortcut(HomeActivity.this, child, childView)) {
@@ -2194,14 +2212,8 @@ public class HomeActivity extends Activity {
                 label.setText((isLocked ? "🔒 " : "") + s.label);
                 label.setVisibility(ShortcutStore.isHomeHideLabels(HomeActivity.this) ? View.GONE : View.VISIBLE);
                 if (badge != null) {
-                    if (LockNotificationListenerService.isBadgesEnabled(HomeActivity.this) && s.isApp()) {
-                        int count = LockNotificationListenerService.getCount(s.pkg);
-                        if (count > 0) {
-                            badge.setText(count > 99 ? "99+" : String.valueOf(count));
-                            badge.setVisibility(View.VISIBLE);
-                        } else {
-                            badge.setVisibility(View.GONE);
-                        }
+                    if (s.isApp()) {
+                        LockNotificationListenerService.bindBadgeView(HomeActivity.this, badge, s.pkg);
                     } else {
                         badge.setVisibility(View.GONE);
                     }

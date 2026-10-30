@@ -140,6 +140,29 @@ public class BackupManager {
             // Backup v2 extensions
             settings.put("active_icon_pack", IconPackManager.getActiveIconPack(ctx));
             settings.put("notification_badges_enabled", LockNotificationListenerService.isBadgesEnabled(ctx));
+            settings.put("badge_style", LockNotificationListenerService.getBadgeStyle(ctx));
+            settings.put("badge_size_pct", LockNotificationListenerService.getBadgeSizePct(ctx));
+            settings.put("badge_color", LockNotificationListenerService.getBadgeColor(ctx));
+            JSONArray disabledBadges = new JSONArray();
+            for (String pkg : LockNotificationListenerService.getDisabledBadgeApps(ctx)) {
+                disabledBadges.put(pkg);
+            }
+            settings.put("disabled_badge_apps", disabledBadges);
+
+            // v2.20 Glass & Blur + Icon appearance + Edge sidebar
+            settings.put("glass_mode", GlassThemeHelper.getGlassMode(ctx));
+            settings.put("glass_sub_theme", GlassThemeHelper.getSubTheme(ctx));
+            settings.put("glass_blur_level", GlassThemeHelper.getBlurLevel(ctx));
+            settings.put("glass_surface_opacity_pct", GlassThemeHelper.getSurfaceOpacityPct(ctx));
+            settings.put("glass_darkness_pct", GlassThemeHelper.getDarknessPct(ctx));
+            settings.put("glass_theme_hue", GlassThemeHelper.getThemeHue(ctx));
+            settings.put("glass_saturation_pct", GlassThemeHelper.getSaturationPct(ctx));
+            settings.put("glass_wallpaper_accent", GlassThemeHelper.isWallpaperAccent(ctx));
+            settings.put("glass_icon_scale_pct", GlassThemeHelper.getIconScaleInsideGlass(ctx));
+            settings.put("minimal_icons", ShortcutStore.isMinimalIcons(ctx));
+            settings.put("glass_icon_backgrounds", ShortcutStore.isGlassIconBackgrounds(ctx));
+            settings.put("icon_shape", ShortcutStore.getIconShape(ctx));
+            settings.put("edge_sidebar_on", ShortcutStore.isEdgeSidebarOn(ctx));
 
             SharedPreferences drawerPrefs = ctx.getSharedPreferences("drawer_prefs", Context.MODE_PRIVATE);
             Set<String> hidden = drawerPrefs.getStringSet("hidden_apps", new HashSet<>());
@@ -244,6 +267,65 @@ public class BackupManager {
                 }
                 if (settings.has("notification_badges_enabled")) {
                     LockNotificationListenerService.setBadgesEnabled(ctx, settings.optBoolean("notification_badges_enabled", true));
+                }
+                if (settings.has("badge_style")) {
+                    LockNotificationListenerService.setBadgeStyle(ctx, settings.optString("badge_style", LockNotificationListenerService.STYLE_NUMBER));
+                }
+                if (settings.has("badge_size_pct")) {
+                    LockNotificationListenerService.setBadgeSizePct(ctx, settings.optInt("badge_size_pct", 100));
+                }
+                if (settings.has("badge_color")) {
+                    LockNotificationListenerService.setBadgeColor(ctx, settings.optInt("badge_color", 0xFF10B981));
+                }
+                if (settings.has("disabled_badge_apps")) {
+                    JSONArray disArr = settings.optJSONArray("disabled_badge_apps");
+                    if (disArr != null) {
+                        for (int i = 0; i < disArr.length(); i++) {
+                            String pkg = disArr.optString(i, "");
+                            if (!pkg.isEmpty()) {
+                                LockNotificationListenerService.setAppBadgeAllowed(ctx, pkg, false);
+                            }
+                        }
+                    }
+                }
+                if (settings.has("glass_mode")) {
+                    GlassThemeHelper.setGlassMode(ctx, settings.optString("glass_mode", GlassThemeHelper.MODE_FROSTED));
+                }
+                if (settings.has("glass_sub_theme")) {
+                    GlassThemeHelper.setSubTheme(ctx, settings.optString("glass_sub_theme", GlassThemeHelper.SUB_DARK));
+                }
+                if (settings.has("glass_blur_level")) {
+                    GlassThemeHelper.setBlurLevel(ctx, settings.optInt("glass_blur_level", 6));
+                }
+                if (settings.has("glass_surface_opacity_pct")) {
+                    GlassThemeHelper.setSurfaceOpacityPct(ctx, settings.optInt("glass_surface_opacity_pct", 18));
+                }
+                if (settings.has("glass_darkness_pct")) {
+                    GlassThemeHelper.setDarknessPct(ctx, settings.optInt("glass_darkness_pct", 50));
+                }
+                if (settings.has("glass_theme_hue")) {
+                    GlassThemeHelper.setThemeHue(ctx, settings.optInt("glass_theme_hue", 200));
+                }
+                if (settings.has("glass_saturation_pct")) {
+                    GlassThemeHelper.setSaturationPct(ctx, settings.optInt("glass_saturation_pct", 50));
+                }
+                if (settings.has("glass_wallpaper_accent")) {
+                    GlassThemeHelper.setWallpaperAccent(ctx, settings.optBoolean("glass_wallpaper_accent", true));
+                }
+                if (settings.has("glass_icon_scale_pct")) {
+                    GlassThemeHelper.setIconScaleInsideGlass(ctx, settings.optInt("glass_icon_scale_pct", 100));
+                }
+                if (settings.has("minimal_icons")) {
+                    ShortcutStore.setMinimalIcons(ctx, settings.optBoolean("minimal_icons", false));
+                }
+                if (settings.has("glass_icon_backgrounds")) {
+                    ShortcutStore.setGlassIconBackgrounds(ctx, settings.optBoolean("glass_icon_backgrounds", false));
+                }
+                if (settings.has("icon_shape")) {
+                    ShortcutStore.setIconShape(ctx, settings.optString("icon_shape", ShortcutStore.SHAPE_SYSTEM));
+                }
+                if (settings.has("edge_sidebar_on")) {
+                    ShortcutStore.setEdgeSidebarOn(ctx, settings.optBoolean("edge_sidebar_on", false));
                 }
 
                 SharedPreferences drawerPrefs = ctx.getSharedPreferences("drawer_prefs", Context.MODE_PRIVATE);

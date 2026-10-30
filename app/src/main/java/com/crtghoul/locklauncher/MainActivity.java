@@ -186,6 +186,16 @@ public class MainActivity extends Activity {
                 btnGridCols.setText("Home Grid Density: " + next + " Columns (tap to cycle 3, 4, 5)");
             });
         }
+        View resetGridCols = findViewById(R.id.reset_home_grid_cols);
+        if (resetGridCols != null) {
+            resetGridCols.setOnClickListener(v -> {
+                ShortcutStore.setHomeGridColumns(this, 4);
+                if (btnGridCols != null) {
+                    btnGridCols.setText("Home Grid Density: 4 Columns (tap to cycle 3, 4, 5)");
+                }
+                toast("Reset Home Grid to 4 columns");
+            });
+        }
 
         Button btnIconSize = findViewById(R.id.btn_home_icon_size);
         if (btnIconSize != null) {
@@ -209,6 +219,16 @@ public class MainActivity extends Activity {
                         })
                         .setNegativeButton("Cancel", null)
                         .show();
+            });
+        }
+        View resetIconSize = findViewById(R.id.reset_home_icon_size);
+        if (resetIconSize != null) {
+            resetIconSize.setOnClickListener(v -> {
+                ShortcutStore.setHomeIconSize(this, 56);
+                if (btnIconSize != null) {
+                    btnIconSize.setText("Home Icon Size: 56dp (Standard)");
+                }
+                toast("Reset Home Icon Size to 56dp (100%)");
             });
         }
 
@@ -245,6 +265,8 @@ public class MainActivity extends Activity {
             monochromeIconsSwitch.setChecked(ShortcutStore.isMonochromeIcons(this));
             monochromeIconsSwitch.setOnCheckedChangeListener((v, on) -> {
                 ShortcutStore.setMonochromeIcons(this, on);
+                IconUtil.clearCache();
+                persist();
                 Toast.makeText(this, on ? "Monochrome mode enabled" : "Full color mode enabled", Toast.LENGTH_SHORT).show();
             });
         }
@@ -270,18 +292,11 @@ public class MainActivity extends Activity {
             notifBadgesSwitch.setChecked(LockNotificationListenerService.isBadgesEnabled(this));
             notifBadgesSwitch.setOnCheckedChangeListener((v, on) -> {
                 LockNotificationListenerService.setBadgesEnabled(this, on);
+                refreshBadgeStyleButtons();
                 if (on && !LockNotificationListenerService.isPermissionGranted(this)) {
-                    new AlertDialog.Builder(this)
-                            .setTitle("Notification Badges")
-                            .setMessage("To calculate unread dots & badges offline, allow notification access in the next screen.")
-                            .setPositiveButton("Enable", (d, w) -> {
-                                try {
-                                    startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
-                                } catch (Exception ignored) {}
-                            })
-                            .setNegativeButton("Later", null)
-                            .show();
+                    promptNotificationListenerAccess();
                 }
+                IslandService.refresh(this);
             });
         }
 
@@ -295,17 +310,16 @@ public class MainActivity extends Activity {
             btnHiddenApps.setOnClickListener(v -> showHiddenAppsDialog());
         }
 
-        SeekBar opacity = findViewById(R.id.seek_opacity);
-        opacity.setMax(255);
-        opacity.setProgress(ShortcutStore.glassOpacity(this));
-        opacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {}
-            @Override public void onStartTrackingTouch(SeekBar s) {}
-            @Override public void onStopTrackingTouch(SeekBar s) {
-                ShortcutStore.setGlassOpacity(MainActivity.this, s.getProgress());
-                persist();
-            }
-        });
+        setupCategoryTabs();
+        setupGlassAndBlurControls();
+        setupAppearanceAndIconControls();
+        setupNotificationBadgeControls();
+
+        View rerunOnboarding = findViewById(R.id.btn_rerun_onboarding);
+        if (rerunOnboarding != null) {
+            rerunOnboarding.setOnClickListener(v ->
+                    startActivity(new Intent(this, OnboardingActivity.class)));
+        }
 
         EditText memo = findViewById(R.id.edit_memo);
         memo.setText(ShortcutStore.dockMemo(this));
@@ -374,6 +388,28 @@ public class MainActivity extends Activity {
         islandSwitch = findViewById(R.id.switch_island);
         islandSwitch.setChecked(IslandService.isIslandOn(this));
         islandSwitch.setOnCheckedChangeListener((v, on) -> setIslandEnabled(on));
+
+        Switch edgeSidebarSwitch = findViewById(R.id.switch_edge_sidebar);
+        if (edgeSidebarSwitch != null) {
+            edgeSidebarSwitch.setChecked(ShortcutStore.isEdgeSidebarOn(this));
+            edgeSidebarSwitch.setOnCheckedChangeListener((v, on) -> {
+                if (on && !IslandService.canShow(this)) {
+                    toast("Allow 'Display over other apps' first");
+                    Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivity(i);
+                    edgeSidebarSwitch.setChecked(false);
+                    return;
+                }
+                ShortcutStore.setEdgeSidebarOn(this, on);
+                if (on) {
+                    IslandService.start(this);
+                    toast("Edge Sidebar on — tap the right-edge glass handle anytime");
+                } else {
+                    IslandService.refresh(this);
+                }
+            });
+        }
 
         Switch islandBatterySwitch = findViewById(R.id.switch_island_battery);
         islandBatterySwitch.setChecked(ShortcutStore.isIslandBattery(this));
@@ -507,6 +543,598 @@ public class MainActivity extends Activity {
         });
 
         handleIncomingIntent(getIntent());
+
+        if (!ShortcutStore.isOnboardingDone(this)) {
+            startActivity(new Intent(this, OnboardingActivity.class));
+        }
+    }
+
+    // ---------- v2.20 Category Tabs, Glass & Blur, Badges & Icon Controls ----------
+
+    private void setupCategoryTabs() {
+        int[] tabIds = {
+                R.id.cat_tab_all,
+                R.id.cat_tab_glass,
+                R.id.cat_tab_appearance,
+                R.id.cat_tab_home,
+                R.id.cat_tab_dock,
+                R.id.cat_tab_general
+        };
+        for (int i = 0; i < tabIds.length; i++) {
+            final int tabIdx = i;
+            View tab = findViewById(tabIds[i]);
+            if (tab != null) {
+                tab.setOnClickListener(v -> selectCategoryTab(tabIdx, tabIds));
+            }
+        }
+    }
+
+    private void selectCategoryTab(int tabIdx, int[] tabIds) {
+        for (int i = 0; i < tabIds.length; i++) {
+            Button b = findViewById(tabIds[i]);
+            if (b != null) {
+                b.setBackgroundResource(i == tabIdx ? R.drawable.btn_accent : R.drawable.btn_ghost);
+                b.setTextColor(i == tabIdx ? 0xFFFFFFFF : 0xFFD4D8E8);
+            }
+        }
+        View secDockTop = findViewById(R.id.sec_group_dock_top);
+        View secGlass = findViewById(R.id.sec_group_glass);
+        View secApp = findViewById(R.id.sec_group_appearance);
+        View secHome = findViewById(R.id.sec_group_home);
+        View secDockBottom = findViewById(R.id.sec_group_dock_bottom);
+        View secGeneral = findViewById(R.id.sec_group_general);
+
+        boolean all = (tabIdx == 0);
+        if (secDockTop != null) secDockTop.setVisibility(all || tabIdx == 4 ? View.VISIBLE : View.GONE);
+        if (secGlass != null) secGlass.setVisibility(all || tabIdx == 1 ? View.VISIBLE : View.GONE);
+        if (secApp != null) secApp.setVisibility(all || tabIdx == 2 ? View.VISIBLE : View.GONE);
+        if (secHome != null) secHome.setVisibility(all || tabIdx == 3 ? View.VISIBLE : View.GONE);
+        if (secDockBottom != null) secDockBottom.setVisibility(all || tabIdx == 4 ? View.VISIBLE : View.GONE);
+        if (secGeneral != null) secGeneral.setVisibility(all || tabIdx == 5 ? View.VISIBLE : View.GONE);
+    }
+
+    private void setupGlassAndBlurControls() {
+        Button bLiquid = findViewById(R.id.btn_glass_mode_liquid);
+        Button bClassic = findViewById(R.id.btn_glass_mode_classic);
+        Button bFrosted = findViewById(R.id.btn_glass_mode_frosted);
+
+        if (bLiquid != null) bLiquid.setOnClickListener(v -> {
+            GlassThemeHelper.setGlassMode(this, GlassThemeHelper.MODE_LIQUID);
+            syncGlassControlsFromPrefs();
+            persist();
+        });
+        if (bClassic != null) bClassic.setOnClickListener(v -> {
+            GlassThemeHelper.setGlassMode(this, GlassThemeHelper.MODE_CLASSIC);
+            syncGlassControlsFromPrefs();
+            persist();
+        });
+        if (bFrosted != null) bFrosted.setOnClickListener(v -> {
+            GlassThemeHelper.setGlassMode(this, GlassThemeHelper.MODE_FROSTED);
+            syncGlassControlsFromPrefs();
+            persist();
+        });
+
+        Button bSubLight = findViewById(R.id.btn_subtheme_light);
+        Button bSubDark = findViewById(R.id.btn_subtheme_dark);
+        Button bSubColored = findViewById(R.id.btn_subtheme_colored);
+        Button bSubGlow = findViewById(R.id.btn_subtheme_glow);
+
+        if (bSubLight != null) bSubLight.setOnClickListener(v -> {
+            GlassThemeHelper.setSubTheme(this, GlassThemeHelper.SUB_LIGHT);
+            syncGlassControlsFromPrefs();
+            persist();
+        });
+        if (bSubDark != null) bSubDark.setOnClickListener(v -> {
+            GlassThemeHelper.setSubTheme(this, GlassThemeHelper.SUB_DARK);
+            syncGlassControlsFromPrefs();
+            persist();
+        });
+        if (bSubColored != null) bSubColored.setOnClickListener(v -> {
+            GlassThemeHelper.setSubTheme(this, GlassThemeHelper.SUB_COLORED);
+            syncGlassControlsFromPrefs();
+            persist();
+        });
+        if (bSubGlow != null) bSubGlow.setOnClickListener(v -> {
+            GlassThemeHelper.setSubTheme(this, GlassThemeHelper.SUB_GLOW);
+            syncGlassControlsFromPrefs();
+            persist();
+        });
+
+        Switch swWallAccent = findViewById(R.id.switch_wallpaper_accent);
+        if (swWallAccent != null) {
+            swWallAccent.setChecked(GlassThemeHelper.isWallpaperAccent(this));
+            swWallAccent.setOnCheckedChangeListener((v, on) -> {
+                GlassThemeHelper.setWallpaperAccent(this, on);
+                persist();
+            });
+        }
+
+        SeekBar seekBlur = findViewById(R.id.seek_glass_blur);
+        TextView txtBlur = findViewById(R.id.val_glass_blur);
+        if (seekBlur != null) {
+            seekBlur.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    if (txtBlur != null) txtBlur.setText(String.valueOf(v));
+                    if (fromUser) {
+                        GlassThemeHelper.setBlurLevel(MainActivity.this, v);
+                        refreshPreview();
+                    }
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    GlassThemeHelper.setBlurLevel(MainActivity.this, s.getProgress());
+                    persist();
+                }
+            });
+        }
+        View resetBlur = findViewById(R.id.reset_glass_blur);
+        if (resetBlur != null) {
+            resetBlur.setOnClickListener(v -> {
+                GlassThemeHelper.resetBlurLevel(this);
+                syncGlassControlsFromPrefs();
+                persist();
+            });
+        }
+
+        SeekBar seekOpacity = findViewById(R.id.seek_opacity);
+        TextView txtOpacity = findViewById(R.id.val_glass_opacity_pct);
+        if (seekOpacity != null) {
+            seekOpacity.setMax(100);
+            seekOpacity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    if (txtOpacity != null) txtOpacity.setText("%" + v);
+                    if (fromUser) {
+                        GlassThemeHelper.setSurfaceOpacityPct(MainActivity.this, v);
+                        refreshPreview();
+                    }
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    GlassThemeHelper.setSurfaceOpacityPct(MainActivity.this, s.getProgress());
+                    persist();
+                }
+            });
+        }
+        View resetOpacity = findViewById(R.id.reset_glass_opacity);
+        if (resetOpacity != null) {
+            resetOpacity.setOnClickListener(v -> {
+                GlassThemeHelper.resetSurfaceOpacityPct(this);
+                syncGlassControlsFromPrefs();
+                persist();
+            });
+        }
+
+        SeekBar seekDarkness = findViewById(R.id.seek_glass_darkness);
+        TextView txtDarkness = findViewById(R.id.val_glass_darkness);
+        if (seekDarkness != null) {
+            seekDarkness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    if (txtDarkness != null) txtDarkness.setText(String.format(Locale.US, "%.2f", v / 100f));
+                    if (fromUser) {
+                        GlassThemeHelper.setDarknessPct(MainActivity.this, v);
+                        refreshPreview();
+                    }
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    GlassThemeHelper.setDarknessPct(MainActivity.this, s.getProgress());
+                    persist();
+                }
+            });
+        }
+        View resetDarkness = findViewById(R.id.reset_glass_darkness);
+        if (resetDarkness != null) {
+            resetDarkness.setOnClickListener(v -> {
+                GlassThemeHelper.resetDarknessPct(this);
+                syncGlassControlsFromPrefs();
+                persist();
+            });
+        }
+
+        SeekBar seekHue = findViewById(R.id.seek_glass_hue);
+        TextView txtHue = findViewById(R.id.val_glass_hue);
+        if (seekHue != null) {
+            seekHue.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    if (txtHue != null) txtHue.setText(v + "°");
+                    if (fromUser) {
+                        GlassThemeHelper.setThemeHue(MainActivity.this, v);
+                        refreshPreview();
+                    }
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    GlassThemeHelper.setThemeHue(MainActivity.this, s.getProgress());
+                    persist();
+                }
+            });
+        }
+        View resetHue = findViewById(R.id.reset_glass_hue);
+        if (resetHue != null) {
+            resetHue.setOnClickListener(v -> {
+                GlassThemeHelper.resetThemeHue(this);
+                syncGlassControlsFromPrefs();
+                persist();
+            });
+        }
+
+        SeekBar seekSat = findViewById(R.id.seek_glass_sat);
+        TextView txtSat = findViewById(R.id.val_glass_sat);
+        if (seekSat != null) {
+            seekSat.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    if (txtSat != null) txtSat.setText(String.format(Locale.US, "%.2f", v / 100f));
+                    if (fromUser) {
+                        GlassThemeHelper.setSaturationPct(MainActivity.this, v);
+                        refreshPreview();
+                    }
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    GlassThemeHelper.setSaturationPct(MainActivity.this, s.getProgress());
+                    persist();
+                }
+            });
+        }
+        View resetSat = findViewById(R.id.reset_glass_sat);
+        if (resetSat != null) {
+            resetSat.setOnClickListener(v -> {
+                GlassThemeHelper.resetSaturationPct(this);
+                syncGlassControlsFromPrefs();
+                persist();
+            });
+        }
+
+        SeekBar seekIconScale = findViewById(R.id.seek_glass_icon_scale);
+        TextView txtIconScale = findViewById(R.id.val_glass_icon_scale);
+        if (seekIconScale != null) {
+            seekIconScale.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    int pct = 70 + v;
+                    if (txtIconScale != null) txtIconScale.setText("%" + pct);
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    GlassThemeHelper.setIconScaleInsideGlass(MainActivity.this, 70 + s.getProgress());
+                    IconUtil.clearCache();
+                    persist();
+                }
+            });
+        }
+        View resetIconScale = findViewById(R.id.reset_glass_icon_scale);
+        if (resetIconScale != null) {
+            resetIconScale.setOnClickListener(v -> {
+                GlassThemeHelper.resetIconScaleInsideGlass(this);
+                IconUtil.clearCache();
+                syncGlassControlsFromPrefs();
+                persist();
+            });
+        }
+
+        View resetAllGlass = findViewById(R.id.btn_reset_all_glass);
+        if (resetAllGlass != null) {
+            resetAllGlass.setOnClickListener(v -> {
+                GlassThemeHelper.resetAll(this);
+                IconUtil.clearCache();
+                syncGlassControlsFromPrefs();
+                persist();
+                toast("Reset all Glass & Blur settings to default");
+            });
+        }
+
+        syncGlassControlsFromPrefs();
+    }
+
+    private void syncGlassControlsFromPrefs() {
+        String mode = GlassThemeHelper.getGlassMode(this);
+        Button bLiquid = findViewById(R.id.btn_glass_mode_liquid);
+        Button bClassic = findViewById(R.id.btn_glass_mode_classic);
+        Button bFrosted = findViewById(R.id.btn_glass_mode_frosted);
+        if (bLiquid != null) bLiquid.setBackgroundResource(GlassThemeHelper.MODE_LIQUID.equals(mode) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bClassic != null) bClassic.setBackgroundResource(GlassThemeHelper.MODE_CLASSIC.equals(mode) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bFrosted != null) bFrosted.setBackgroundResource(GlassThemeHelper.MODE_FROSTED.equals(mode) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+
+        String sub = GlassThemeHelper.getSubTheme(this);
+        Button bSubLight = findViewById(R.id.btn_subtheme_light);
+        Button bSubDark = findViewById(R.id.btn_subtheme_dark);
+        Button bSubColored = findViewById(R.id.btn_subtheme_colored);
+        Button bSubGlow = findViewById(R.id.btn_subtheme_glow);
+        if (bSubLight != null) bSubLight.setBackgroundResource(GlassThemeHelper.SUB_LIGHT.equals(sub) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bSubDark != null) bSubDark.setBackgroundResource(GlassThemeHelper.SUB_DARK.equals(sub) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bSubColored != null) bSubColored.setBackgroundResource(GlassThemeHelper.SUB_COLORED.equals(sub) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bSubGlow != null) bSubGlow.setBackgroundResource(GlassThemeHelper.SUB_GLOW.equals(sub) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+
+        Switch swWall = findViewById(R.id.switch_wallpaper_accent);
+        if (swWall != null) swWall.setChecked(GlassThemeHelper.isWallpaperAccent(this));
+
+        int blur = GlassThemeHelper.getBlurLevel(this);
+        SeekBar seekBlur = findViewById(R.id.seek_glass_blur);
+        TextView txtBlur = findViewById(R.id.val_glass_blur);
+        if (seekBlur != null) seekBlur.setProgress(blur);
+        if (txtBlur != null) txtBlur.setText(String.valueOf(blur));
+
+        int opPct = GlassThemeHelper.getSurfaceOpacityPct(this);
+        SeekBar seekOp = findViewById(R.id.seek_opacity);
+        TextView txtOp = findViewById(R.id.val_glass_opacity_pct);
+        if (seekOp != null) seekOp.setProgress(opPct);
+        if (txtOp != null) txtOp.setText("%" + opPct);
+
+        int darkPct = GlassThemeHelper.getDarknessPct(this);
+        SeekBar seekDark = findViewById(R.id.seek_glass_darkness);
+        TextView txtDark = findViewById(R.id.val_glass_darkness);
+        if (seekDark != null) seekDark.setProgress(darkPct);
+        if (txtDark != null) txtDark.setText(String.format(Locale.US, "%.2f", darkPct / 100f));
+
+        int hue = GlassThemeHelper.getThemeHue(this);
+        SeekBar seekHue = findViewById(R.id.seek_glass_hue);
+        TextView txtHue = findViewById(R.id.val_glass_hue);
+        if (seekHue != null) seekHue.setProgress(hue);
+        if (txtHue != null) txtHue.setText(hue + "°");
+
+        int sat = GlassThemeHelper.getSaturationPct(this);
+        SeekBar seekSat = findViewById(R.id.seek_glass_sat);
+        TextView txtSat = findViewById(R.id.val_glass_sat);
+        if (seekSat != null) seekSat.setProgress(sat);
+        if (txtSat != null) txtSat.setText(String.format(Locale.US, "%.2f", sat / 100f));
+
+        int scale = GlassThemeHelper.getIconScaleInsideGlass(this);
+        SeekBar seekScale = findViewById(R.id.seek_glass_icon_scale);
+        TextView txtScale = findViewById(R.id.val_glass_icon_scale);
+        if (seekScale != null) seekScale.setProgress(Math.max(0, Math.min(60, scale - 70)));
+        if (txtScale != null) txtScale.setText("%" + scale);
+    }
+
+    private void setupAppearanceAndIconControls() {
+        Button bOrig = findViewById(R.id.btn_icons_original);
+        Button bMin = findViewById(R.id.btn_icons_minimal);
+        if (bOrig != null) {
+            bOrig.setOnClickListener(v -> {
+                ShortcutStore.setMinimalIcons(this, false);
+                IconUtil.clearCache();
+                syncIconControlsFromPrefs();
+                persist();
+            });
+        }
+        if (bMin != null) {
+            bMin.setOnClickListener(v -> {
+                ShortcutStore.setMinimalIcons(this, true);
+                IconUtil.clearCache();
+                syncIconControlsFromPrefs();
+                persist();
+            });
+        }
+        View resetStyle = findViewById(R.id.reset_icon_style);
+        if (resetStyle != null) {
+            resetStyle.setOnClickListener(v -> {
+                ShortcutStore.setMinimalIcons(this, false);
+                IconUtil.clearCache();
+                syncIconControlsFromPrefs();
+                persist();
+            });
+        }
+
+        Switch swGlassIconBg = findViewById(R.id.switch_glass_icon_bg);
+        if (swGlassIconBg != null) {
+            swGlassIconBg.setChecked(ShortcutStore.isGlassIconBackgrounds(this));
+            swGlassIconBg.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setGlassIconBackgrounds(this, on);
+                IconUtil.clearCache();
+                persist();
+            });
+        }
+
+        int[] shapeBtnIds = {R.id.btn_shape_system, R.id.btn_shape_circle, R.id.btn_shape_square, R.id.btn_shape_rounded};
+        String[] shapeVals = {ShortcutStore.SHAPE_SYSTEM, ShortcutStore.SHAPE_CIRCLE, ShortcutStore.SHAPE_SQUARE, ShortcutStore.SHAPE_ROUNDED};
+        for (int i = 0; i < shapeBtnIds.length; i++) {
+            final String val = shapeVals[i];
+            Button b = findViewById(shapeBtnIds[i]);
+            if (b != null) {
+                b.setOnClickListener(v -> {
+                    ShortcutStore.setIconShape(this, val);
+                    IconUtil.clearCache();
+                    syncIconControlsFromPrefs();
+                    persist();
+                });
+            }
+        }
+        View resetShape = findViewById(R.id.reset_icon_shape);
+        if (resetShape != null) {
+            resetShape.setOnClickListener(v -> {
+                ShortcutStore.setIconShape(this, ShortcutStore.SHAPE_SYSTEM);
+                IconUtil.clearCache();
+                syncIconControlsFromPrefs();
+                persist();
+            });
+        }
+        syncIconControlsFromPrefs();
+    }
+
+    private void syncIconControlsFromPrefs() {
+        boolean minimal = ShortcutStore.isMinimalIcons(this);
+        Button bOrig = findViewById(R.id.btn_icons_original);
+        Button bMin = findViewById(R.id.btn_icons_minimal);
+        if (bOrig != null) bOrig.setBackgroundResource(!minimal ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bMin != null) bMin.setBackgroundResource(minimal ? R.drawable.btn_accent : R.drawable.btn_ghost);
+
+        Switch swGlassIconBg = findViewById(R.id.switch_glass_icon_bg);
+        if (swGlassIconBg != null) swGlassIconBg.setChecked(ShortcutStore.isGlassIconBackgrounds(this));
+
+        String shape = ShortcutStore.getIconShape(this);
+        int[] shapeBtnIds = {R.id.btn_shape_system, R.id.btn_shape_circle, R.id.btn_shape_square, R.id.btn_shape_rounded};
+        String[] shapeVals = {ShortcutStore.SHAPE_SYSTEM, ShortcutStore.SHAPE_CIRCLE, ShortcutStore.SHAPE_SQUARE, ShortcutStore.SHAPE_ROUNDED};
+        for (int i = 0; i < shapeBtnIds.length; i++) {
+            Button b = findViewById(shapeBtnIds[i]);
+            if (b != null) {
+                b.setBackgroundResource(shapeVals[i].equals(shape) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+            }
+        }
+    }
+
+    private void setupNotificationBadgeControls() {
+        Button bOff = findViewById(R.id.btn_badge_style_off);
+        Button bDot = findViewById(R.id.btn_badge_style_dot);
+        Button bNum = findViewById(R.id.btn_badge_style_number);
+
+        if (bOff != null) bOff.setOnClickListener(v -> {
+            LockNotificationListenerService.setBadgeStyle(this, LockNotificationListenerService.STYLE_OFF);
+            Switch sw = findViewById(R.id.switch_notification_badges);
+            if (sw != null) sw.setChecked(false);
+            refreshBadgeStyleButtons();
+            IslandService.refresh(this);
+        });
+        if (bDot != null) bDot.setOnClickListener(v -> {
+            LockNotificationListenerService.setBadgeStyle(this, LockNotificationListenerService.STYLE_DOT);
+            Switch sw = findViewById(R.id.switch_notification_badges);
+            if (sw != null) sw.setChecked(true);
+            refreshBadgeStyleButtons();
+            if (!LockNotificationListenerService.isPermissionGranted(this)) promptNotificationListenerAccess();
+            IslandService.refresh(this);
+        });
+        if (bNum != null) bNum.setOnClickListener(v -> {
+            LockNotificationListenerService.setBadgeStyle(this, LockNotificationListenerService.STYLE_NUMBER);
+            Switch sw = findViewById(R.id.switch_notification_badges);
+            if (sw != null) sw.setChecked(true);
+            refreshBadgeStyleButtons();
+            if (!LockNotificationListenerService.isPermissionGranted(this)) promptNotificationListenerAccess();
+            IslandService.refresh(this);
+        });
+
+        SeekBar seekBadgeSize = findViewById(R.id.seek_badge_size);
+        TextView txtBadgeSize = findViewById(R.id.val_badge_size);
+        if (seekBadgeSize != null) {
+            int curPct = LockNotificationListenerService.getBadgeSizePct(this);
+            seekBadgeSize.setProgress(Math.max(0, Math.min(100, curPct - 50)));
+            if (txtBadgeSize != null) txtBadgeSize.setText("%" + curPct);
+            seekBadgeSize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    int pct = 50 + v;
+                    if (txtBadgeSize != null) txtBadgeSize.setText("%" + pct);
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    LockNotificationListenerService.setBadgeSizePct(MainActivity.this, 50 + s.getProgress());
+                    IslandService.refresh(MainActivity.this);
+                }
+            });
+        }
+        View resetBadgeSize = findViewById(R.id.reset_badge_size);
+        if (resetBadgeSize != null) {
+            resetBadgeSize.setOnClickListener(v -> {
+                LockNotificationListenerService.resetBadgeSizePct(this);
+                if (seekBadgeSize != null) seekBadgeSize.setProgress(50);
+                if (txtBadgeSize != null) txtBadgeSize.setText("%100");
+                IslandService.refresh(this);
+            });
+        }
+
+        int[] colBtnIds = {
+                R.id.btn_badge_col_0, R.id.btn_badge_col_1, R.id.btn_badge_col_2,
+                R.id.btn_badge_col_3, R.id.btn_badge_col_4
+        };
+        for (int i = 0; i < colBtnIds.length && i < LockNotificationListenerService.BADGE_COLOR_PRESETS.length; i++) {
+            final int colorVal = LockNotificationListenerService.BADGE_COLOR_PRESETS[i];
+            Button b = findViewById(colBtnIds[i]);
+            if (b != null) {
+                b.setOnClickListener(v -> {
+                    LockNotificationListenerService.setBadgeColor(this, colorVal);
+                    refreshBadgeStyleButtons();
+                    IslandService.refresh(this);
+                });
+            }
+        }
+
+        View btnSelectApps = findViewById(R.id.btn_badge_select_apps);
+        if (btnSelectApps != null) {
+            btnSelectApps.setOnClickListener(v -> showPerAppBadgeDialog());
+        }
+
+        refreshBadgeStyleButtons();
+    }
+
+    private void refreshBadgeStyleButtons() {
+        String style = LockNotificationListenerService.getBadgeStyle(this);
+        Button bOff = findViewById(R.id.btn_badge_style_off);
+        Button bDot = findViewById(R.id.btn_badge_style_dot);
+        Button bNum = findViewById(R.id.btn_badge_style_number);
+        if (bOff != null) bOff.setBackgroundResource(LockNotificationListenerService.STYLE_OFF.equals(style) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bDot != null) bDot.setBackgroundResource(LockNotificationListenerService.STYLE_DOT.equals(style) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (bNum != null) bNum.setBackgroundResource(LockNotificationListenerService.STYLE_NUMBER.equals(style) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+
+        int activeColor = LockNotificationListenerService.getBadgeColor(this);
+        int[] colBtnIds = {
+                R.id.btn_badge_col_0, R.id.btn_badge_col_1, R.id.btn_badge_col_2,
+                R.id.btn_badge_col_3, R.id.btn_badge_col_4
+        };
+        for (int i = 0; i < colBtnIds.length && i < LockNotificationListenerService.BADGE_COLOR_PRESETS.length; i++) {
+            Button b = findViewById(colBtnIds[i]);
+            if (b != null) {
+                boolean sel = (LockNotificationListenerService.BADGE_COLOR_PRESETS[i] == activeColor);
+                b.setBackgroundResource(sel ? R.drawable.btn_accent : R.drawable.btn_ghost);
+            }
+        }
+    }
+
+    private void promptNotificationListenerAccess() {
+        new AlertDialog.Builder(this)
+                .setTitle("Notification Badges")
+                .setMessage("To calculate unread dots & numeric counts offline, allow notification access in the next screen.")
+                .setPositiveButton("Enable", (d, w) -> {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                    } catch (Exception ignored) {}
+                })
+                .setNegativeButton("Later", null)
+                .show();
+    }
+
+    private void showPerAppBadgeDialog() {
+        PackageManager pm = getPackageManager();
+        Intent main = new Intent(Intent.ACTION_MAIN, null);
+        main.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> ris = pm.queryIntentActivities(main, 0);
+        List<String> pkgs = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (ResolveInfo ri : ris) {
+            if (ri.activityInfo == null) continue;
+            String pkg = ri.activityInfo.packageName;
+            if (seen.add(pkg)) {
+                pkgs.add(pkg);
+                labels.add(String.valueOf(ri.loadLabel(pm)));
+            }
+        }
+        // Sort alphabetically by label
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < pkgs.size(); i++) order.add(i);
+        Collections.sort(order, (a, b) -> labels.get(a).compareToIgnoreCase(labels.get(b)));
+
+        String[] sortedLabels = new String[order.size()];
+        String[] sortedPkgs = new String[order.size()];
+        boolean[] checked = new boolean[order.size()];
+        for (int i = 0; i < order.size(); i++) {
+            int idx = order.get(i);
+            sortedLabels[i] = labels.get(idx);
+            sortedPkgs[i] = pkgs.get(idx);
+            checked[i] = LockNotificationListenerService.isAppBadgeAllowed(this, sortedPkgs[i]);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Select Apps for Badges")
+                .setMultiChoiceItems(sortedLabels, checked, (d, which, isChecked) -> {
+                    LockNotificationListenerService.setAppBadgeAllowed(this, sortedPkgs[which], isChecked);
+                })
+                .setPositiveButton("Done", (d, w) -> {
+                    IslandService.refresh(this);
+                    toast("Updated per-app notification badge rules");
+                })
+                .setNeutralButton("Enable All", (d, w) -> {
+                    for (String pkg : sortedPkgs) {
+                        LockNotificationListenerService.setAppBadgeAllowed(this, pkg, true);
+                    }
+                    IslandService.refresh(this);
+                    toast("Enabled badges for all apps");
+                })
+                .show();
     }
 
     @Override
@@ -550,6 +1178,10 @@ public class MainActivity extends Activity {
                 islandSwitch.setChecked(on);
             }
         }
+        syncGlassControlsFromPrefs();
+        syncIconControlsFromPrefs();
+        refreshBadgeStyleButtons();
+        refreshPreview();
     }
 
     private void switchProfile(int p) {
@@ -1379,6 +2011,10 @@ public class MainActivity extends Activity {
     }
 
     private void refreshPreview() {
+        View previewCard = findViewById(R.id.dock_preview_card);
+        if (previewCard != null) {
+            GlassThemeHelper.applyToView(this, previewCard, 22f);
+        }
         preview.removeAllViews();
         if (shortcuts.isEmpty()) {
             TextView hint = new TextView(this);

@@ -423,6 +423,68 @@ public class ShortcutStore {
         prefs(ctx).edit().putBoolean("home_show_empty_slots", show).apply();
     }
 
+    public static boolean isOnboardingDone(Context ctx) {
+        return prefs(ctx).getBoolean("onboarding_v220_done", false);
+    }
+
+    public static void setOnboardingDone(Context ctx, boolean done) {
+        prefs(ctx).edit().putBoolean("onboarding_v220_done", done).apply();
+    }
+
+    /**
+     * Original vs Minimal icon option (Everything Launcher style):
+     * - Original (false): full-color original app icon or active icon pack
+     * - Minimal (true): strips adaptive icon background plate and renders foreground glyph in clean monochrome/white
+     */
+    public static boolean isMinimalIcons(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_MONOCHROME_ICONS, false);
+    }
+
+    public static void setMinimalIcons(Context ctx, boolean minimal) {
+        setMonochromeIcons(ctx, minimal);
+    }
+
+    public static boolean isGlassIconBackgrounds(Context ctx) {
+        return prefs(ctx).getBoolean("glass_icon_backgrounds", true);
+    }
+
+    public static void setGlassIconBackgrounds(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean("glass_icon_backgrounds", enabled).apply();
+    }
+
+    public static final String SHAPE_SYSTEM = "system";
+    public static final String SHAPE_CIRCLE = "circle";
+    public static final String SHAPE_SQUARE = "square";
+    public static final String SHAPE_ROUNDED = "rounded";
+
+    public static String getIconShape(Context ctx) {
+        if (!prefs(ctx).contains("adaptive_icon_shape")) {
+            return isRoundIcons(ctx) ? SHAPE_CIRCLE : SHAPE_SYSTEM;
+        }
+        String s = prefs(ctx).getString("adaptive_icon_shape", SHAPE_SYSTEM);
+        if (!SHAPE_SYSTEM.equals(s) && !SHAPE_CIRCLE.equals(s)
+                && !SHAPE_SQUARE.equals(s) && !SHAPE_ROUNDED.equals(s)) {
+            return SHAPE_SYSTEM;
+        }
+        return s;
+    }
+
+    public static void setIconShape(Context ctx, String shape) {
+        if (shape == null) shape = SHAPE_SYSTEM;
+        prefs(ctx).edit()
+                .putString("adaptive_icon_shape", shape)
+                .putBoolean(KEY_ROUND, SHAPE_CIRCLE.equals(shape))
+                .apply();
+    }
+
+    public static boolean isEdgeSidebarOn(Context ctx) {
+        return prefs(ctx).getBoolean("edge_sidebar_on", false);
+    }
+
+    public static void setEdgeSidebarOn(Context ctx, boolean on) {
+        prefs(ctx).edit().putBoolean("edge_sidebar_on", on).apply();
+    }
+
     /** Places a shortcut into the first empty slot if available, or appends up to MAX. */
     public static boolean addOrPlaceShortcut(List<Shortcut> list, Shortcut item) {
         if (list == null || item == null) return false;
