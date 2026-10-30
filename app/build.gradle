@@ -2,20 +2,26 @@ plugins {
     id 'com.android.application'
 }
 
+def versionPropsFile = file('../version.properties')
+def vCode = 55
+def vName = '2.17'
+if (versionPropsFile.canRead()) {
+    def Properties versionProps = new Properties()
+    versionProps.load(new FileInputStream(versionPropsFile))
+    if (versionProps['versionCode'] != null) vCode = versionProps['versionCode'].toInteger()
+    if (versionProps['versionName'] != null) vName = versionProps['versionName'].toString()
+}
+
 android {
     namespace 'com.crtghoul.locklauncher'
     compileSdk 34
 
-    // NOTE: the raw aapt2 pipeline (build-apk.sh/.ps1) is the build used
-    // for releases and reads version.properties (2.12 / code 50). These
-    // Gradle defaults are intentionally NOT the release version; do not
-    // ship a Gradle-built APK as a release without syncing them first.
     defaultConfig {
         applicationId 'com.crtghoul.locklauncher'
         minSdk 28
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode vCode
+        versionName vName
     }
 
     buildTypes {

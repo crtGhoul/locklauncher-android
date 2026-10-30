@@ -3,3 +3,6 @@ build-out/
 debug.keystore
 *.zip
 screencap*.png
+node_modules/
+dist/
+.env

@@ -7,6 +7,9 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -81,6 +84,8 @@ public class WebAppActivity extends Activity {
     private boolean isImmersiveFullscreen = false;
     private boolean isLoading = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private AudioManager audioManager;
+    private AudioFocusRequest audioFocusRequest;
 
     // File chooser (was missing from WebAppActivity through v2.15, so
     // <input type=file> taps did nothing in WebView: Android WebView
@@ -241,6 +246,14 @@ public class WebAppActivity extends Activity {
             cookieManager.setAcceptThirdPartyCookies(webView, true);
         }
 
+        // Enforce 120Hz LTPO GPU hardware layer & prevent Android/OxygenOS from waiving
+        // renderer priority when the screen turns off or the user switches apps
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+        }
+        requestMediaAudioFocus();
+
         // Register predictive back gesture on Android 13+ (API 33+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             android.window.OnBackInvokedCallback callback = this::handleBackNavigation;
@@ -336,9 +349,9 @@ public class WebAppActivity extends Activity {
                 }
                 updateNavState();
 
-                // Progressive DOM ad cleansing during loading
+                // Progressive DOM ad cleansing and background playback hook during loading
                 if (newProgress == 30 || newProgress == 60 || newProgress == 85) {
-                    view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+                    injectClientScripts(view);
                 }
             }
 
@@ -360,6 +373,12 @@ public class WebAppActivity extends Activity {
                 final WebView tempWebView = new WebView(view.getContext());
                 WebSettings tempSettings = tempWebView.getSettings();
                 tempSettings.setJavaScriptEnabled(true);
+                tempSettings.setDomStorageEnabled(true);
+                tempSettings.setDatabaseEnabled(true);
+                tempSettings.setUserAgentString(view.getSettings().getUserAgentString());
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(tempWebView, true);
+                }
 
                 tempWebView.setWebViewClient(new WebViewClient() {
                     private boolean redirected = false;
@@ -370,8 +389,11 @@ public class WebAppActivity extends Activity {
                             return false;
                         }
                         redirected = true;
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            CookieManager.getInstance().flush();
+                        }
                         if (!AdBlockEngine.isAdUrl(targetUrl)) {
-                            // Funnel navigation safely into the main WebView
+                            // Funnel navigation safely into the main WebView with cookies synced
                             view.post(() -> view.loadUrl(targetUrl));
                         }
                         view.post(tempWebView::destroy);
@@ -541,13 +563,13 @@ public class WebAppActivity extends Activity {
                 super.onPageStarted(view, url, favicon);
                 isLoading = true;
                 updateNavState();
-                view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+                injectClientScripts(view);
             }
 
             @Override
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
-                view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+                injectClientScripts(view);
             }
 
             @Override
@@ -558,7 +580,7 @@ public class WebAppActivity extends Activity {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     CookieManager.getInstance().flush();
                 }
-                view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+                injectClientScripts(view);
             }
         });
 
@@ -942,6 +964,47 @@ public class WebAppActivity extends Activity {
         finish();
     }
 
+    private void injectClientScripts(WebView view) {
+        if (view == null) return;
+        view.evaluateJavascript(AdBlockEngine.BACKGROUND_PLAYBACK_JS, null);
+        view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+    }
+
+    private void requestMediaAudioFocus() {
+        try {
+            if (audioManager == null) {
+                audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            }
+            if (audioManager == null) return;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (audioFocusRequest == null) {
+                    AudioAttributes attrs = new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build();
+                    audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                            .setAudioAttributes(attrs)
+                            .setWillPauseWhenDucked(false)
+                            .setOnAudioFocusChangeListener(focusChange -> {
+                                // Retain WebView playback state across transient system notifications
+                            })
+                            .build();
+                }
+                audioManager.requestAudioFocus(audioFocusRequest);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void abandonMediaAudioFocus() {
+        try {
+            if (audioManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && audioFocusRequest != null) {
+                audioManager.abandonAudioFocusRequest(audioFocusRequest);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     @Override
     public void onBackPressed() {
         handleBackNavigation();
@@ -950,7 +1013,14 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (webView != null) webView.onPause();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().flush();
+        }
+        if (webView != null) {
+            // Do NOT call webView.onPause() here — calling onPause() suspends Chromium's
+            // media thread and kills background / screen-off YouTube & YouTube Music audio.
+            webView.evaluateJavascript("window.__llAppBackgrounded = true;", null);
+        }
     }
 
     @Override
@@ -958,7 +1028,11 @@ public class WebAppActivity extends Activity {
         super.onResume();
         DisplayHelper.enforceHighRefreshRate(this);
         applyFullscreen(isImmersiveFullscreen);
-        if (webView != null) webView.onResume();
+        requestMediaAudioFocus();
+        if (webView != null) {
+            webView.onResume();
+            webView.evaluateJavascript("window.__llAppBackgrounded = false;", null);
+        }
     }
 
     @Override
@@ -991,6 +1065,10 @@ public class WebAppActivity extends Activity {
             fileUploadCallback = null;
         }
         abortPendingBlob();
+        abandonMediaAudioFocus();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().flush();
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backCallback != null) {
             try {
                 getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((android.window.OnBackInvokedCallback) backCallback);
@@ -999,6 +1077,7 @@ public class WebAppActivity extends Activity {
             backCallback = null;
         }
         if (webView != null) {
+            webView.onPause();
             webView.destroy();
         }
         super.onDestroy();
