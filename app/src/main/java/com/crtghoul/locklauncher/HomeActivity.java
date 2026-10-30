@@ -195,7 +195,7 @@ public class HomeActivity extends Activity {
         });
         View quickWidget = findViewById(R.id.btn_quick_add_widget);
         if (quickWidget != null) {
-            quickWidget.setOnClickListener(v -> selectWidget());
+            quickWidget.setOnClickListener(v -> showWidgetMenu());
         }
         findViewById(R.id.btn_quick_add_web).setOnClickListener(v -> {
             showAddWebAppDialog("", "");
@@ -562,8 +562,14 @@ public class HomeActivity extends Activity {
                 lastRemovedIndex = -1;
             });
         }
+        int currentProfile = ShortcutStore.activeProfile(this);
+        List<Integer> currentWidgets = ShortcutStore.homeWidgets(this, currentProfile);
+        if (!currentWidgets.isEmpty()) {
+            opts.add("🗑️ Delete / Manage Widgets (" + currentWidgets.size() + " active)");
+            acts.add(this::showManageWidgetsDialog);
+        }
         opts.add("🧩 Add Android Widget");
-        acts.add(this::selectWidget);
+        acts.add(this::showWidgetMenu);
         opts.add("➕ Add Apps to Home Screen");
         acts.add(() -> {
             Intent addAppIntent = new Intent(this, AppPickerActivity.class);
@@ -615,19 +621,115 @@ public class HomeActivity extends Activity {
                 .show();
     }
     // ---- Widget Management ----
+    private void showWidgetMenu() {
+        int profile = ShortcutStore.activeProfile(this);
+        List<Integer> widgetIds = ShortcutStore.homeWidgets(this, profile);
+        List<String> options = new ArrayList<>();
+        List<Runnable> actions = new ArrayList<>();
+
+        options.add("➕ Add New Widget...");
+        actions.add(this::selectWidget);
+
+        if (!widgetIds.isEmpty()) {
+            options.add("🗑️ Delete / Manage Widgets (" + widgetIds.size() + " active)...");
+            actions.add(this::showManageWidgetsDialog);
+
+            options.add("🧹 Remove All Widgets from this Screen");
+            actions.add(this::removeAllWidgetsConfirm);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Home Screen Widgets")
+                .setItems(options.toArray(new String[0]), (d, which) -> {
+                    if (which >= 0 && which < actions.size()) {
+                        actions.get(which).run();
+                    }
+                })
+                .show();
+    }
+
+    private void showManageWidgetsDialog() {
+        int profile = ShortcutStore.activeProfile(this);
+        List<Integer> widgetIds = ShortcutStore.homeWidgets(this, profile);
+        if (widgetIds.isEmpty()) {
+            Toast.makeText(this, "No active widgets to delete", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] items = new String[widgetIds.size() + 1];
+        for (int i = 0; i < widgetIds.size(); i++) {
+            int wId = widgetIds.get(i);
+            String name = "Widget #" + wId;
+            try {
+                if (appWidgetManager != null) {
+                    AppWidgetProviderInfo info = appWidgetManager.getAppWidgetInfo(wId);
+                    if (info != null && info.label != null && !info.label.isEmpty()) {
+                        name = info.label;
+                    }
+                }
+            } catch (Exception ignored) {}
+            items[i] = "🗑️ Delete: " + name;
+        }
+        items[widgetIds.size()] = "🧹 Delete All Widgets";
+
+        new AlertDialog.Builder(this)
+                .setTitle("Manage & Delete Widgets")
+                .setItems(items, (d, which) -> {
+                    if (which == widgetIds.size()) {
+                        removeAllWidgetsConfirm();
+                    } else {
+                        int wId = widgetIds.get(which);
+                        ShortcutStore.removeHomeWidget(this, profile, wId);
+                        try {
+                            if (appWidgetHost != null) appWidgetHost.deleteAppWidgetId(wId);
+                        } catch (Exception ignored) {}
+                        loadWidgets();
+                        Toast.makeText(this, "Widget deleted", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Done", null)
+                .show();
+    }
+
+    private void removeAllWidgetsConfirm() {
+        new AlertDialog.Builder(this)
+                .setTitle("Remove All Widgets?")
+                .setMessage("This will remove all widgets from the current home screen profile.")
+                .setPositiveButton("Remove All", (d, w) -> {
+                    int profile = ShortcutStore.activeProfile(this);
+                    List<Integer> widgetIds = ShortcutStore.homeWidgets(this, profile);
+                    for (int wId : widgetIds) {
+                        try {
+                            if (appWidgetHost != null) appWidgetHost.deleteAppWidgetId(wId);
+                        } catch (Exception ignored) {}
+                    }
+                    ShortcutStore.setHomeWidgets(this, profile, new ArrayList<>());
+                    loadWidgets();
+                    Toast.makeText(this, "All widgets removed", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void selectWidget() {
         if (appWidgetHost == null) return;
         String[] choices = {
-                "✨ Add Lock Launcher App Dock Widget (4x1)",
+                "✨ Add Lock Launcher 2x1 Quick Dock Widget",
+                "✨ Add Lock Launcher 4x1 App Dock Widget",
+                "✨ Add Lock Launcher 1x1 Mini Pill Widget",
                 "✨ Add Lock Launcher Full Dock Widget (16-Slot)",
-                "🧩 Browse All Installed Widgets..."
+                "🧩 Browse All Installed Android Widgets..."
         };
         new AlertDialog.Builder(this)
                 .setTitle("Add Widget")
                 .setItems(choices, (d, which) -> {
                     if (which == 0) {
-                        bindInternalWidget(DockWidget4x1.class);
+                        bindInternalWidget(DockWidget2x1.class);
                     } else if (which == 1) {
+                        bindInternalWidget(DockWidget4x1.class);
+                    } else if (which == 2) {
+                        bindInternalWidget(DockWidget1x1.class);
+                    } else if (which == 3) {
                         bindInternalWidget(DockWidgetProvider.class);
                     } else {
                         launchSystemWidgetPicker();

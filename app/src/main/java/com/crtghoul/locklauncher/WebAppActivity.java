@@ -67,6 +67,15 @@ public class WebAppActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Object backCallback;
 
+    public static final String BACKGROUND_AUDIO_JS =
+            "javascript:(function() {" +
+            "  try {" +
+            "    Object.defineProperty(document, 'hidden', { value: false, writable: false });" +
+            "    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: false });" +
+            "    document.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
+            "  } catch(e) {}" +
+            "})();";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -465,6 +474,7 @@ public class WebAppActivity extends Activity {
                 isLoading = true;
                 updateNavState();
                 view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+                view.evaluateJavascript(BACKGROUND_AUDIO_JS, null);
             }
 
             @Override
@@ -482,6 +492,7 @@ public class WebAppActivity extends Activity {
                     CookieManager.getInstance().flush();
                 }
                 view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+                view.evaluateJavascript(BACKGROUND_AUDIO_JS, null);
             }
         });
 
@@ -577,7 +588,8 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (webView != null) webView.onPause();
+        // Do not freeze WebView so YouTube / YouTube Music background audio
+        // continues playing seamlessly when the phone screen is locked or turned off.
     }
 
     @Override
