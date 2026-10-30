@@ -139,16 +139,16 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- ⚙️ Launcher Settings Gear Button -->
+            <!-- Launcher Settings Button -->
             <Button
                 android:id="@+id/btn_home_settings"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="64dp"
+                android:layout_height="38dp"
                 android:layout_alignParentEnd="true"
                 android:layout_centerVertical="true"
                 android:background="@drawable/btn_ghost"
-                android:text="⚙️"
-                android:textSize="18sp"
+                android:text="Config"
+                android:textSize="11.5sp"
                 android:textColor="#FFFFFF" />
         </RelativeLayout>
 
@@ -194,6 +194,85 @@
                 android:fontFamily="sans-serif-medium"
                 android:textColor="#BBFFFFFF" />
         </LinearLayout>
+
+        <!-- Live Now Playing Media Pill (Nothing OS / Dynamic Media Bar) -->
+        <LinearLayout
+            android:id="@+id/home_now_playing_bar"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/dock_card"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="14dp"
+            android:paddingEnd="8dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/now_playing_info_container"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_vertical"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/now_playing_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12.5sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:text="Now Playing" />
+
+                <TextView
+                    android:id="@+id/now_playing_artist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#AAFFFFFF"
+                    android:textSize="10.5sp"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:text="Tap to open player" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/btn_media_prev"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:text="⏮"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/btn_media_toggle"
+                android:layout_width="36dp"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:text="⏸"
+                android:textColor="#FF4B4B"
+                android:textSize="14sp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/btn_media_next"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:gravity="center"
+                android:text="⏭"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- Minimalist Clean Home Screen "Apps / Launcher" Toggle Pill -->
@@ -218,7 +297,7 @@
             android:id="@+id/text_toggle_apps_pill"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🚀 Apps"
+            android:text="Apps"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:fontFamily="sans-serif-medium"
@@ -253,18 +332,12 @@
             android:focusable="true">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🔍"
-                android:textSize="16sp" />
-
-            <TextView
                 android:id="@+id/home_search_hint"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:paddingStart="12dp"
-                android:text="Search apps &amp; websites..."
+                android:paddingStart="4dp"
+                android:text="Search apps, web, or math..."
                 android:textColor="#BBFFFFFF"
                 android:textSize="14sp" />
 
@@ -273,11 +346,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="34dp"
                 android:background="@drawable/dock_card"
-                android:text="🧩 + Widget"
+                android:text="Widgets"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
                 android:layout_marginEnd="6dp" />
 
             <Button
@@ -285,11 +358,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="34dp"
                 android:background="@drawable/btn_accent"
-                android:text="🌐 + Web App"
+                android:text="+ Web App"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp" />
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -332,7 +405,7 @@
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
         android:gravity="center"
-        android:text="No shortcuts in this profile yet.\nTap '🌐 + Web App' below or ⚙️ Settings to add apps!"
+        android:text="No shortcuts in this profile yet.\nTap '+ Web App' below or Config to add apps."
         android:textColor="#CCFFFFFF"
         android:textSize="14sp"
         android:padding="20dp"

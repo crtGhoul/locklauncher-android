@@ -366,6 +366,20 @@ public class IconUtil {
     /** True if the app exists, is enabled, and is not suspended. */
     public static boolean isAppLaunchable(Context ctx, Shortcut s) {
         if (s == null || !s.isApp() || s.pkg == null || s.pkg.isEmpty()) return false;
+        if (s.profileSerial > 0) {
+            try {
+                LauncherApps la = (LauncherApps) ctx.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+                UserManager um = (UserManager) ctx.getSystemService(Context.USER_SERVICE);
+                if (la != null && um != null) {
+                    UserHandle uh = um.getUserForSerialNumber(s.profileSerial);
+                    if (uh != null) {
+                        List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
+                        if (acts != null && !acts.isEmpty()) return true;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
         try {
             ApplicationInfo ai = ctx.getPackageManager().getApplicationInfo(s.pkg, 0);
             if (ai == null || !ai.enabled) return false;
@@ -407,6 +421,14 @@ public class IconUtil {
                 // P1-1: a disabled/suspended app must never produce a
                 // visible-but-dead slot; fail here so callers can explain it.
                 if (!isAppLaunchable(ctx, s)) return null;
+                if (s.profileSerial > 0) {
+                    Intent cloneTrampoline = new Intent(ctx, HomeActivity.class);
+                    cloneTrampoline.setAction("com.crtghoul.locklauncher.LAUNCH_CLONE");
+                    cloneTrampoline.putExtra("clone_pkg", s.pkg);
+                    cloneTrampoline.putExtra("clone_serial", s.profileSerial);
+                    cloneTrampoline.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    return cloneTrampoline;
+                }
                 Intent i = ctx.getPackageManager().getLaunchIntentForPackage(s.pkg);
                 if (i == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     try {
@@ -643,6 +665,26 @@ public class IconUtil {
                         km.requestDismissKeyguard((Activity) ctx, null);
                     } catch (Exception ignored) {}
                 }
+                // Cloned / Work profile apps (profileSerial > 0) MUST launch via LauncherApps
+                // on their target UserHandle first; PackageManager.getLaunchIntentForPackage
+                // always resolves to User 0 (the main instance).
+                if (s.profileSerial > 0) {
+                    try {
+                        LauncherApps la = (LauncherApps) ctx.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+                        UserManager um = (UserManager) ctx.getSystemService(Context.USER_SERVICE);
+                        if (la != null && um != null) {
+                            UserHandle uh = um.getUserForSerialNumber(s.profileSerial);
+                            if (uh != null) {
+                                List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
+                                if (acts != null && !acts.isEmpty()) {
+                                    la.startMainActivity(acts.get(0).getComponentName(), uh, null, null);
+                                    return true;
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
                 Intent launch = launchIntent(ctx, s);
                 if (launch != null) {
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
@@ -670,7 +712,7 @@ public class IconUtil {
                                 la.startMainActivity(acts.get(0).getComponentName(), uh, null, null);
                                 return true;
                             }
-                        } 
+                        }
                     }
                 } catch (Exception ignored) {
                 }

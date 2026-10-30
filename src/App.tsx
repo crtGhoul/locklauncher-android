@@ -5,7 +5,6 @@ import {
   Pause,
   Lock,
   Unlock,
-  Volume2,
   Check,
   Copy,
   Search,
@@ -16,12 +15,14 @@ import {
   Maximize2,
   Minimize2,
   X,
-  SlidersHorizontal,
   UserCheck,
   FastForward,
-  Sparkles,
-  Globe,
-  Terminal,
+  SlidersHorizontal,
+  Clock,
+  PictureInPicture2,
+  EyeOff,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import { analyzeUrlInterception, JAVA_SNIPPETS } from './adBlockLogic';
 
@@ -30,98 +31,95 @@ interface AppShortcut {
   name: string;
   url?: string;
   category: 'web' | 'system';
-  accent: string;
-  symbol: string;
+  code: string;
   subtitle: string;
 }
 
+interface HomeWidgetItem {
+  id: number;
+  label: string;
+  size: string;
+}
+
 const INITIAL_SHORTCUTS: AppShortcut[] = [
+  {
+    id: 'ytm',
+    name: 'YT Music',
+    url: 'https://music.youtube.com/watch?v=dQw4w9WgXcQ',
+    category: 'web',
+    code: 'YM',
+    subtitle: 'InnerTube Ad-Strip · Desktop UA',
+  },
   {
     id: 'yt',
     name: 'YouTube',
     url: 'https://m.youtube.com/watch?v=locklauncher_120hz',
     category: 'web',
-    accent: 'bg-rose-600 text-white',
-    symbol: '▶',
-    subtitle: 'Ad-Free WebApp · Background Audio',
-  },
-  {
-    id: 'ytm',
-    name: 'YT Music',
-    url: 'https://music.youtube.com/playlist?list=LL_OFFLINE_MIX',
-    category: 'web',
-    accent: 'bg-red-700 text-white',
-    symbol: '♫',
-    subtitle: 'Screen-Off Audio · _lact Keepalive',
+    code: 'YT',
+    subtitle: 'SponsorBlock · PiP · 120Hz',
   },
   {
     id: 'chatgpt',
     name: 'ChatGPT',
     url: 'https://chatgpt.com/',
     category: 'web',
-    accent: 'bg-emerald-700 text-white',
-    symbol: '✦',
-    subtitle: 'OAuth Popup Transport · Zero Trackers',
+    code: 'AI',
+    subtitle: 'OAuth Transport · Zero Trackers',
   },
   {
     id: 'reddit',
     name: 'Reddit',
     url: 'https://www.reddit.com/r/androiddev',
     category: 'web',
-    accent: 'bg-orange-600 text-white',
-    symbol: 'R',
-    subtitle: 'Cosmetic CSS · Promo Slot Stripping',
+    code: 'RD',
+    subtitle: 'Cosmetic CSS · Promo Stripping',
   },
   {
     id: 'github',
     name: 'GitHub',
     url: 'https://github.com/crtGhoul/locklauncher-android',
     category: 'web',
-    accent: 'bg-slate-800 text-slate-100',
-    symbol: 'GH',
-    subtitle: 'Blob & Release APK Downloader',
+    code: 'GH',
+    subtitle: 'Auto-Release v2.18 · Blob Saver',
   },
   {
     id: 'dialer',
     name: 'Phone',
     category: 'system',
-    accent: 'bg-indigo-600 text-white',
-    symbol: '✆',
+    code: 'PH',
     subtitle: '0ms Native LauncherApps Intent',
   },
   {
     id: 'camera',
     name: 'Camera',
     category: 'system',
-    accent: 'bg-sky-700 text-white',
-    symbol: '◉',
+    code: 'CM',
     subtitle: 'Keyguard Dismiss Hardware Shortcut',
   },
   {
     id: 'settings',
     name: 'Settings',
     category: 'system',
-    accent: 'bg-slate-700 text-slate-200',
-    symbol: '⚙',
+    code: 'OS',
     subtitle: '120Hz LTPO & Profile Serial Isolation',
   },
 ];
 
 const PRESET_TEST_URLS = [
   {
-    label: 'YouTube Music InnerTube Track API (Ad Stripped)',
+    label: 'YT Music InnerTube Player (Ad Stripped)',
     url: 'https://music.youtube.com/youtubei/v1/player?key=AIzaSyA',
   },
   {
-    label: 'YouTube Music Audio Telemetry (Blocked)',
-    url: 'https://music.youtube.com/youtubei/v1/att/get?key=AIzaSyA',
+    label: 'SponsorBlock Skip Segments API',
+    url: 'https://sponsor.ajay.app/api/skipSegments?videoID=dQw4w9WgXcQ',
   },
   {
-    label: 'YouTube Pre-Roll Ad Break API (Blocked)',
+    label: 'YouTube Pre-Roll Ad Break (Blocked)',
     url: 'https://m.youtube.com/youtubei/v1/player/ad_break?key=AIzaSyA',
   },
   {
-    label: 'YouTube Video & Audio Media Stream (Protected)',
+    label: 'YouTube Audio/Video Stream (Protected)',
     url: 'https://rr2---sn-ab5l6nzy.googlevideo.com/videoplayback?expire=173999&mime=audio/mp4',
   },
   {
@@ -129,7 +127,7 @@ const PRESET_TEST_URLS = [
     url: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=youtube_web',
   },
   {
-    label: 'DoubleClick Ad SDK Script (Blocked)',
+    label: 'DoubleClick Ad SDK (Blocked)',
     url: 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js',
   },
 ];
@@ -161,6 +159,12 @@ export default function App() {
   const [cleanModeHidden, setCleanModeHidden] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Home Widgets state (mirrors HomeActivity.java widget manager)
+  const [homeWidgets, setHomeWidgets] = useState<HomeWidgetItem[]>([
+    { id: 101, label: 'Lock Launcher 4x1 Dock', size: '4x1' },
+  ]);
+  const [widgetMenuOpen, setWidgetMenuOpen] = useState(false);
+
   // WebAppActivity container state
   const [activeWebApp, setActiveWebApp] = useState<AppShortcut | null>(INITIAL_SHORTCUTS[0]);
   const [isScreenLocked, setIsScreenLocked] = useState(false);
@@ -168,8 +172,12 @@ export default function App() {
   const [playbackSeconds, setPlaybackSeconds] = useState(142);
   const [isImmersiveFullscreen, setIsImmersiveFullscreen] = useState(false);
   const [adBreakSimulated, setAdBreakSimulated] = useState(false);
+  const [powerMenuOpen, setPowerMenuOpen] = useState(false);
+  const [audioOnlyMode, setAudioOnlyMode] = useState(false);
+  const [sleepTimerMin, setSleepTimerMin] = useState<number>(0);
+  const [pipActive, setPipActive] = useState(false);
   const [adSkipLog, setAdSkipLog] = useState<string>(
-    'Non-destructive observer active: .video-ads preserved in DOM, 3 pre-roll requests intercepted.'
+    'InnerTube fetch/XHR hook active: adPlacements & adSlots stripped; SponsorBlock segments loaded.'
   );
   const [activeGoogleAccount, setActiveGoogleAccount] = useState('crtghoul@gmail.com');
   const [oauthModalOpen, setOauthModalOpen] = useState(false);
@@ -180,14 +188,14 @@ export default function App() {
   const [selectedCodeTab, setSelectedCodeTab] = useState<keyof typeof JAVA_SNIPPETS>('ytMusicAdStrip');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Advance simulated media timer even when screen is locked (proving background playback)
+  // Advance simulated media timer even when screen is locked or on Home screen (proving background playback)
   useEffect(() => {
-    if (!activeWebApp || !isPlayingMedia) return;
+    if (!isPlayingMedia) return;
     const timer = window.setInterval(() => {
       setPlaybackSeconds((prev) => prev + 1);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [activeWebApp, isPlayingMedia]);
+  }, [isPlayingMedia]);
 
   const handleCopyCode = (key: keyof typeof JAVA_SNIPPETS) => {
     navigator.clipboard.writeText(JAVA_SNIPPETS[key]);
@@ -229,6 +237,7 @@ export default function App() {
       setActiveWebApp(app);
       setIsPlayingMedia(app.id === 'yt' || app.id === 'ytm');
       setIslandExpanded(false);
+      setPipActive(false);
     } else {
       setActiveWebApp(null);
     }
@@ -236,17 +245,20 @@ export default function App() {
 
   const triggerSimulatedPreRoll = () => {
     setAdBreakSimulated(true);
-    setAdSkipLog('Detected #movie_player.ad-showing → muted video, seeked currentTime to duration, clicked .ytp-ad-skip-button-modern (0ms black screen).');
+    setAdSkipLog(
+      'SponsorBlock + InnerTube Guard: Skipped [14.2s -> 42.8s] sponsor segment & stripped adPlacements (0ms interruption).'
+    );
+    setPlaybackSeconds((prev) => prev + 28);
     setTimeout(() => {
       setAdBreakSimulated(false);
-    }, 900);
+    }, 800);
   };
 
   const handleSwitchOAuthAccount = (newEmail: string) => {
     setActiveGoogleAccount(newEmail);
     setOauthModalOpen(false);
     setAdSkipLog(
-      `onCreateWindow WebViewTransport synced cookies for ${newEmail} via CookieManager.getInstance().flush().`
+      `Desktop Chrome 132 UA + onCreateWindow WebViewTransport synced cookies for ${newEmail} via CookieManager.flush().`
     );
   };
 
@@ -264,25 +276,32 @@ export default function App() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* Top Bar Contract: 3 zones separated by gap-8 */}
-      <header className="flex items-center justify-between gap-8 px-6 py-4 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md sticky top-0 z-30">
-        <a
-          href="#top"
-          className="text-lg font-bold tracking-tight text-white font-display whitespace-nowrap shrink-0"
-        >
-          Lock Launcher
-        </a>
+  const activeHost = activeWebApp?.url
+    ? new URL(activeWebApp.url).hostname.replace(/^www\./, '')
+    : 'youtube.com';
 
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
+  return (
+    <div className="min-h-screen bg-[#090A0F] text-zinc-100 flex flex-col">
+      {/* Top Bar Contract: 3 zones separated by gap-8 */}
+      <header className="flex items-center justify-between gap-8 px-6 py-3.5 border-b border-zinc-800/80 bg-[#090A0F]/95 backdrop-blur-md sticky top-0 z-30">
+        <div className="flex items-center gap-3 shrink-0">
+          <a
+            href="#top"
+            className="text-base font-bold tracking-tight text-white font-display whitespace-nowrap"
+          >
+            LOCK LAUNCHER
+          </a>
+          <span className="text-xs font-mono text-zinc-500 tabular-nums">v2.18 · BUILD 56</span>
+        </div>
+
+        <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-zinc-400">
           <button
             onClick={() => setActiveWorkbenchTab('inspector')}
             className={`hover:text-white transition-colors whitespace-nowrap shrink-0 ${
               activeWorkbenchTab === 'inspector' ? 'text-white underline underline-offset-8' : ''
             }`}
           >
-            AdBlock & Audio Inspector
+            Interceptor & SponsorBlock
           </button>
           <button
             onClick={() => setActiveWorkbenchTab('code')}
@@ -290,7 +309,7 @@ export default function App() {
               activeWorkbenchTab === 'code' ? 'text-white underline underline-offset-8' : ''
             }`}
           >
-            Java & JS Patch Source
+            Java & Workflow Source
           </button>
           <button
             onClick={() => {
@@ -299,16 +318,16 @@ export default function App() {
             }}
             className="hover:text-white transition-colors whitespace-nowrap shrink-0"
           >
-            WebAppActivity Simulator
+            WebApp Container
           </button>
           <button
             onClick={() => {
               setActiveWebApp(null);
-              setIslandExpanded(true);
+              setIslandExpanded(false);
             }}
             className="hover:text-white transition-colors whitespace-nowrap shrink-0"
           >
-            Dynamic Island Deck
+            Home Screen
           </button>
         </nav>
 
@@ -318,64 +337,64 @@ export default function App() {
               setActiveWorkbenchTab('code');
               handleCopyCode(selectedCodeTab);
             }}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors whitespace-nowrap shrink-0 flex items-center gap-2"
+            className="px-3.5 py-1.5 text-xs font-medium text-zinc-950 bg-zinc-100 rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
           >
             {copiedKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedKey ? 'Copied Snippet' : 'Copy Active Patch'}</span>
+            <span>{copiedKey ? 'Copied Source' : 'Copy Active Source'}</span>
           </button>
         </div>
       </header>
 
       {/* Main 1440px Multi-Column Workbench */}
-      <main className="max-w-7xl w-full mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 items-start">
-        {/* Left 5 Columns: Interactive OnePlus 13 (OxygenOS 15) Hardware Frame Simulator */}
+      <main className="max-w-7xl w-full mx-auto px-6 py-7 grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 items-start">
+        {/* Left 5 Columns: Hardware Device Frame (OnePlus 13 · OxygenOS 15) */}
         <section className="lg:col-span-5 flex flex-col items-center">
-          <div className="w-full max-w-[400px] rounded-[36px] border border-slate-800 bg-slate-900/90 p-4 shadow-2xl">
-            {/* Simulated Device Hardware Control Strip */}
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/80 text-xs text-slate-400">
-              <span>OnePlus 13 · 120Hz LTPO</span>
+          <div className="w-full max-w-[400px] rounded-[32px] border border-zinc-800 bg-[#11131A] p-4 shadow-2xl">
+            {/* Hardware Frame Top Control Bar */}
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800/80 text-xs text-zinc-400">
+              <span className="font-mono text-[11px] text-zinc-300">ONEPLUS 13 · 120HZ LTPO</span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsScreenLocked((prev) => !prev)}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                  className={`px-2.5 py-1 rounded font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     isScreenLocked
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700'
                   }`}
                 >
                   {isScreenLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                  <span>{isScreenLocked ? 'Screen Locked' : 'Lock Screen'}</span>
+                  <span>{isScreenLocked ? 'Locked' : 'Lock'}</span>
                 </button>
                 {activeWebApp && (
                   <button
                     onClick={() => setActiveWebApp(null)}
-                    className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 hover:bg-slate-700 font-medium whitespace-nowrap shrink-0"
+                    className="px-2.5 py-1 rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 font-medium whitespace-nowrap shrink-0"
                   >
-                    Home
+                    Go Home
                   </button>
                 )}
               </div>
             </div>
 
             {/* Viewport Screen Area */}
-            <div className="relative h-[640px] rounded-[26px] bg-slate-950 border border-slate-800/90 overflow-hidden flex flex-col justify-between">
-              {/* Dynamic Island v2.12 Overlay Capsule */}
+            <div className="relative h-[650px] rounded-[24px] bg-[#090A0F] border border-zinc-800/90 overflow-hidden flex flex-col justify-between">
+              {/* Dynamic Island Overlay Capsule */}
               <div className="pt-3 px-3 z-20">
                 {!islandExpanded ? (
                   <button
                     onClick={() => setIslandExpanded(true)}
-                    className="mx-auto flex items-center justify-between gap-4 px-4 py-1.5 rounded-full bg-black border border-slate-800 text-xs text-slate-200 hover:border-indigo-500/60 transition-colors"
+                    className="mx-auto flex items-center justify-between gap-5 px-4 py-1.5 rounded-full bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-200 hover:border-zinc-600 transition-colors"
                   >
-                    <span className="font-mono tabular-nums">94% · 120Hz</span>
-                    <span className="text-slate-400">
-                      {isPlayingMedia && activeWebApp ? `Playing ${activeWebApp.name}` : 'Dynamic Island'}
+                    <span className="font-mono tabular-nums text-zinc-400">94% · 120Hz</span>
+                    <span className="font-medium text-zinc-200">
+                      {isPlayingMedia ? `Playing · ${formatTime(playbackSeconds)}` : 'Dynamic Island'}
                     </span>
                   </button>
                 ) : (
-                  <div className="rounded-2xl bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-3 shadow-xl">
-                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+                  <div className="rounded-xl bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 p-3 shadow-xl">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-800">
                       <span className="text-xs font-semibold text-white">
-                        Island Deck · 4-Column Glass
+                        Dynamic Island · 16-Slot Deck
                       </span>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -385,15 +404,15 @@ export default function App() {
                           }}
                           className={`px-2 py-1 rounded text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
                             islandOrganizeMode
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                              ? 'bg-zinc-100 text-zinc-950'
+                              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                           }`}
                         >
                           {islandOrganizeMode ? 'Done' : 'Organize'}
                         </button>
                         <button
                           onClick={() => setIslandExpanded(false)}
-                          className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                          className="p-1 rounded bg-zinc-800 text-zinc-400 hover:text-white"
                           aria-label="Collapse Dynamic Island"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -402,15 +421,15 @@ export default function App() {
                     </div>
 
                     {islandOrganizeMode && (
-                      <div className="flex items-center justify-between gap-2 mb-2.5 text-[11px] text-slate-300 bg-slate-950/80 px-2.5 py-1.5 rounded-lg">
+                      <div className="flex items-center justify-between gap-2 mb-2.5 text-[11px] text-zinc-300 bg-zinc-950 px-2.5 py-1.5 rounded">
                         <span>
                           {selectedSwapIndex !== null
-                            ? `Tap target slot to swap with #${selectedSwapIndex + 1}`
-                            : 'Tap any two apps to swap'}
+                            ? `Select target slot to swap with #${selectedSwapIndex + 1}`
+                            : 'Tap any two slots to swap'}
                         </span>
                         <button
                           onClick={handleSortIslandApps}
-                          className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center gap-1 whitespace-nowrap shrink-0"
+                          className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium flex items-center gap-1 whitespace-nowrap shrink-0"
                         >
                           <ArrowUpDown className="w-3 h-3" />
                           <span>Sort A–Z</span>
@@ -423,18 +442,16 @@ export default function App() {
                         <div key={item.id} className="flex flex-col items-center">
                           <button
                             onClick={() => handleSlotTap(item, idx)}
-                            className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center p-1.5 transition-transform active:scale-95 border ${
+                            className={`w-full aspect-square rounded-lg flex flex-col items-center justify-center p-1.5 transition-transform active:scale-95 border ${
                               selectedSwapIndex === idx
-                                ? 'border-indigo-400 bg-indigo-950/60'
-                                : 'border-slate-800 bg-slate-950/70 hover:border-slate-700'
+                                ? 'border-zinc-200 bg-zinc-800'
+                                : 'border-zinc-800 bg-zinc-950/80 hover:border-zinc-700'
                             }`}
                           >
-                            <span
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${item.accent}`}
-                            >
-                              {item.symbol}
+                            <span className="w-7 h-7 rounded bg-zinc-800 text-zinc-100 font-mono text-[11px] font-semibold flex items-center justify-center">
+                              {item.code}
                             </span>
-                            <span className="text-[10px] text-slate-300 mt-1 truncate max-w-full">
+                            <span className="text-[10px] text-zinc-300 mt-1 truncate max-w-full">
                               {item.name}
                             </span>
                           </button>
@@ -442,14 +459,14 @@ export default function App() {
                             <div className="flex items-center gap-1 mt-1">
                               <button
                                 onClick={() => handleShiftApp(idx, -1)}
-                                className="p-0.5 rounded bg-slate-800 text-slate-400 hover:text-white"
+                                className="p-0.5 rounded bg-zinc-800 text-zinc-400 hover:text-white"
                                 title="Shift Left"
                               >
                                 <ArrowLeft className="w-2.5 h-2.5" />
                               </button>
                               <button
                                 onClick={() => handleShiftApp(idx, 1)}
-                                className="p-0.5 rounded bg-slate-800 text-slate-400 hover:text-white"
+                                className="p-0.5 rounded bg-zinc-800 text-zinc-400 hover:text-white"
                                 title="Shift Right"
                               >
                                 <ArrowRight className="w-2.5 h-2.5" />
@@ -465,91 +482,92 @@ export default function App() {
 
               {/* Screen Lock Overlay (Tests Background Audio Survival) */}
               {isScreenLocked && (
-                <div className="absolute inset-0 z-10 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-6 text-center">
+                <div className="absolute inset-0 z-10 bg-[#090A0F]/95 backdrop-blur-md flex flex-col items-center justify-between p-6 text-center">
                   <div className="mt-12">
                     <p className="text-4xl font-bold font-mono tabular-nums text-white tracking-tight">
                       22:48
                     </p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Screen Off · Lock Screen Active
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Keyguard Active · Screen Off
                     </p>
                   </div>
 
-                  {activeWebApp && (
-                    <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-left">
-                      <div className="flex items-center justify-between text-xs text-indigo-300 mb-1.5">
-                        <span>WebAppActivity Background Audio</span>
-                        <span className="font-mono tabular-nums">{formatTime(playbackSeconds)}</span>
-                      </div>
-                      <p className="text-sm font-semibold text-white truncate">
-                        {activeWebApp.name} — Playing with Screen Off
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        document.hidden = false · AudioFocus GAIN held · Renderer priority IMPORTANT
-                      </p>
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800">
-                        <button
-                          onClick={() => setIsPlayingMedia((p) => !p)}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5"
-                        >
-                          {isPlayingMedia ? (
-                            <>
-                              <Pause className="w-3.5 h-3.5" />
-                              <span>Pause Audio</span>
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-3.5 h-3.5" />
-                              <span>Resume Audio</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => setIsScreenLocked(false)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200"
-                        >
-                          Unlock Device
-                        </button>
-                      </div>
+                  <div className="w-full rounded-xl border border-zinc-800 bg-zinc-900/90 p-4 text-left">
+                    <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
+                      <span className="font-mono text-[11px] text-emerald-400">
+                        AUDIOFOCUS_GAIN · KEEP_ALIVE
+                      </span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {formatTime(playbackSeconds)}
+                      </span>
                     </div>
-                  )}
+                    <p className="text-sm font-semibold text-white truncate">
+                      {activeWebApp ? activeWebApp.name : 'YT Music'} — Background Stream
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      document.hidden = false · Renderer priority IMPORTANT
+                    </p>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-800">
+                      <button
+                        onClick={() => setIsPlayingMedia((p) => !p)}
+                        className="px-3 py-1.5 rounded bg-zinc-100 hover:bg-white text-xs font-semibold text-zinc-950 flex items-center gap-1.5"
+                      >
+                        {isPlayingMedia ? (
+                          <>
+                            <Pause className="w-3.5 h-3.5" />
+                            <span>Pause</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5" />
+                            <span>Resume</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setIsScreenLocked(false)}
+                        className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200"
+                      >
+                        Unlock Device
+                      </button>
+                    </div>
+                  </div>
 
-                  <p className="text-xs text-slate-500">
-                    Double-tap or click Unlock to return to WebAppActivity
+                  <p className="text-xs text-zinc-500">
+                    Click Unlock to return to active surface
                   </p>
                 </div>
               )}
 
-              {/* Active View: Either Standalone WebAppActivity or Flagship Home Launcher */}
+              {/* Active View: Either Standalone WebAppActivity or De-AI'd Home Launcher */}
               {activeWebApp ? (
                 <div className="flex-1 flex flex-col justify-between px-3 pb-3 pt-2 overflow-y-auto">
-                  {/* Standalone WebApp Container Body (Zero Address Bar) */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex-1 flex flex-col justify-between">
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3.5 flex-1 flex flex-col justify-between">
                     <div>
-                      <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
                         <div>
-                          <h2 className="text-base font-bold text-white font-display">
+                          <h2 className="text-sm font-bold text-white font-display">
                             {activeWebApp.name}
                           </h2>
-                          <p className="text-xs text-slate-400">{activeWebApp.subtitle}</p>
+                          <p className="text-[11px] text-zinc-400">{activeWebApp.subtitle}</p>
                         </div>
                         <button
                           onClick={() => setOauthModalOpen((prev) => !prev)}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] font-mono text-zinc-200 flex items-center gap-1.5 whitespace-nowrap shrink-0"
                         >
-                          <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
                           <span className="truncate max-w-[115px]">{activeGoogleAccount}</span>
                         </button>
                       </div>
 
                       {/* OAuth Account Switcher Popup Simulation */}
                       {oauthModalOpen && (
-                        <div className="mt-3 p-3 rounded-xl bg-slate-950 border border-indigo-500/40">
+                        <div className="mt-2.5 p-3 rounded-lg bg-zinc-950 border border-zinc-700">
                           <p className="text-xs font-semibold text-white mb-1">
-                            onCreateWindow · Multi-Account OAuth Transport
+                            Google OAuth · Desktop Chrome 132 UA
                           </p>
-                          <p className="text-[11px] text-slate-400 mb-2">
-                            3rd-party cookies + DOMStorage synced & flushed before redirect:
+                          <p className="text-[11px] text-zinc-400 mb-2">
+                            Bypasses WebView 403 disallowed_useragent; syncs cookies via WebViewTransport:
                           </p>
                           <div className="flex flex-col gap-1.5">
                             {['crtghoul@gmail.com', 'velazquez.lab@gmail.com', 'work.profile@oneplus.dev'].map(
@@ -557,10 +575,10 @@ export default function App() {
                                 <button
                                   key={acct}
                                   onClick={() => handleSwitchOAuthAccount(acct)}
-                                  className={`px-2.5 py-1.5 rounded-lg text-xs text-left font-mono flex items-center justify-between ${
+                                  className={`px-2.5 py-1.5 rounded text-xs text-left font-mono flex items-center justify-between ${
                                     activeGoogleAccount === acct
-                                      ? 'bg-indigo-600/20 text-indigo-200 border border-indigo-500/40'
-                                      : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                                      ? 'bg-zinc-800 text-white border border-zinc-600'
+                                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
                                   }`}
                                 >
                                   <span>{acct}</span>
@@ -572,30 +590,108 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Simulated HTML5 Media Player with Non-Destructive Ad Guard */}
-                      <div className="mt-3 rounded-xl bg-slate-950 border border-slate-800 p-3.5">
-                        <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                          <span>#movie_player · HTML5 Video</span>
-                          <span className="font-mono tabular-nums text-slate-300">
-                            {adBreakSimulated ? 'AD BREAK → SKIPPING (16x)' : `${formatTime(playbackSeconds)} / 18:40`}
+                      {/* WebApp Power Controls Sheet (Triggered by tapping Domain Bar or Controls button) */}
+                      {powerMenuOpen && (
+                        <div className="mt-2.5 p-3 rounded-lg bg-zinc-950 border border-zinc-700 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-white">
+                              WebApp Power Controls
+                            </span>
+                            <button
+                              onClick={() => setPowerMenuOpen(false)}
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                            <button
+                              onClick={() => {
+                                setAudioOnlyMode((p) => !p);
+                                setAdSkipLog(
+                                  !audioOnlyMode
+                                    ? 'Audio-Only OLED Saver enabled: <video> opacity 0.01, audio stream active.'
+                                    : 'Video display layer restored.'
+                                );
+                              }}
+                              className={`p-2 rounded border text-left flex items-center gap-1.5 ${
+                                audioOnlyMode
+                                  ? 'bg-zinc-800 border-zinc-500 text-white'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                              }`}
+                            >
+                              <EyeOff className="w-3.5 h-3.5 shrink-0" />
+                              <span>{audioOnlyMode ? 'OLED Saver: ON' : 'OLED Audio-Only'}</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const next = sleepTimerMin === 0 ? 15 : sleepTimerMin === 15 ? 30 : sleepTimerMin === 30 ? 60 : 0;
+                                setSleepTimerMin(next);
+                                setAdSkipLog(
+                                  next > 0
+                                    ? `Sleep Timer scheduled for ${next}m: will pause media & abandon audio focus.`
+                                    : 'Sleep Timer cancelled.'
+                                );
+                              }}
+                              className={`p-2 rounded border text-left flex items-center gap-1.5 ${
+                                sleepTimerMin > 0
+                                  ? 'bg-zinc-800 border-zinc-500 text-white'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                              }`}
+                            >
+                              <Clock className="w-3.5 h-3.5 shrink-0" />
+                              <span>{sleepTimerMin > 0 ? `Sleep: ${sleepTimerMin}m` : 'Sleep Timer'}</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setPipActive(true);
+                                setPowerMenuOpen(false);
+                                setActiveWebApp(null);
+                                setAdSkipLog('Entered Android Picture-in-Picture (16:9 Rational) floating window.');
+                              }}
+                              className="p-2 rounded border bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700 text-left flex items-center gap-1.5 col-span-2"
+                            >
+                              <PictureInPicture2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Enter Picture-in-Picture (PiP) Mode on Home Screen</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Simulated HTML5 Media Player with SponsorBlock + InnerTube Ad Guard */}
+                      <div className="mt-2.5 rounded-lg bg-zinc-950 border border-zinc-800 p-3">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-2">
+                          <span className="font-mono">
+                            {audioOnlyMode ? 'AUDIO_ONLY_OLED_MODE' : 'HTML5_SURFACE · 120HZ'}
+                          </span>
+                          <span className="font-mono tabular-nums text-zinc-300">
+                            {adBreakSimulated ? 'SPONSOR SKIP -> 42.8s' : `${formatTime(playbackSeconds)} / 18:40`}
                           </span>
                         </div>
 
-                        <div className="h-24 rounded-lg bg-gradient-to-br from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800/80 flex flex-col items-center justify-center px-3 text-center">
-                          <p className="text-xs font-semibold text-white">
+                        <div
+                          className={`h-24 rounded border flex flex-col items-center justify-center px-3 text-center transition-colors ${
+                            audioOnlyMode
+                              ? 'bg-black border-zinc-900 text-zinc-500'
+                              : 'bg-zinc-900/70 border-zinc-800 text-zinc-100'
+                          }`}
+                        >
+                          <p className="text-xs font-semibold">
                             {adBreakSimulated
-                              ? 'Pre-Roll Detected — Muting & Seeking to End...'
-                              : `${activeWebApp.name} 120Hz Hardware Layer Stream`}
+                              ? 'SponsorBlock + Ad Guard: Seeking Past Segment...'
+                              : audioOnlyMode
+                              ? 'OLED Black Screen Active · Audio Streaming'
+                              : `${activeWebApp.name} · Zero Ad Placements`}
                           </p>
-                          <p className="text-[11px] text-slate-400 mt-1">
-                            .video-ads & .ytp-ad-module intact · Zero black screen
+                          <p className="text-[11px] text-zinc-400 mt-1 font-mono">
+                            adPlacements: [] · SponsorBlock: Active
                           </p>
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 mt-3">
+                        <div className="flex items-center justify-between gap-2 mt-2.5">
                           <button
                             onClick={() => setIsPlayingMedia((p) => !p)}
-                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                            className="px-3 py-1.5 rounded bg-zinc-100 hover:bg-white text-xs font-semibold text-zinc-950 flex items-center gap-1.5 whitespace-nowrap shrink-0"
                           >
                             {isPlayingMedia ? (
                               <>
@@ -612,46 +708,50 @@ export default function App() {
 
                           <button
                             onClick={triggerSimulatedPreRoll}
-                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                            className="px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 flex items-center gap-1.5 whitespace-nowrap shrink-0"
                           >
-                            <FastForward className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>Simulate Pre-Roll Ad</span>
+                            <FastForward className="w-3.5 h-3.5 text-zinc-300" />
+                            <span>Test Sponsor/Ad Skip</span>
                           </button>
                         </div>
                       </div>
 
                       {/* Live Telemetry Readout inside WebApp */}
-                      <div className="mt-3 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs space-y-1.5">
+                      <div className="mt-2.5 p-2.5 rounded-lg bg-zinc-950 border border-zinc-800/80 text-xs space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Page Visibility Spoof</span>
-                          <span className="font-mono text-emerald-400">hidden = false</span>
+                          <span className="text-zinc-400">Visibility & Focus</span>
+                          <span className="font-mono text-[11px] text-emerald-400">
+                            hidden=false · hasFocus=true
+                          </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Renderer Priority</span>
-                          <span className="font-mono text-slate-200">IMPORTANT (keepAlive)</span>
+                          <span className="text-zinc-400">InnerTube JSON Filter</span>
+                          <span className="font-mono text-[11px] text-zinc-200">
+                            /youtubei/v1/player stripped
+                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                        <p className="text-[11px] text-zinc-400 pt-1 border-t border-zinc-800/80 leading-snug">
                           {adSkipLog}
                         </p>
                       </div>
                     </div>
 
-                    {/* Floating Frosted-Glass Web Navigation Bar (Matches WebAppActivity.java) */}
+                    {/* Floating Minimalist Web Navigation Dock (De-AI'd) */}
                     {!isImmersiveFullscreen ? (
-                      <div className="mt-3 px-3 py-2 rounded-full bg-slate-950/90 backdrop-blur-md border border-slate-700/80 flex items-center justify-between gap-2">
+                      <div className="mt-3 px-2.5 py-1.5 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-1.5">
                         <button
                           onClick={() => setAdSkipLog('Navigated back in WebView history.')}
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 hover:bg-slate-800 text-xs"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-300 hover:bg-zinc-800"
                           title="Back"
                         >
-                          ◀
+                          <ArrowLeft className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setAdSkipLog('Navigated forward in WebView history.')}
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-800 text-xs"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-400 hover:bg-zinc-800"
                           title="Forward"
                         >
-                          ▶
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() =>
@@ -659,31 +759,33 @@ export default function App() {
                               'Reloaded page & re-injected BACKGROUND_PLAYBACK_JS + COSMETIC_AD_BLOCK_JS.'
                             )
                           }
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 hover:bg-slate-800 text-xs"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-300 hover:bg-zinc-800"
                           title="Refresh"
                         >
                           <RotateCw className="w-3.5 h-3.5" />
                         </button>
 
                         <button
-                          onClick={() =>
-                            setAdSkipLog(`Active URL: ${activeWebApp.url} (HTTPS Verified)`)
-                          }
-                          className="px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-200 truncate max-w-[130px]"
+                          onClick={() => setPowerMenuOpen((prev) => !prev)}
+                          className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-[11px] font-mono text-zinc-200 truncate max-w-[140px] flex items-center gap-1.5"
+                          title="Tap for PiP, Sleep Timer & OLED Controls"
                         >
-                          🔒 {new URL(activeWebApp.url || 'https://youtube.com').hostname.replace(/^www\./, '')}
+                          <SlidersHorizontal className="w-3 h-3 text-zinc-400 shrink-0" />
+                          <span className="truncate">
+                            {sleepTimerMin > 0 ? `${activeHost} · ${sleepTimerMin}m` : activeHost}
+                          </span>
                         </button>
 
                         <button
                           onClick={() => setIsImmersiveFullscreen(true)}
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 hover:bg-slate-800 text-xs"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-300 hover:bg-zinc-800"
                           title="Immersive Fullscreen"
                         >
                           <Maximize2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setActiveWebApp(null)}
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-rose-400 hover:bg-slate-800 text-xs"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800"
                           title="Close WebApp"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -692,76 +794,171 @@ export default function App() {
                     ) : (
                       <button
                         onClick={() => setIsImmersiveFullscreen(false)}
-                        className="mt-3 mx-auto px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5"
+                        className="mt-3 mx-auto px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 flex items-center gap-1.5"
                       >
                         <Minimize2 className="w-3 h-3" />
-                        <span>Exit Immersive Fullscreen</span>
+                        <span>Exit Fullscreen</span>
                       </button>
                     )}
                   </div>
                 </div>
               ) : (
-                /* Flagship Lock Launcher Home Screen (16-Slot Grid + Clean Mode + Search/Math Drawer) */
+                /* De-AI'd Flagship Lock Launcher Home Screen */
                 <div className="flex-1 flex flex-col justify-between p-4 overflow-y-auto">
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <p className="text-2xl font-bold font-display text-white">Thursday, Oct 29</p>
-                        <p className="text-xs text-slate-400">
-                          At A Glance · 0% Ads · Offline-First Home
+                        <p className="text-xl font-bold font-display text-white tracking-tight">
+                          Thursday, Oct 30
+                        </p>
+                        <p className="text-[11px] text-zinc-400 font-mono">
+                          0% ADS · OFFLINE LAUNCHER
                         </p>
                       </div>
-                      <button
-                        onClick={() => setCleanModeHidden((prev) => !prev)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium text-slate-200 hover:border-slate-700 whitespace-nowrap shrink-0"
-                      >
-                        {cleanModeHidden ? 'Show Apps' : 'Clean Mode'}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setWidgetMenuOpen((prev) => !prev)}
+                          className="px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[11px] font-medium text-zinc-300 hover:border-zinc-700"
+                        >
+                          Widgets ({homeWidgets.length})
+                        </button>
+                        <button
+                          onClick={() => setCleanModeHidden((prev) => !prev)}
+                          className="px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[11px] font-medium text-zinc-300 hover:border-zinc-700"
+                        >
+                          {cleanModeHidden ? 'Show Grid' : 'Clean'}
+                        </button>
+                      </div>
                     </div>
 
+                    {/* Widget Manager Modal (Matches user's showWidgetMenu / showManageWidgetsDialog in HomeActivity.java) */}
+                    {widgetMenuOpen && (
+                      <div className="mb-3 p-3 rounded-lg bg-zinc-900 border border-zinc-700 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-white">Manage Home Widgets</span>
+                          <button
+                            onClick={() => setWidgetMenuOpen(false)}
+                            className="text-zinc-400 hover:text-white"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {homeWidgets.length === 0 ? (
+                          <p className="text-[11px] text-zinc-400">No active widgets on this profile.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {homeWidgets.map((w) => (
+                              <div
+                                key={w.id}
+                                className="flex items-center justify-between px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800"
+                              >
+                                <span className="text-[11px] text-zinc-200">
+                                  {w.label} ({w.size})
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    setHomeWidgets((prev) => prev.filter((item) => item.id !== w.id))
+                                  }
+                                  className="text-zinc-400 hover:text-rose-400 flex items-center gap-1 text-[11px]"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <button
+                            onClick={() =>
+                              setHomeWidgets((prev) => [
+                                ...prev,
+                                {
+                                  id: Date.now(),
+                                  label: 'Lock Launcher 2x1 Pill',
+                                  size: '2x1',
+                                },
+                              ])
+                            }
+                            className="px-2.5 py-1 rounded bg-zinc-100 text-zinc-950 font-medium text-[11px] flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add Widget</span>
+                          </button>
+                          {homeWidgets.length > 0 && (
+                            <button
+                              onClick={() => setHomeWidgets([])}
+                              className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 hover:text-white text-[11px]"
+                            >
+                              Remove All
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Search Bar + Instant MathEvaluator */}
-                    <div className="relative mb-4">
-                      <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <div className="relative mb-3">
+                      <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Fuzzy app search or math (e.g. 120 * 8)..."
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                        placeholder="Search apps, web, or math (e.g. 120 * 8)..."
+                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600"
                       />
                     </div>
 
                     {mathOutput && (
-                      <div className="mb-3 px-3 py-2 rounded-xl bg-indigo-950/50 border border-indigo-500/40 flex items-center justify-between text-xs">
-                        <span className="text-indigo-200">MathEvaluator Result</span>
-                        <span className="font-mono font-bold text-white tabular-nums">
+                      <div className="mb-3 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 flex items-center justify-between text-xs">
+                        <span className="text-zinc-400">MathEvaluator</span>
+                        <span className="font-mono font-bold text-emerald-400 tabular-nums">
                           = {mathOutput}
                         </span>
                       </div>
                     )}
 
-                    {/* Ongoing Background Media Notification (Applies when returning Home while playing) */}
+                    {/* Active Home Widgets Preview */}
+                    {homeWidgets.length > 0 && (
+                      <div className="mb-3 space-y-1.5">
+                        {homeWidgets.map((w) => (
+                          <div
+                            key={w.id}
+                            className="px-3 py-2 rounded-lg bg-zinc-900/60 border border-zinc-800/90 flex items-center justify-between text-[11px]"
+                          >
+                            <span className="text-zinc-300 font-medium">{w.label}</span>
+                            <button
+                              onClick={() => setWidgetMenuOpen(true)}
+                              className="text-zinc-500 hover:text-zinc-300 font-mono"
+                            >
+                              {w.size} · Edit
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Picture-in-Picture (PiP) or Ongoing Background Audio Card when on Home Screen */}
                     {isPlayingMedia && (
-                      <div className="mb-3 p-3 rounded-2xl bg-indigo-950/60 border border-indigo-500/40 text-xs">
-                        <div className="flex items-center justify-between text-indigo-300 mb-1">
-                          <span className="font-semibold flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            Background Audio Active
+                      <div className="mb-3 p-3 rounded-lg bg-zinc-900 border border-zinc-700 text-xs">
+                        <div className="flex items-center justify-between text-zinc-400 mb-1">
+                          <span className="font-mono text-[11px] text-emerald-400">
+                            {pipActive ? 'PIP_WINDOW · 16:9 FLOATING' : 'BACKGROUND_AUDIO · ONGOING'}
                           </span>
-                          <span className="font-mono tabular-nums text-indigo-200">
+                          <span className="font-mono tabular-nums text-zinc-200">
                             {formatTime(playbackSeconds)}
                           </span>
                         </div>
-                        <p className="text-white font-medium text-[11px] truncate">
-                          YT Music · Ad-Free Background Stream
+                        <p className="text-white font-semibold text-xs truncate">
+                          YT Music — Ad-Free Stream Active
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          Ongoing notification prevents OxygenOS 15 process kill. Switched to other apps uninterrupted.
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          Playing uninterrupted while on Home screen or in other apps.
                         </p>
-                        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-indigo-500/30">
+                        <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-zinc-800">
                           <button
                             onClick={() => setIsPlayingMedia((p) => !p)}
-                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] flex items-center gap-1"
+                            className="px-2.5 py-1 rounded bg-zinc-100 hover:bg-white text-zinc-950 font-semibold text-[11px] flex items-center gap-1"
                           >
                             <Pause className="w-3 h-3" />
                             <span>Pause</span>
@@ -770,29 +967,28 @@ export default function App() {
                             onClick={() => {
                               const ytm = shortcuts.find((s) => s.id === 'ytm') || shortcuts[0];
                               setActiveWebApp(ytm);
+                              setPipActive(false);
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 font-medium text-[11px]"
+                            className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-[11px]"
                           >
-                            Return to WebApp
+                            Open Player
                           </button>
                         </div>
                       </div>
                     )}
 
                     {!cleanModeHidden && (
-                      <div className="grid grid-cols-4 gap-2.5">
+                      <div className="grid grid-cols-4 gap-2">
                         {filteredShortcuts.map((app, index) => (
                           <button
                             key={app.id}
                             onClick={() => handleSlotTap(app, index)}
-                            className="p-2.5 rounded-2xl bg-slate-900/80 border border-slate-800/90 hover:border-indigo-500/50 flex flex-col items-center justify-center transition-transform active:scale-95"
+                            className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90 hover:border-zinc-600 flex flex-col items-center justify-center transition-transform active:scale-95"
                           >
-                            <div
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${app.accent}`}
-                            >
-                              {app.symbol}
+                            <div className="w-9 h-9 rounded-lg bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-xs font-mono font-semibold text-zinc-100">
+                              {app.code}
                             </div>
-                            <span className="text-[11px] font-medium text-slate-200 mt-1.5 truncate max-w-full">
+                            <span className="text-[11px] font-medium text-zinc-200 mt-1.5 truncate max-w-full">
                               {app.name}
                             </span>
                           </button>
@@ -801,9 +997,9 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="pt-3 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>Tap YouTube, YT Music, or ChatGPT to test WebAppActivity</span>
-                    <span className="font-mono">v2.17</span>
+                  <div className="pt-3 border-t border-zinc-900 flex items-center justify-between text-[11px] text-zinc-400">
+                    <span>Tap YT Music or YouTube to open WebApp</span>
+                    <span className="font-mono tabular-nums">v2.18</span>
                   </div>
                 </div>
               )}
@@ -811,84 +1007,87 @@ export default function App() {
           </div>
         </section>
 
-        {/* Right 7 Columns: Engineering Workbench (Live URL Interceptor + Drop-In Java/JS Source) */}
+        {/* Right 7 Columns: Engineering Workbench */}
         <section className="lg:col-span-7 flex flex-col gap-6">
-          {/* Architecture Summary Header */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white font-display tracking-tight">
-              WebAppActivity & AdBlockEngine Security Workbench
-            </h1>
-            <p className="text-sm text-slate-300 mt-2 leading-relaxed">
-              Updated directly in <code className="text-indigo-300">AdBlockEngine.java</code>,{' '}
-              <code className="text-indigo-300">WebAppActivity.java</code>, and{' '}
-              <code className="text-indigo-300">DisplayHelper.java</code> for OnePlus 13 (OxygenOS 15, API 28–34).
-            </p>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-4 pt-4 border-t border-slate-800/80">
-              <span>Screen-Off Playback (Visibility Spoof + AudioFocus)</span>
-              <span aria-hidden="true">·</span>
-              <span>Non-Destructive YouTube Ad Skipper</span>
-              <span aria-hidden="true">·</span>
-              <span>120Hz LTPO Mode Lock & OAuth Cookie Flush</span>
+          <div className="rounded-xl border border-zinc-800 bg-[#11131A] p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-mono text-emerald-400">
+                RELEASE READY · GITHUB ACTIONS AUTO-APK SYNC
+              </span>
+              <span className="text-xs font-mono text-zinc-400 tabular-nums">
+                versionCode=56 · versionName=2.18
+              </span>
             </div>
+            <h1 className="text-2xl font-bold text-white font-display tracking-tight">
+              Lock Launcher v2.18 Architecture & De-AI Workbench
+            </h1>
+            <p className="text-sm text-zinc-300 mt-2 leading-relaxed">
+              Updated across <code className="text-zinc-100">AdBlockEngine.java</code>,{' '}
+              <code className="text-zinc-100">WebAppActivity.java</code>,{' '}
+              <code className="text-zinc-100">HomeActivity.java</code>, and{' '}
+              <code className="text-zinc-100">.github/workflows/release.yml</code>. Pushing to{' '}
+              <code className="text-zinc-100">main</code> automatically compiles{' '}
+              <code className="text-zinc-100">locklauncher.apk</code>, commits the updated APK binary back to the repo, and publishes the GitHub Release.
+            </p>
 
             {/* Segmented Mode Control */}
-            <div className="flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-xl mt-5 w-fit">
+            <div className="flex items-center gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded-lg mt-5 w-fit">
               <button
                 onClick={() => setActiveWorkbenchTab('inspector')}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                className={`px-3.5 py-1.5 text-xs font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
                   activeWorkbenchTab === 'inspector'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-zinc-100 text-zinc-950'
+                    : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                Live URL & Player Guard Tester
+                URL Interceptor & New Features
               </button>
               <button
                 onClick={() => setActiveWorkbenchTab('code')}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                className={`px-3.5 py-1.5 text-xs font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
                   activeWorkbenchTab === 'code'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-zinc-100 text-zinc-950'
+                    : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                Production Java & JS Source
+                Java & GitHub Release Source
               </button>
             </div>
           </div>
 
           {activeWorkbenchTab === 'inspector' ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-6">
+            <div className="rounded-xl border border-zinc-800 bg-[#11131A] p-6 space-y-6">
               <div>
-                <h2 className="text-lg font-semibold text-white font-display">
-                  01. Surgical Request Interceptor (AdBlockEngine.isAdUrl)
+                <h2 className="text-base font-semibold text-white font-display">
+                  01. Request Interceptor & SponsorBlock Tester
                 </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Test any URL against the updated interceptor. YouTube ad breaks and telemetry endpoints are blocked before the media host whitelist, while video streams and Google OAuth flows pass untouched.
+                <p className="text-xs text-zinc-400 mt-1">
+                  Inspect how <code className="text-zinc-200">AdBlockEngine</code> handles YouTube Music InnerTube JSON payloads, SponsorBlock skip segments, Google OAuth, and ad networks.
                 </p>
 
                 <div className="mt-4">
-                  <label htmlFor="url-probe" className="block text-xs font-medium text-slate-300 mb-1.5">
-                    Inspect Request URL
+                  <label htmlFor="url-probe" className="block text-xs font-medium text-zinc-300 mb-1.5">
+                    Request URL
                   </label>
                   <input
                     id="url-probe"
                     type="text"
                     value={probeUrl}
                     onChange={(e) => setProbeUrl(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-100 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3.5 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-100 focus:outline-none focus:border-zinc-600"
                   />
                 </div>
 
                 {/* Preset Quick-Test Buttons */}
-                <div className="flex flex-wrap gap-2 mt-3">
+                <div className="flex flex-wrap gap-1.5 mt-3">
                   {PRESET_TEST_URLS.map((preset) => (
                     <button
                       key={preset.label}
                       onClick={() => setProbeUrl(preset.url)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap shrink-0 ${
+                      className={`px-2.5 py-1.5 rounded text-xs font-medium border transition-colors whitespace-nowrap shrink-0 ${
                         probeUrl === preset.url
-                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200'
-                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                          ? 'bg-zinc-800 border-zinc-500 text-white'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
                       }`}
                     >
                       {preset.label}
@@ -897,33 +1096,33 @@ export default function App() {
                 </div>
 
                 {/* Interception Result Table */}
-                <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/90 p-4 space-y-3 text-xs">
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                    <span className="text-slate-400">Interceptor Decision</span>
+                <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950 p-4 space-y-3 text-xs">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-zinc-800">
+                    <span className="text-zinc-400">Engine Decision</span>
                     <span
-                      className={`font-semibold flex items-center gap-1.5 ${
+                      className={`font-mono font-semibold flex items-center gap-1.5 ${
                         analysis.blocked ? 'text-amber-300' : 'text-emerald-400'
                       }`}
                     >
-                      <Shield className="w-4 h-4" />
+                      <Shield className="w-3.5 h-3.5" />
                       <span>
                         {analysis.blocked
-                          ? 'INTERCEPTED & NEUTRALIZED (Empty MIME Response)'
-                          : 'ALLOWED (Passthrough to Chromium Network Stack)'}
+                          ? 'BLOCKED (SYNTHETIC EMPTY PAYLOAD)'
+                          : 'ALLOWED / SANITIZED IN-FLIGHT'}
                       </span>
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
-                      <span className="text-slate-500 block">Matched Rule</span>
-                      <span className="text-slate-200 font-medium mt-0.5 block">
+                      <span className="text-zinc-500 block">Rule & Pipeline Stage</span>
+                      <span className="text-zinc-200 font-medium mt-0.5 block leading-snug">
                         {analysis.reason}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">Synthetic Response MIME & Payload</span>
-                      <span className="text-slate-200 font-mono mt-0.5 block">
+                      <span className="text-zinc-500 block">Response Payload</span>
+                      <span className="text-zinc-200 font-mono mt-0.5 block">
                         {analysis.mimeType} → {analysis.payloadPreview}
                       </span>
                     </div>
@@ -931,52 +1130,63 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Architectural Verification Matrix */}
-              <div className="pt-4 border-t border-slate-800">
+              {/* New Features & De-AI Summary Matrix */}
+              <div className="pt-4 border-t border-zinc-800">
                 <h3 className="text-base font-semibold text-white font-display mb-3">
-                  02. Three-Layer Hardening Matrix
+                  02. What Was Added & De-AI'd in v2.18
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-800 text-slate-400">
-                        <th className="py-2.5 pr-4 font-semibold">Subsystem</th>
-                        <th className="py-2.5 px-4 font-semibold">Failure Mode Prevented</th>
-                        <th className="py-2.5 pl-4 font-semibold">Implementation in Repo</th>
+                      <tr className="border-b border-zinc-800 text-zinc-400">
+                        <th className="py-2.5 pr-4 font-semibold">Feature / Upgrade</th>
+                        <th className="py-2.5 px-4 font-semibold">What It Solves</th>
+                        <th className="py-2.5 pl-4 font-semibold">Implementation</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/70 text-slate-300">
+                    <tbody className="divide-y divide-zinc-800/70 text-zinc-300">
                       <tr>
                         <td className="py-3 pr-4 font-medium text-white">
-                          Screen-Off Audio Survival
+                          SponsorBlock Auto-Skip
                         </td>
                         <td className="py-3 px-4">
-                          YouTube <code className="text-indigo-300">visibilitychange</code> & Chromium surface pause when locking phone
+                          In-video sponsor reads, intros, outros, and non-music skits inside YouTube & YT Music tracks
                         </td>
                         <td className="py-3 pl-4 font-mono text-[11px]">
-                          BACKGROUND_PLAYBACK_JS + setRendererPriorityPolicy(IMPORTANT, false)
+                          sponsor.ajay.app/api/skipSegments in AdBlockEngine.java
                         </td>
                       </tr>
                       <tr>
                         <td className="py-3 pr-4 font-medium text-white">
-                          Zero Black-Screen Ad Skip
+                          WebApp Power Menu (PiP, Sleep Timer, OLED Audio)
                         </td>
                         <td className="py-3 px-4">
-                          Removing <code className="text-indigo-300">.video-ads</code> crashes YouTube Polymer player state machine
+                          Floating video when going Home, timed auto-stop at night, and zero-brightness OLED battery saving
                         </td>
                         <td className="py-3 pl-4 font-mono text-[11px]">
-                          Keep .video-ads node; seek currentTime=duration & click .ytp-ad-skip-button
+                          Tap domain bar in WebAppActivity.java
                         </td>
                       </tr>
                       <tr>
                         <td className="py-3 pr-4 font-medium text-white">
-                          120Hz LTPO & OAuth Sync
+                          De-AI Native & Workbench UI
                         </td>
                         <td className="py-3 px-4">
-                          OxygenOS 60Hz WebView throttle & dropped Google account session cookies
+                          Removed emoji spam on every button/dialog, fixed stray XML on line 328 of activity_main.xml
                         </td>
                         <td className="py-3 pl-4 font-mono text-[11px]">
-                          preferredDisplayModeId (120Hz) + CookieManager.flush() in onCreateWindow
+                          HomeActivity, MainActivity, AppPickerActivity
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pr-4 font-medium text-white">
+                          Auto APK Commit + GitHub Release
+                        </td>
+                        <td className="py-3 px-4">
+                          Syncing to GitHub automatically compiles v2.18 APK, updates locklauncher.apk in repo, and publishes release
+                        </td>
+                        <td className="py-3 pl-4 font-mono text-[11px]">
+                          .github/workflows/release.yml (v2.18 / code 56)
                         </td>
                       </tr>
                     </tbody>
@@ -985,44 +1195,54 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-4">
+            <div className="rounded-xl border border-zinc-800 bg-[#11131A] p-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-xl">
+                <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded-lg">
                   <button
                     onClick={() => setSelectedCodeTab('ytMusicAdStrip')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                       selectedCodeTab === 'ytMusicAdStrip'
-                        ? 'bg-slate-800 text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-zinc-800 text-white'
+                        : 'text-zinc-400 hover:text-white'
                     }`}
                   >
-                    1. YT Music API Ad Strip & CSS
+                    1. InnerTube + SponsorBlock
                   </button>
                   <button
                     onClick={() => setSelectedCodeTab('backgroundPlayback')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                       selectedCodeTab === 'backgroundPlayback'
-                        ? 'bg-slate-800 text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-zinc-800 text-white'
+                        : 'text-zinc-400 hover:text-white'
                     }`}
                   >
-                    2. Background Audio JS Injection
+                    2. Background Audio JS
                   </button>
                   <button
                     onClick={() => setSelectedCodeTab('desktopUaAndKeepalive')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                       selectedCodeTab === 'desktopUaAndKeepalive'
-                        ? 'bg-slate-800 text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-zinc-800 text-white'
+                        : 'text-zinc-400 hover:text-white'
                     }`}
                   >
-                    3. Desktop UA & Keepalive Service
+                    3. PiP, Sleep Timer & OLED Menu
+                  </button>
+                  <button
+                    onClick={() => setSelectedCodeTab('githubAutoRelease')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                      selectedCodeTab === 'githubAutoRelease'
+                        ? 'bg-zinc-800 text-white'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    4. GitHub Auto-Release YAML
                   </button>
                 </div>
 
                 <button
                   onClick={() => handleCopyCode(selectedCodeTab)}
-                  className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   {copiedKey === selectedCodeTab ? (
                     <>
@@ -1038,7 +1258,7 @@ export default function App() {
                 </button>
               </div>
 
-              <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 overflow-x-auto leading-relaxed max-h-[460px]">
+              <pre className="p-4 rounded-lg bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-200 overflow-x-auto leading-relaxed max-h-[460px]">
                 <code>{JAVA_SNIPPETS[selectedCodeTab]}</code>
               </pre>
             </div>

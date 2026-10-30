@@ -102,7 +102,7 @@
             android:maxWidth="130dp"
             android:singleLine="true"
             android:ellipsize="middle"
-            android:text="🔒 Web"
+            android:text="Web"
             android:textColor="#DDFFFFFF"
             android:textSize="12sp"
             android:fontFamily="sans-serif-medium"

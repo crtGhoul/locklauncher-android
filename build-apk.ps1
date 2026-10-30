@@ -9,7 +9,7 @@ if (-not $env:JDK) { $JDK = "$env:USERPROFILE\workspace\tools\jdk17\jdk-17.0.20.
 $BT = "$SDK\build-tools\34.0.0"
 $PLATFORM = "$SDK\platforms\android-34\android.jar"
 # P1-4: single source of truth for version (do not hardcode here).
-$VERSION_CODE = "55"; $VERSION_NAME = "2.17"
+$VERSION_CODE = "56"; $VERSION_NAME = "2.18"
 $versionFile = Join-Path $PROJ "version.properties"
 if (Test-Path $versionFile) {
   foreach ($line in Get-Content $versionFile) {

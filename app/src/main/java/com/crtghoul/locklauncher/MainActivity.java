@@ -1486,9 +1486,7 @@ public class MainActivity extends Activity {
                         if (!newName.isEmpty()) {
                             s.label = newName;
                             if (s.isApp() && s.pkg != null) {
-                                String key = AppPickerActivity.getCustomLabelKey(s.pkg, s.profileSerial);
-                                getSharedPreferences("dock", MODE_PRIVATE)
-                                        .edit().putString(key, newName).apply();
+                                ShortcutStore.setCustomAppLabel(this, s.pkg, s.profileSerial, newName);
                             }
                             persist();
                             toast("Renamed to " + newName);
@@ -1535,13 +1533,13 @@ public class MainActivity extends Activity {
 
     private void copyShortcutToProfile(Shortcut src, int targetProfile) {
         List<Shortcut> targetList = ShortcutStore.load(this, targetProfile);
-        if (targetList.size() >= ShortcutStore.MAX) {
+        String newId = java.util.UUID.randomUUID().toString();
+        Shortcut clone = new Shortcut(newId, src.type, src.pkg, src.url, src.data,
+                src.label, src.iconMode, src.iconColor, src.iconEmoji, src.profileSerial);
+        if (!ShortcutStore.addOrPlaceShortcut(targetList, clone)) {
             toast(ShortcutStore.profileName(this, targetProfile) + " is full (" + ShortcutStore.MAX + " max)");
             return;
         }
-        String newId = java.util.UUID.randomUUID().toString();
-        Shortcut clone = new Shortcut(newId, src.type, src.pkg, src.url, src.data,
-                src.label, src.iconMode, src.iconColor, src.iconEmoji);
         java.io.File srcIcon = IconUtil.customIconFile(this, src.id);
         if (srcIcon.exists()) {
             java.io.File destIcon = IconUtil.customIconFile(this, newId);
@@ -1553,7 +1551,6 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {
             }
         }
-        targetList.add(clone);
         ShortcutStore.save(this, targetProfile, targetList);
         toast("Copied to " + ShortcutStore.profileName(this, targetProfile));
     }

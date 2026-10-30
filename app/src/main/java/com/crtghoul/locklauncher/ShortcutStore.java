@@ -415,6 +415,96 @@ public class ShortcutStore {
         prefs(ctx).edit().putStringSet(KEY_LOCKED_APPS, set).apply();
     }
 
+    public static boolean isShowEmptyGridSlots(Context ctx) {
+        return prefs(ctx).getBoolean("home_show_empty_slots", false);
+    }
+
+    public static void setShowEmptyGridSlots(Context ctx, boolean show) {
+        prefs(ctx).edit().putBoolean("home_show_empty_slots", show).apply();
+    }
+
+    /** Places a shortcut into the first empty slot if available, or appends up to MAX. */
+    public static boolean addOrPlaceShortcut(List<Shortcut> list, Shortcut item) {
+        if (list == null || item == null) return false;
+        for (int i = 0; i < list.size(); i++) {
+            Shortcut existing = list.get(i);
+            if (existing != null && existing.isEmpty()) {
+                list.set(i, item);
+                return true;
+            }
+        }
+        if (list.size() < MAX) {
+            list.add(item);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Unified custom app label lookup across both "drawer_prefs" and "dock" preferences,
+     * keyed by package name and clone/work profileSerial.
+     */
+    public static String getCustomAppLabel(Context ctx, String pkg, long profileSerial) {
+        if (ctx == null || pkg == null || pkg.isEmpty()) return null;
+        String key = AppPickerActivity.getCustomLabelKey(pkg, profileSerial);
+        SharedPreferences drawerPrefs = ctx.getSharedPreferences("drawer_prefs", Context.MODE_PRIVATE);
+        String v = drawerPrefs.getString(key, null);
+        if (v != null && !v.trim().isEmpty()) return v.trim();
+        String vDock = prefs(ctx).getString(key, null);
+        if (vDock != null && !vDock.trim().isEmpty()) return vDock.trim();
+        return null;
+    }
+
+    /**
+     * Saves custom app label to both "drawer_prefs" and "dock" and updates all matching
+     * shortcuts across all profiles, folders, and Dynamic Island.
+     */
+    public static void setCustomAppLabel(Context ctx, String pkg, long profileSerial, String newLabel) {
+        if (ctx == null || pkg == null || pkg.isEmpty() || newLabel == null) return;
+        String trimmed = newLabel.trim();
+        if (trimmed.isEmpty()) return;
+        String key = AppPickerActivity.getCustomLabelKey(pkg, profileSerial);
+        ctx.getSharedPreferences("drawer_prefs", Context.MODE_PRIVATE)
+                .edit().putString(key, trimmed).apply();
+        prefs(ctx).edit().putString(key, trimmed).apply();
+
+        for (int profIdx = 0; profIdx < PROFILES; profIdx++) {
+            List<Shortcut> pShortcuts = load(ctx, profIdx);
+            boolean changed = false;
+            for (Shortcut s : pShortcuts) {
+                if (s.isApp() && pkg.equals(s.pkg) && s.profileSerial == profileSerial) {
+                    s.label = trimmed;
+                    changed = true;
+                }
+                if (s.isFolder() && s.folderItems != null) {
+                    for (Shortcut fi : s.folderItems) {
+                        if (fi.isApp() && pkg.equals(fi.pkg) && fi.profileSerial == profileSerial) {
+                            fi.label = trimmed;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            if (changed) {
+                save(ctx, profIdx, pShortcuts);
+            }
+        }
+
+        if (isIslandSeparate(ctx)) {
+            List<Shortcut> island = loadIsland(ctx);
+            boolean islChanged = false;
+            for (Shortcut s : island) {
+                if (s.isApp() && pkg.equals(s.pkg) && s.profileSerial == profileSerial) {
+                    s.label = trimmed;
+                    islChanged = true;
+                }
+            }
+            if (islChanged) {
+                saveIsland(ctx, island);
+            }
+        }
+    }
+
     private static SharedPreferences prefs(Context ctx) {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }

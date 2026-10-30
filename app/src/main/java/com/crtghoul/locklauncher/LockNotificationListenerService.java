@@ -81,21 +81,43 @@ public class LockNotificationListenerService extends NotificationListenerService
         try {
             StatusBarNotification[] active = getActiveNotifications();
             Map<String, Integer> counts = new ConcurrentHashMap<>();
+            boolean foundMedia = false;
             if (active != null) {
                 for (StatusBarNotification sbn : active) {
                     if (sbn == null) continue;
                     Notification n = sbn.getNotification();
                     if (n == null) continue;
-                    // Skip ongoing / sticky notifications (e.g. background services, music playback)
+                    String pkg = sbn.getPackageName();
+
+                    // Check if this is an active media playback notification
+                    if (!foundMedia && pkg != null && !pkg.equals(getPackageName())) {
+                        boolean isMedia = Notification.CATEGORY_TRANSPORT.equals(n.category)
+                                || (n.extras != null && n.extras.containsKey(Notification.EXTRA_MEDIA_SESSION));
+                        if (isMedia && n.extras != null) {
+                            CharSequence titleCs = n.extras.getCharSequence(Notification.EXTRA_TITLE);
+                            CharSequence textCs = n.extras.getCharSequence(Notification.EXTRA_TEXT);
+                            String title = titleCs != null ? titleCs.toString() : "";
+                            String artist = textCs != null ? textCs.toString() : "";
+                            if (!title.isEmpty()) {
+                                boolean isOngoing = (n.flags & Notification.FLAG_ONGOING_EVENT) != 0;
+                                NowPlayingHelper.updateSystemMedia(this, title, artist, isOngoing, pkg, n.contentIntent);
+                                foundMedia = true;
+                            }
+                        }
+                    }
+
+                    // Skip ongoing / sticky notifications for unread badge counts
                     if ((n.flags & Notification.FLAG_ONGOING_EVENT) != 0) continue;
                     if ((n.flags & Notification.FLAG_FOREGROUND_SERVICE) != 0) continue;
 
-                    String pkg = sbn.getPackageName();
                     if (pkg != null && !pkg.equals(getPackageName())) {
                         int current = counts.containsKey(pkg) ? counts.get(pkg) : 0;
                         counts.put(pkg, current + 1);
                     }
                 }
+            }
+            if (!foundMedia) {
+                NowPlayingHelper.clearSystemMedia();
             }
             sNotificationCounts.clear();
             sNotificationCounts.putAll(counts);

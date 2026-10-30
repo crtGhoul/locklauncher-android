@@ -7,11 +7,6 @@ on:
       - master
     tags:
       - 'v*'
-    paths:
-      - 'app/**'
-      - 'version.properties'
-      - 'build-apk.sh'
-      - '.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:
@@ -19,10 +14,13 @@ permissions:
 
 jobs:
   build-and-release:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -62,6 +60,17 @@ jobs:
           cp build-out/locklauncher.apk ./locklauncher.apk
           cp build-out/locklauncher.apk "./LockLauncher-v${{ steps.version.outputs.name }}.apk"
 
+      - name: Commit Updated Prebuilt APK Back to Branch
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add locklauncher.apk
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update compiled locklauncher.apk for v${{ steps.version.outputs.name }} [skip ci]"
+            git push origin HEAD:${GITHUB_REF#refs/heads/} || true
+          fi
+
       - name: Upload APK Build Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -76,10 +85,10 @@ jobs:
           tag_name: v${{ steps.version.outputs.name }}
           name: Lock Launcher v${{ steps.version.outputs.name }} (Build ${{ steps.version.outputs.code }})
           body: |
-            - **YouTube & YouTube Music Ad Elimination**: Client-side fetch/XHR hook intercepts `/youtubei/v1/player` and `/youtubei/v1/next` payloads to strip `adPlacements` and `adSlots` at the network JSON layer before the player engine can schedule ads. Eliminates mealbar promos and audio interruptions with zero DOM crashes.
-            - **Seamless Google Account Sign-In**: Automatically applies Desktop Chrome User-Agent (`Mozilla/5.0... Chrome/132.0.0.0`) on `music.youtube.com`, bypassing Google's 403 `disallowed_useragent` block and loading the full desktop web player.
-            - **Flawless Background & App-Switch Audio**: Injects `BACKGROUND_PLAYBACK_JS` (spoofing `document.hidden`, `visibilityState`, `hasFocus`, and blocking `blur`/`pagehide`), holds `AUDIOFOCUS_GAIN`, and posts an ongoing playback notification so OxygenOS 15's cgroup freezer never kills playback when you go Home or switch to other apps.
-            - **OnePlus 13 / OxygenOS 15 Polish**: 120Hz LTPO display mode lock, hardware-accelerated WebView layer, and multi-window OAuth `CookieManager.flush()` persistence.
+            - **YouTube & YouTube Music Ad Elimination + SponsorBlock**: Client-side fetch/XHR hook intercepts `/youtubei/v1/player` and `/youtubei/v1/next` payloads to strip `adPlacements` and `adSlots` before the player schedules ads, combined with automatic SponsorBlock segment skipping (`sponsor`, `selfpromo`, `intro`, `outro`, `music_offtopic`).
+            - **WebApp Power Controls (PiP, Sleep Timer, Audio-Only OLED Saver)**: Long-press or tap the domain bar in `WebAppActivity` to launch Picture-in-Picture (PiP) mode, set a 15m/30m/60m Sleep Timer, toggle Audio-Only OLED battery saving mode, or switch Desktop/Mobile User-Agent.
+            - **De-AI Native Hardware Aesthetic**: Removed decorative emoji clutter across the Home Launcher, Dock Manager, and App Drawer for a clean, hardware-grade OxygenOS 15 interface, plus full Home Widget management.
+            - **Flawless Background & App-Switch Audio**: Injects `BACKGROUND_PLAYBACK_JS` (`document.hidden = false`, `hasFocus = true`, blocked `blur`/`pagehide`), holds `AUDIOFOCUS_GAIN`, and maintains an ongoing media notification when switching apps or locking the screen.
           files: |
             locklauncher.apk
             LockLauncher-v${{ steps.version.outputs.name }}.apk

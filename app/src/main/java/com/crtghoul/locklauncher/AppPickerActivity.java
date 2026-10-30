@@ -92,7 +92,7 @@ public class AppPickerActivity extends Activity {
     private Button btnCalcCopy;
 
     static class AppEntry {
-        String pkg, label;
+        String pkg, label, rawLabel;
         Drawable icon;
         UserHandle user;
         long profileSerial;
@@ -100,6 +100,17 @@ public class AppPickerActivity extends Activity {
         boolean isClone;
         boolean isSystem;
         String category; // "ai", "media", "tools", "social", "system"
+    }
+
+    private void rebuildSearchIndex() {
+        List<String> pickerLabels = new ArrayList<>();
+        for (AppEntry e : all) {
+            if (e.label != null) pickerLabels.add(e.label);
+            if (e.rawLabel != null && !e.rawLabel.equalsIgnoreCase(e.label)) {
+                pickerLabels.add(e.rawLabel);
+            }
+        }
+        memoizedSearch.setTargets(pickerLabels);
     }
 
     @Override
@@ -122,7 +133,7 @@ public class AppPickerActivity extends Activity {
                 UserHandle myUser = Process.myUserHandle();
                 for (UserHandle profile : userProfiles) {
                     boolean isCloneOrWork = !myUser.equals(profile);
-                    long pSerial = userManager.getSerialNumberForUser(profile);
+                    long pSerial = isCloneOrWork ? userManager.getSerialNumberForUser(profile) : 0L;
                     List<LauncherActivityInfo> activityList = launcherApps.getActivityList(null, profile);
                     for (LauncherActivityInfo info : activityList) {
                         String pkg = info.getApplicationInfo().packageName;
@@ -137,7 +148,8 @@ public class AppPickerActivity extends Activity {
                         e.isClone = isCloneOrWork;
                         e.isSystem = (info.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) != 0;
                         String rawLabel = info.getLabel().toString();
-                        String customLabel = prefs.getString(getCustomLabelKey(pkg, pSerial), null);
+                        e.rawLabel = rawLabel;
+                        String customLabel = ShortcutStore.getCustomAppLabel(this, pkg, pSerial);
                         if (customLabel != null && !customLabel.trim().isEmpty()) {
                             e.label = customLabel;
                         } else {
@@ -169,8 +181,10 @@ public class AppPickerActivity extends Activity {
                 boolean isAppHidden = isDrawerMode && hidden.contains(pkg);
                 AppEntry e = new AppEntry();
                 e.pkg = pkg;
-                String customLabel = prefs.getString(getCustomLabelKey(pkg, 0), null);
-                e.label = (customLabel != null && !customLabel.trim().isEmpty()) ? customLabel : ri.loadLabel(pm).toString();
+                String rawLbl = ri.loadLabel(pm).toString();
+                e.rawLabel = rawLbl;
+                String customLabel = ShortcutStore.getCustomAppLabel(this, pkg, 0);
+                e.label = (customLabel != null && !customLabel.trim().isEmpty()) ? customLabel : rawLbl;
                 e.icon = ri.loadIcon(pm);
                 e.isSystem = (ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
                 e.category = classifyApp(e.pkg, e.label, e.isSystem, false);
@@ -185,10 +199,8 @@ public class AppPickerActivity extends Activity {
         Collections.sort(all, (a, c) -> a.label.compareToIgnoreCase(c.label));
         Collections.sort(hiddenList, (a, c) -> a.label.compareToIgnoreCase(c.label));
 
-        // Memoized prefix index, built once per app list.
-        List<String> pickerLabels = new ArrayList<>();
-        for (AppEntry e : all) pickerLabels.add(e.label);
-        memoizedSearch.setTargets(pickerLabels);
+        // Memoized prefix index, built from custom + raw labels.
+        rebuildSearchIndex();
 
         adapter = new AppAdapter();
         ListView list = findViewById(R.id.app_list);
@@ -332,11 +344,13 @@ public class AppPickerActivity extends Activity {
                                     // Pin directly to active profile with full clone support
                                     int p = ShortcutStore.activeProfile(this);
                                     List<Shortcut> current = ShortcutStore.load(this, p);
-                                    if (current.size() >= ShortcutStore.MAX) {
+                                    Shortcut newHomeSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                                    if (!ShortcutStore.addOrPlaceShortcut(current, newHomeSc)) {
                                         Toast.makeText(this, "Home screen is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                                     } else {
-                                        current.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
                                         ShortcutStore.save(this, p, current);
+                                        BaseDockWidget.refreshAll(this);
+                                        DockService.refresh(this);
                                         Toast.makeText(this, "Pinned " + e.label + " to Home screen", Toast.LENGTH_SHORT).show();
                                     }
                                     break;
@@ -346,20 +360,22 @@ public class AppPickerActivity extends Activity {
                                 case 3:
                                     int curP = ShortcutStore.activeProfile(this);
                                     List<Shortcut> dockList = ShortcutStore.load(this, curP);
-                                    if (dockList.size() >= ShortcutStore.MAX) {
+                                    Shortcut newDockSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                                    if (!ShortcutStore.addOrPlaceShortcut(dockList, newDockSc)) {
                                         Toast.makeText(this, "Dock is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                                     } else {
-                                        dockList.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
                                         ShortcutStore.save(this, curP, dockList);
+                                        BaseDockWidget.refreshAll(this);
+                                        DockService.refresh(this);
                                         Toast.makeText(this, "Added to Lock Launcher", Toast.LENGTH_SHORT).show();
                                     }
                                     break;
                                 case 4:
                                     List<Shortcut> islandList = ShortcutStore.loadIsland(this);
-                                    if (islandList.size() >= ShortcutStore.MAX) {
+                                    Shortcut newIslSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                                    if (!ShortcutStore.addOrPlaceShortcut(islandList, newIslSc)) {
                                         Toast.makeText(this, "Dynamic Island is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
                                     } else {
-                                        islandList.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
                                         ShortcutStore.saveIsland(this, islandList);
                                         IslandService.refresh(this);
                                         Toast.makeText(this, "Added " + e.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
@@ -376,42 +392,37 @@ public class AppPickerActivity extends Activity {
                                     if (e.label != null) input.setSelection(e.label.length());
                                     new AlertDialog.Builder(this)
                                             .setTitle("Custom Display Name")
-                                            .setMessage("Rename app in drawer and shortcuts:")
+                                            .setMessage("Rename app in drawer, search, and shortcuts:")
                                             .setView(input)
                                             .setPositiveButton("Save", (cd, cw) -> {
                                                 String n = input.getText().toString().trim();
                                                 if (!n.isEmpty()) {
                                                     e.label = n;
-                                                    String key = getCustomLabelKey(e.pkg, e.profileSerial);
-                                                    prefs.edit().putString(key, n).apply();
-
-                                                    // Update existing shortcuts matching this exact clone serial only
-                                                    for (int profIdx = 0; profIdx < ShortcutStore.PROFILES; profIdx++) {
-                                                        List<Shortcut> pShortcuts = ShortcutStore.load(AppPickerActivity.this, profIdx);
-                                                        boolean changed = false;
-                                                        for (Shortcut s : pShortcuts) {
-                                                            if (s.isApp() && e.pkg.equals(s.pkg) && s.profileSerial == e.profileSerial) {
-                                                                s.label = n;
-                                                                changed = true;
-                                                            }
-                                                            if (s.isFolder() && s.folderItems != null) {
-                                                                for (Shortcut fi : s.folderItems) {
-                                                                    if (fi.isApp() && e.pkg.equals(fi.pkg) && fi.profileSerial == e.profileSerial) {
-                                                                        fi.label = n;
-                                                                        changed = true;
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                        if (changed) {
-                                                            ShortcutStore.save(AppPickerActivity.this, profIdx, pShortcuts);
-                                                        }
-                                                    }
+                                                    ShortcutStore.setCustomAppLabel(AppPickerActivity.this, e.pkg, e.profileSerial, n);
+                                                    Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                                    rebuildSearchIndex();
                                                     BaseDockWidget.refreshAll(AppPickerActivity.this);
                                                     DockService.refresh(AppPickerActivity.this);
+                                                    IslandService.refresh(AppPickerActivity.this);
 
                                                     adapter.applyFilter();
                                                     Toast.makeText(this, "Renamed to " + n, Toast.LENGTH_SHORT).show();
+                                                }
+                                            })
+                                            .setNeutralButton("Reset Default", (cd, cw) -> {
+                                                String defLbl = e.isClone ? (e.rawLabel + " (Clone)") : e.rawLabel;
+                                                if (defLbl != null && !defLbl.isEmpty()) {
+                                                    e.label = defLbl;
+                                                    String key = getCustomLabelKey(e.pkg, e.profileSerial);
+                                                    prefs.edit().remove(key).apply();
+                                                    getSharedPreferences("dock", MODE_PRIVATE).edit().remove(key).apply();
+                                                    ShortcutStore.setCustomAppLabel(AppPickerActivity.this, e.pkg, e.profileSerial, defLbl);
+                                                    prefs.edit().remove(key).apply();
+                                                    getSharedPreferences("dock", MODE_PRIVATE).edit().remove(key).apply();
+                                                    Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                                    rebuildSearchIndex();
+                                                    adapter.applyFilter();
+                                                    Toast.makeText(this, "Reset to " + defLbl, Toast.LENGTH_SHORT).show();
                                                 }
                                             })
                                             .setNegativeButton("Cancel", null)
@@ -709,14 +720,13 @@ public class AppPickerActivity extends Activity {
                                 .setPositiveButton("Create", (d, w) -> {
                                     String name = input.getText().toString().trim();
                                     if (name.isEmpty()) name = "Folder";
-                                    if (list.size() >= ShortcutStore.MAX) {
-                                        Toast.makeText(this, "Home screen is full", Toast.LENGTH_SHORT).show();
-                                        return;
-                                    }
                                     Shortcut newFolder = Shortcut.createFolder(name, Collections.singletonList(
                                             new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial)
                                     ));
-                                    list.add(newFolder);
+                                    if (!ShortcutStore.addOrPlaceShortcut(list, newFolder)) {
+                                        Toast.makeText(this, "Home screen is full", Toast.LENGTH_SHORT).show();
+                                        return;
+                                    }
                                     ShortcutStore.save(this, p, list);
                                     Toast.makeText(this, "Created folder " + name + " with " + e.label, Toast.LENGTH_SHORT).show();
                                 })
@@ -754,20 +764,30 @@ public class AppPickerActivity extends Activity {
 
     private void performLaunchApp(AppEntry e, LauncherApps launcherApps, View sourceView) {
         Bundle opts = null;
-        if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !e.isClone) {
             try {
                 int w = Math.max(sourceView.getWidth(), 48);
                 int h = Math.max(sourceView.getHeight(), 48);
                 opts = ActivityOptions.makeClipRevealAnimation(sourceView, 0, 0, w, h).toBundle();
             } catch (Exception ignored) {}
         }
-        try {
-            if (e.component != null && e.user != null && launcherApps != null) {
+        if (e.component != null && e.user != null && launcherApps != null) {
+            try {
                 launcherApps.startMainActivity(e.component, e.user, null, opts);
                 finish();
                 return;
+            } catch (Exception ex) {
+                try {
+                    launcherApps.startMainActivity(e.component, e.user, null, null);
+                    finish();
+                    return;
+                } catch (Exception ignored) {
+                }
             }
-        } catch (Exception ignored) {
+        }
+        if (e.isClone) {
+            Toast.makeText(this, "Cannot launch cloned app " + e.label, Toast.LENGTH_SHORT).show();
+            return;
         }
         Intent launch = getPackageManager().getLaunchIntentForPackage(e.pkg);
         if (launch != null) {
@@ -816,22 +836,24 @@ public class AppPickerActivity extends Activity {
                 if ("system".equals(currentCategory) && !e.isSystem) continue;
 
                 if (!q.isEmpty() && q.length() < 3) {
-                    // Prefix fast path only: 1-2 char queries never
-                    // run the full fuzzy scorer. Behaviour note:
-                    // short queries now match label word-starts
-                    // (prefix index) or package prefixes, not
-                    // arbitrary fuzzy substrings. Category filtering
-                    // above still applies. Longer queries keep the
-                    // existing FuzzyMatcher path unchanged.
                     boolean labelHit = false;
                     for (MemoizedSearch.Result r : memoizedSearch.search(q)) {
-                        if (r.target.equals(e.label)) { labelHit = true; break; }
+                        if (r.target.equals(e.label) || (e.rawLabel != null && r.target.equals(e.rawLabel))) {
+                            labelHit = true;
+                            break;
+                        }
+                    }
+                    if (!labelHit && e.label != null && e.label.toLowerCase().contains(q)) {
+                        labelHit = true;
                     }
                     boolean pkgHit = e.pkg != null && e.pkg.toLowerCase().startsWith(q);
                     if (!labelHit && !pkgHit) continue;
                     scores.put(e, labelHit ? 100 : 50);
                 } else if (!q.isEmpty()) {
                     int score = FuzzyMatcher.matchScore(e.label, q);
+                    if (score < 0 && e.rawLabel != null) {
+                        score = FuzzyMatcher.matchScore(e.rawLabel, q);
+                    }
                     if (score < 0) {
                         score = FuzzyMatcher.matchScore(e.pkg, q);
                     }
@@ -900,8 +922,16 @@ public class AppPickerActivity extends Activity {
             name.setText((isLocked ? "🔒 " : "") + e.label);
 
             if (profileBadge != null) {
-                if (e.isClone) {
+                boolean isRenamed = e.rawLabel != null && !e.label.equalsIgnoreCase(e.rawLabel)
+                        && !e.label.equalsIgnoreCase(e.rawLabel + " (Clone)");
+                if (e.isClone && isRenamed) {
+                    profileBadge.setText("Clone · " + e.rawLabel);
+                    profileBadge.setVisibility(View.VISIBLE);
+                } else if (e.isClone) {
                     profileBadge.setText("Clone / Work");
+                    profileBadge.setVisibility(View.VISIBLE);
+                } else if (isRenamed) {
+                    profileBadge.setText(e.rawLabel);
                     profileBadge.setVisibility(View.VISIBLE);
                 } else {
                     profileBadge.setVisibility(View.GONE);

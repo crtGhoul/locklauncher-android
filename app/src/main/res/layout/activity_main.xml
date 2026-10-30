@@ -50,7 +50,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/btn_accent"
-            android:text="🏠 Open Home Launcher Screen"
+            android:text="Open Home Launcher Screen"
             android:textColor="#FFFFFF"
             android:layout_marginTop="10dp" />
 
@@ -256,7 +256,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="✨ Clean Mode (Hide apps behind 'Apps' pill)"
+                    android:text="Clean Mode (Hide apps behind 'Apps' pill)"
                     android:textColor="@color/text"
                     android:textSize="15sp" />
 
@@ -325,7 +325,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
             </LinearLayout>
-                android:textColor="#FFFFFF" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -445,7 +444,7 @@
                     android:layout_weight="1"
                     android:layout_marginEnd="4dp"
                     android:background="@drawable/btn_ghost"
-                    android:text="🎨 Icon Pack"
+                    android:text="Icon Pack"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp" />
 
@@ -456,7 +455,7 @@
                     android:layout_weight="1"
                     android:layout_marginStart="4dp"
                     android:background="@drawable/btn_ghost"
-                    android:text="👁️ Hidden Apps"
+                    android:text="Hidden Apps"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp" />
             </LinearLayout>
@@ -562,7 +561,7 @@
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:background="@drawable/btn_accent"
-                android:text="🌐 Add Web App"
+                android:text="+ Add Web App"
                 android:textColor="#FFFFFF" />
         </LinearLayout>
 
@@ -571,7 +570,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/btn_ghost"
-            android:text="🔍 Search &amp; Launch All Apps"
+            android:text="Search &amp; Launch All Apps"
             android:textColor="#FFFFFF"
             android:layout_marginTop="6dp" />
 
@@ -611,7 +610,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/btn_ghost"
-            android:text="🏠 Set as Default Home Launcher"
+            android:text="Set as Default Home Launcher"
             android:textColor="#FFFFFF"
             android:layout_marginBottom="6dp" />
 
@@ -726,7 +725,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:background="@drawable/btn_ghost"
-            android:text="🏝️ Manage Island Apps (16 Slots)"
+            android:text="Manage Island Apps (16 Slots)"
             android:textColor="#FFFFFF" />
 
         <Button

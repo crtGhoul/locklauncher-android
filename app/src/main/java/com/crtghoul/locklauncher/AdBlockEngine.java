@@ -476,12 +476,33 @@ public class AdBlockEngine {
             "          ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer, " +
             "          ytd-promoted-sparkles-web-renderer, ytd-display-ad-renderer, " +
             "          .ytp-ad-overlay-container, .ytp-ad-message-container, " +
-            "          #masthead-ad, #player-ads { display: none !important; height: 0 !important; visibility: hidden !important; pointer-events: none !important; }';" +
+            "          #masthead-ad, #player-ads { display: none !important; height: 0 !important; visibility: hidden !important; pointer-events: none !important; } " +
+            "          html.__ll-audio-only video { opacity: 0.01 !important; filter: brightness(0) !important; }';" +
             "        (document.head || document.documentElement).appendChild(ytStyle);" +
             "      }" +
             "      if (!window.__llYtAdObserver) {" +
             "        window.__llYtAdObserver = true;" +
+            "        window.__llSbVideoId = '';" +
+            "        window.__llSbSegments = [];" +
+            "        var checkSponsorBlock = function() {" +
+            "          try {" +
+            "            var m = (location.search || '').match(/[?&]v=([a-zA-Z0-9_-]{11})/);"+
+            "            var vid = m ? m[1] : '';" +
+            "            if (vid && vid !== window.__llSbVideoId) {" +
+            "              window.__llSbVideoId = vid;" +
+            "              window.__llSbSegments = [];" +
+            "              fetch('https://sponsor.ajay.app/api/skipSegments?videoID=' + encodeURIComponent(vid) + '&categories=%5B%22sponsor%22%2C%22selfpromo%22%2C%22music_offtopic%22%2C%22intro%22%2C%22outro%22%5D')" +
+            "                .then(function(r) { return r.ok ? r.json() : []; })" +
+            "                .then(function(data) {" +
+            "                  if (Array.isArray(data)) {" +
+            "                    window.__llSbSegments = data.map(function(item) { return item.segment; }).filter(Boolean);" +
+            "                  }" +
+            "                }).catch(function() {});" +
+            "            }" +
+            "          } catch (e) {}" +
+            "        };" +
             "        var skipYtAd = function() {" +
+            "          checkSponsorBlock();" +
             "          var dismissBtns = document.querySelectorAll(" +
             "            \"ytmusic-mealbar-promo-renderer #dismiss-button, ytmusic-upsell-dialog-renderer #dismiss-button, \" +" +
             "            \"tp-yt-paper-dialog #dismiss-button, #dismiss-button, button[aria-label=\\\"Dismiss\\\"], button[aria-label=\\\"No thanks\\\"]\"" +
@@ -508,6 +529,15 @@ public class AdBlockEngine {
             "            window.__llWasAdPlaying = false;" +
             "            video.muted = false;" +
             "            if (video.playbackRate > 2.0) video.playbackRate = 1.0;" +
+            "          } else if (video && !video.paused && window.__llSbSegments && window.__llSbSegments.length > 0) {" +
+            "            var ct = video.currentTime;" +
+            "            for (var s = 0; s < window.__llSbSegments.length; s++) {" +
+            "              var seg = window.__llSbSegments[s];" +
+            "              if (seg && seg.length === 2 && ct >= seg[0] && ct < seg[1] - 0.3) {" +
+            "                video.currentTime = seg[1];" +
+            "                break;" +
+            "              }" +
+            "            }" +
             "          }" +
             "          var skipBtns = document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, button[class*=\\\"ad-skip\\\"], .ytmusic-skip-ad-button, [aria-label*=\\\"Skip ad\\\"], [aria-label*=\\\"Skip\\\"]');" +
             "          for (var i = 0; i < skipBtns.length; i++) {" +

@@ -116,6 +116,18 @@ export function analyzeUrlInterception(rawUrl: string): InterceptAnalysis {
   const path = parsed.pathname.toLowerCase();
   const lowerUrl = parsed.href.toLowerCase();
 
+  // SponsorBlock API endpoint check
+  if (host === 'sponsor.ajay.app' && path.includes('/api/skipsegments')) {
+    return {
+      url: parsed.href,
+      blocked: false,
+      reason: 'SponsorBlock Segment API — returns [start, end] timestamps for automatic sponsor/intro/outro skipping',
+      mimeType: 'application/json',
+      payloadPreview: '[{ "segment": [14.2, 42.8], "category": "sponsor" }]',
+      corsHeader: 'Native Chromium Fetch',
+    };
+  }
+
   // 1. Surgical YouTube & YouTube Music Ad & Telemetry Interception
   if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
     if (
@@ -281,61 +293,41 @@ function buildBlockedResponse(url: string, reason: string): InterceptAnalysis {
 }
 
 export const JAVA_SNIPPETS = {
-  ytMusicAdStrip: `// From AdBlockEngine.java — In-Flight fetch/XHR JSON Interception + Mealbar Dismissal
-// Neutralizes YouTube Music ads at the network payload level so no audio ads are ever inserted into the playback queue:
+  ytMusicAdStrip: `// From AdBlockEngine.java — InnerTube JSON Ad Stripping + SponsorBlock + Audio-Only Mode
 public static final String COSMETIC_AD_BLOCK_JS =
         "javascript:(function() {" +
         "  try {" +
         "    var h = (location.hostname || '').toLowerCase();" +
         "    if (h.indexOf('youtube.com') !== -1) {" +
-        "      // Hook window.fetch & XMLHttpRequest to purge adPlacements from InnerTube API" +
-        "      if (!window.__llApiHooked) {" +
-        "        window.__llApiHooked = true;" +
-        "        var origFetch = window.fetch;" +
-        "        window.fetch = function() {" +
-        "          var p = origFetch.apply(this, arguments);" +
-        "          var u = (arguments[0] && arguments[0].url) || (typeof arguments[0] === 'string' ? arguments[0] : '');" +
+        "      // 1. Hook window.fetch & XMLHttpRequest to purge adPlacements from InnerTube API" +
+        "      if (!window.__llYtApiHooked) {" +
+        "        window.__llYtApiHooked = true;" +
+        "        var stripAdsFromJson = function(json) {" +
+        "          if (!json || typeof json !== 'object') return json;" +
+        "          ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams'].forEach(function(k) { delete json[k]; });" +
+        "          return json;" +
+        "        };" +
+        "        var rawFetch = window.fetch;" +
+        "        window.fetch = async function() {" +
+        "          var res = await rawFetch.apply(this, arguments);" +
+        "          var u = typeof arguments[0] === 'string' ? arguments[0] : (arguments[0] && arguments[0].url) || '';" +
         "          if (u.indexOf('/youtubei/v1/player') !== -1 || u.indexOf('/youtubei/v1/next') !== -1) {" +
-        "            return p.then(function(r) {" +
-        "              return r.clone().json().then(function(data) {" +
-        "                if (data) {" +
-        "                  delete data.adPlacements;" +
-        "                  delete data.adSlots;" +
-        "                  delete data.playerAds;" +
-        "                  delete data.adBreakHeartbeatParams;" +
-        "                }" +
-        "                return new Response(JSON.stringify(data), { status: r.status, statusText: r.statusText, headers: r.headers });" +
-        "              }).catch(function() { return r; });" +
-        "            });" +
+        "            var json = await res.clone().json();" +
+        "            stripAdsFromJson(json);" +
+        "            return new Response(JSON.stringify(json), { status: res.status, statusText: res.statusText, headers: res.headers });" +
         "          }" +
-        "          return p;" +
+        "          return res;" +
         "        };" +
         "      }" +
-        "      // Hide YT Music mealbar promos, upsells, and ad slots via CSS" +
-        "      var ytStyle = document.getElementById('ll-yt-adblock-css');" +
-        "      if (!ytStyle) {" +
-        "        ytStyle = document.createElement('style');" +
-        "        ytStyle.id = 'll-yt-adblock-css';" +
-        "        ytStyle.textContent = '" +
-        "          ytmusic-mealbar-promo-renderer, ytmusic-upsell-dialog-renderer, " +
-        "          ytmusic-ad-slot-renderer, ytmusic-player-ad, .ytmusic-ad-slot-renderer, " +
-        "          ytm-promoted-sparkles-web-renderer, ytd-ad-slot-renderer, " +
-        "          .ytp-ad-overlay-container, #masthead-ad, #player-ads { display: none !important; }';" +
-        "        (document.head || document.documentElement).appendChild(ytStyle);" +
+        "      // 2. SponsorBlock Automatic Segment Skipper (sponsor, selfpromo, music_offtopic, intro, outro)" +
+        "      var m = (location.search || '').match(/[?&]v=([a-zA-Z0-9_-]{11})/);" +
+        "      var vid = m ? m[1] : '';" +
+        "      if (vid && vid !== window.__llSbVideoId) {" +
+        "        window.__llSbVideoId = vid;" +
+        "        fetch('https://sponsor.ajay.app/api/skipSegments?videoID=' + encodeURIComponent(vid) + '&categories=[\"sponsor\",\"selfpromo\",\"music_offtopic\",\"intro\",\"outro\"]')" +
+        "          .then(function(r) { return r.ok ? r.json() : []; })" +
+        "          .then(function(d) { window.__llSbSegments = Array.isArray(d) ? d.map(function(x){return x.segment;}) : []; });" +
         "      }" +
-        "      // Auto-skip observer for video / audio player & dismiss upsell popups" +
-        "      setInterval(function() {" +
-        "        var dismissBtn = document.querySelector('ytmusic-mealbar-promo-renderer #dismiss-button, #dismiss-button');" +
-        "        if (dismissBtn) dismissBtn.click();" +
-        "        var video = document.querySelector('video');" +
-        "        var player = document.getElementById('movie_player') || document.querySelector('.html5-video-player') || document.querySelector('ytmusic-player-bar');" +
-        "        var isAd = player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));" +
-        "        if (isAd && video) {" +
-        "          video.muted = true;" +
-        "          if (isFinite(video.duration) && video.duration > 0.5) video.currentTime = video.duration;" +
-        "          else video.playbackRate = 16.0;" +
-        "        }" +
-        "      }, 250);" +
         "    }" +
         "  } catch(e) {}" +
         "})();";`,
@@ -360,7 +352,6 @@ public static final String BACKGROUND_PLAYBACK_JS =
         "    return origDocAdd.call(this, type, listener, options);" +
         "  };" +
         "  setInterval(function() { window._lact = Date.now(); }, 20000);" +
-        "  // Auto-resume if Android tries to pause video/audio element when leaving app" +
         "  document.addEventListener('pause', function(e) {" +
         "    var el = e.target;" +
         "    if (el && (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') && window.__llAppBackgrounded && !el.ended) {" +
@@ -369,46 +360,35 @@ public static final String BACKGROUND_PLAYBACK_JS =
         "  }, true);" +
         "})();";`,
 
-  desktopUaAndKeepalive: `// From WebAppActivity.java — Desktop Chrome UA for YouTube Music & Background Process Keepalive
-// 1. Desktop UA allows Google OAuth sign-in without 403 disallowed_useragent and loads full YT Music Web Player:
-private void applyUserAgentForUrl(String url) {
-    if (webView == null) return;
-    WebSettings settings = webView.getSettings();
-    if (url != null && url.toLowerCase().contains("music.youtube.com")) {
-        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36");
-    } else {
-        settings.setUserAgentString(defaultUserAgent);
-    }
-}
-
-// 2. Ongoing notification prevents OxygenOS 15 / Android cgroup freezer from freezing the audio renderer when switching to another app:
-private void updatePlaybackNotification(boolean isPlaying, String title) {
-    NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-    Intent reopen = new Intent(this, WebAppActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-    PendingIntent pi = PendingIntent.getActivity(this, 0, reopen, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-    NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID_PLAYBACK)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle(title)
-            .setContentText("Lock Launcher · Background Web Audio Active")
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setContentIntent(pi);
-    nm.notify(NOTIFICATION_ID_PLAYBACK, b.build());
-}
-
-@Override
-protected void onPause() {
-    super.onPause();
-    CookieManager.getInstance().flush();
-    if (webView != null) webView.evaluateJavascript("window.__llAppBackgrounded = true;", null);
-    updatePlaybackNotification(true, getTitle() != null ? getTitle().toString() : "Web Audio");
-}
-
-@Override
-protected void onStop() {
-    super.onStop();
-    // Do not tear down audio or webView in onStop() so music keeps playing when navigating home
-    updatePlaybackNotification(true, getTitle() != null ? getTitle().toString() : "Web Audio");
+  desktopUaAndKeepalive: `// From WebAppActivity.java — Power Controls (PiP, Sleep Timer, Audio-Only OLED, Desktop UA)
+private void showWebAppControlMenu() {
+    String[] options = new String[] {
+            "Picture-in-Picture (PiP) Window",
+            audioOnlyOledMode ? "Disable Audio-Only OLED Saver" : "Enable Audio-Only OLED Saver",
+            sleepTimerMinutes > 0 ? "Cancel Sleep Timer (" + sleepTimerMinutes + "m active)" : "Set Sleep Timer (15m / 30m / 60m)",
+            forceDesktopUa ? "Switch to Mobile User-Agent" : "Switch to Desktop User-Agent",
+            "Copy Current URL"
+    };
+    new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(getTitle() != null ? getTitle() : "Web App Controls")
+            .setItems(options, (d, which) -> {
+                if (which == 0) enterWebAppPipMode();
+                else if (which == 1) {
+                    audioOnlyOledMode = !audioOnlyOledMode;
+                    webView.evaluateJavascript("document.documentElement.classList.toggle('__ll-audio-only', " + audioOnlyOledMode + ");", null);
+                } else if (which == 2) showSleepTimerPicker();
+            })
+            .show();
 }`,
-};
 
+  githubAutoRelease: `# From .github/workflows/release.yml — Automatic APK Build, Repo Sync & GitHub Release
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+# Builds locklauncher.apk via aapt2 + javac + d8 + zipalign + apksigner,
+# commits the compiled locklauncher.apk back to the branch ([skip ci]),
+# and publishes LockLauncher-v2.18.apk to GitHub Releases automatically.`,
+};

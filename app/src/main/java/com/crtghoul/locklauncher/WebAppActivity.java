@@ -7,9 +7,11 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
@@ -93,6 +95,32 @@ public class WebAppActivity extends Activity {
     private static final String PLAYBACK_CHANNEL = "webapp_bg_audio";
     private static final int PLAYBACK_NOTIF_ID = 4040;
     private static final String DESKTOP_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36";
+    private boolean forceDesktopUa = false;
+    private boolean audioOnlyOledMode = false;
+    private int sleepTimerMinutes = 0;
+    private String currentMediaTitle = "";
+    private String currentMediaArtist = "";
+    private boolean currentMediaPlaying = false;
+    private final BroadcastReceiver mediaCommandReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent == null || webView == null) return;
+            String cmd = intent.getStringExtra(NowPlayingHelper.EXTRA_CMD);
+            if (cmd == null) return;
+            executeWebMediaCommand(cmd);
+        }
+    };
+    private final Runnable sleepTimerRunnable = () -> {
+        sleepTimerMinutes = 0;
+        if (webView != null) {
+            webView.evaluateJavascript("document.querySelectorAll('video,audio').forEach(function(e){try{e.pause();}catch(err){}});", null);
+        }
+        currentMediaPlaying = false;
+        NowPlayingHelper.updateWebMedia(WebAppActivity.this, currentMediaTitle, currentMediaArtist, false, webView != null ? webView.getUrl() : "");
+        abandonMediaAudioFocus();
+        updatePlaybackNotification(false);
+        Toast.makeText(WebAppActivity.this, "Sleep timer finished — playback paused", Toast.LENGTH_SHORT).show();
+    };
 
     // File chooser (was missing from WebAppActivity through v2.15, so
     // <input type=file> taps did nothing in WebView: Android WebView
@@ -221,13 +249,12 @@ public class WebAppActivity extends Activity {
             });
         }
 
-        // Setup Domain indicator pill click (shows full URL in toast)
+        // Setup Domain indicator pill click / long-press (opens WebApp Power Controls Menu)
         if (textDomain != null) {
-            textDomain.setOnClickListener(v -> {
-                if (webView != null && webView.getUrl() != null) {
-                    String info = (webView.getTitle() != null ? webView.getTitle() + "\n" : "") + webView.getUrl();
-                    Toast.makeText(this, info, Toast.LENGTH_SHORT).show();
-                }
+            textDomain.setOnClickListener(v -> showWebAppControlMenu());
+            textDomain.setOnLongClickListener(v -> {
+                showWebAppControlMenu();
+                return true;
             });
         }
 
@@ -303,6 +330,17 @@ public class WebAppActivity extends Activity {
         // Blob-download bridge. Registered before any page loads; every
         // method is gated on pendingBlobActive (see BlobSaver).
         webView.addJavascriptInterface(new BlobSaver(), "LLBlobSaver");
+        webView.addJavascriptInterface(new MediaBridge(), "LLMediaBridge");
+
+        try {
+            IntentFilter mf = new IntentFilter(NowPlayingHelper.ACTION_MEDIA_COMMAND);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(mediaCommandReceiver, mf, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(mediaCommandReceiver, mf);
+            }
+        } catch (Exception ignored) {
+        }
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -916,12 +954,93 @@ public class WebAppActivity extends Activity {
                     String host = u.getHost();
                     if (host != null) {
                         if (host.startsWith("www.")) host = host.substring(4);
-                        boolean isHttps = "https".equalsIgnoreCase(u.getScheme());
-                        textDomain.setText((isHttps ? "🔒 " : "🌐 ") + host);
+                        textDomain.setText(sleepTimerMinutes > 0 ? host + " · " + sleepTimerMinutes + "m" : host);
                     }
                 } catch (Exception ignored) {
                 }
             }
+        }
+    }
+
+    private void showWebAppControlMenu() {
+        if (webView == null) return;
+        String curUrl = webView.getUrl() != null ? webView.getUrl() : "";
+        String[] options = new String[] {
+                "Picture-in-Picture (PiP) Window",
+                audioOnlyOledMode ? "Disable Audio-Only OLED Saver" : "Enable Audio-Only OLED Saver",
+                sleepTimerMinutes > 0 ? "Cancel Sleep Timer (" + sleepTimerMinutes + "m active)" : "Set Sleep Timer (15m / 30m / 60m)",
+                forceDesktopUa ? "Switch to Mobile User-Agent" : "Switch to Desktop User-Agent",
+                "Copy Current URL"
+        };
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle(getTitle() != null ? getTitle() : "Web App Controls")
+                .setItems(options, (d, which) -> {
+                    if (which == 0) {
+                        enterWebAppPipMode();
+                    } else if (which == 1) {
+                        audioOnlyOledMode = !audioOnlyOledMode;
+                        String js = "document.documentElement.classList.toggle('__ll-audio-only', " + audioOnlyOledMode + ");";
+                        webView.evaluateJavascript(js, null);
+                        Toast.makeText(this, audioOnlyOledMode ? "Audio-Only OLED mode enabled" : "Video display restored", Toast.LENGTH_SHORT).show();
+                    } else if (which == 2) {
+                        if (sleepTimerMinutes > 0) {
+                            handler.removeCallbacks(sleepTimerRunnable);
+                            sleepTimerMinutes = 0;
+                            updateNavState();
+                            Toast.makeText(this, "Sleep timer cancelled", Toast.LENGTH_SHORT).show();
+                        } else {
+                            showSleepTimerPicker();
+                        }
+                    } else if (which == 3) {
+                        forceDesktopUa = !forceDesktopUa;
+                        applyUserAgentForUrl(curUrl);
+                        webView.reload();
+                        Toast.makeText(this, forceDesktopUa ? "Desktop mode enabled" : "Standard mode enabled", Toast.LENGTH_SHORT).show();
+                    } else if (which == 4) {
+                        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                        if (cm != null) {
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("URL", curUrl));
+                            Toast.makeText(this, "URL copied", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void showSleepTimerPicker() {
+        final int[] mins = new int[] { 15, 30, 60 };
+        String[] labels = new String[] { "15 minutes", "30 minutes", "60 minutes" };
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle("Sleep Timer")
+                .setItems(labels, (d, which) -> {
+                    sleepTimerMinutes = mins[which];
+                    handler.removeCallbacks(sleepTimerRunnable);
+                    handler.postDelayed(sleepTimerRunnable, sleepTimerMinutes * 60_000L);
+                    updateNavState();
+                    Toast.makeText(this, "Sleep timer set for " + sleepTimerMinutes + " minutes", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
+    private void enterWebAppPipMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                android.app.PictureInPictureParams params = new android.app.PictureInPictureParams.Builder()
+                        .setAspectRatio(new android.util.Rational(16, 9))
+                        .build();
+                enterPictureInPictureMode(params);
+            } catch (Exception e) {
+                Toast.makeText(this, "PiP unavailable on this device", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, android.content.res.Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (webNavBar != null) {
+            webNavBar.setVisibility(isInPictureInPictureMode ? View.GONE : View.VISIBLE);
         }
     }
 
@@ -972,7 +1091,7 @@ public class WebAppActivity extends Activity {
     private void applyUserAgentForUrl(String targetUrl) {
         if (webView == null) return;
         WebSettings settings = webView.getSettings();
-        if (targetUrl != null && targetUrl.toLowerCase().contains("music.youtube.com")) {
+        if (forceDesktopUa || (targetUrl != null && targetUrl.toLowerCase().contains("music.youtube.com"))) {
             // YouTube Music blocks playback on mobile web browser user agents ("not optimized for your browser").
             // Using a clean desktop Chrome User-Agent gives the full YouTube Music web player, library, and 100% working Google sign-in!
             settings.setUserAgentString(DESKTOP_CHROME_UA);
@@ -1005,6 +1124,57 @@ public class WebAppActivity extends Activity {
         }
     }
 
+    private final class MediaBridge {
+        @JavascriptInterface
+        public void onMediaState(String title, String artist, boolean isPlaying) {
+            String safeTitle = title != null ? title.trim() : "";
+            String safeArtist = artist != null ? artist.trim() : "";
+            if (safeTitle.isEmpty()) return;
+            boolean changed = !safeTitle.equals(currentMediaTitle)
+                    || !safeArtist.equals(currentMediaArtist)
+                    || (isPlaying != currentMediaPlaying);
+            currentMediaTitle = safeTitle;
+            currentMediaArtist = safeArtist;
+            currentMediaPlaying = isPlaying;
+            if (changed) {
+                handler.post(() -> {
+                    String curUrl = webView != null ? webView.getUrl() : "";
+                    NowPlayingHelper.updateWebMedia(WebAppActivity.this, currentMediaTitle, currentMediaArtist, currentMediaPlaying, curUrl);
+                    updatePlaybackNotification(true);
+                });
+            }
+        }
+    }
+
+    private void executeWebMediaCommand(String cmd) {
+        if (webView == null) return;
+        String js;
+        if (NowPlayingHelper.CMD_NEXT.equals(cmd)) {
+            js = "(function(){"
+               + "var btn = document.querySelector('.next-button, .ytp-next-button, [aria-label=\"Next\"], [aria-label=\"Next song\"], [title=\"Next\"]');"
+               + "if(btn){btn.click();return;}"
+               + "var v = document.querySelector('video,audio'); if(v && v.duration){v.currentTime = Math.min(v.duration, v.currentTime + 15);}"
+               + "})();";
+        } else if (NowPlayingHelper.CMD_PREV.equals(cmd)) {
+            js = "(function(){"
+               + "var btn = document.querySelector('.previous-button, .ytp-prev-button, [aria-label=\"Previous\"], [aria-label=\"Previous song\"], [title=\"Previous\"]');"
+               + "if(btn){btn.click();return;}"
+               + "var v = document.querySelector('video,audio'); if(v){v.currentTime = Math.max(0, v.currentTime - 15);}"
+               + "})();";
+        } else {
+            js = "(function(){"
+               + "var v = document.querySelector('video,audio');"
+               + "if(v){if(v.paused){v.play();}else{v.pause();}return;}"
+               + "var btn = document.querySelector('#play-pause-button, .play-pause-button, .ytp-play-button');"
+               + "if(btn){btn.click();}"
+               + "})();";
+            currentMediaPlaying = !currentMediaPlaying;
+            NowPlayingHelper.updateWebMedia(this, currentMediaTitle, currentMediaArtist, currentMediaPlaying, webView.getUrl());
+            updatePlaybackNotification(true);
+        }
+        webView.evaluateJavascript(js, null);
+    }
+
     private void updatePlaybackNotification(boolean show) {
         try {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -1013,11 +1183,32 @@ public class WebAppActivity extends Activity {
                 nm.cancel(PLAYBACK_NOTIF_ID);
                 return;
             }
-            String pageTitle = getTitle() != null ? getTitle().toString() : "Web App";
+            String displayTitle = (currentMediaTitle != null && !currentMediaTitle.isEmpty())
+                    ? currentMediaTitle
+                    : (getTitle() != null ? getTitle().toString() : "Web App");
+            String displayArtist = (currentMediaArtist != null && !currentMediaArtist.isEmpty())
+                    ? currentMediaArtist + (currentMediaPlaying ? " · Playing" : " · Paused")
+                    : "Playing in background · Tap to open";
+
             Intent resumeIntent = new Intent(this, WebAppActivity.class);
             resumeIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             PendingIntent pi = PendingIntent.getActivity(
                     this, 0, resumeIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Intent prevIntent = new Intent(NowPlayingHelper.ACTION_MEDIA_COMMAND).setPackage(getPackageName())
+                    .putExtra(NowPlayingHelper.EXTRA_CMD, NowPlayingHelper.CMD_PREV);
+            PendingIntent prevPi = PendingIntent.getBroadcast(this, 401, prevIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Intent toggleIntent = new Intent(NowPlayingHelper.ACTION_MEDIA_COMMAND).setPackage(getPackageName())
+                    .putExtra(NowPlayingHelper.EXTRA_CMD, NowPlayingHelper.CMD_TOGGLE);
+            PendingIntent togglePi = PendingIntent.getBroadcast(this, 402, toggleIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Intent nextIntent = new Intent(NowPlayingHelper.ACTION_MEDIA_COMMAND).setPackage(getPackageName())
+                    .putExtra(NowPlayingHelper.EXTRA_CMD, NowPlayingHelper.CMD_NEXT);
+            PendingIntent nextPi = PendingIntent.getBroadcast(this, 403, nextIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
             Notification.Builder b;
@@ -1026,20 +1217,76 @@ public class WebAppActivity extends Activity {
             } else {
                 b = new Notification.Builder(this);
             }
-            b.setSmallIcon(android.R.drawable.ic_media_play)
-             .setContentTitle(pageTitle)
-             .setContentText("Playing in background · Tap to open")
+            b.setSmallIcon(currentMediaPlaying ? android.R.drawable.ic_media_play : android.R.drawable.ic_media_pause)
+             .setContentTitle(displayTitle)
+             .setContentText(displayArtist)
              .setContentIntent(pi)
-             .setOngoing(true);
+             .setCategory(Notification.CATEGORY_TRANSPORT)
+             .setVisibility(Notification.VISIBILITY_PUBLIC)
+             .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_previous, "Prev", prevPi).build())
+             .addAction(new Notification.Action.Builder(
+                     currentMediaPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
+                     currentMediaPlaying ? "Pause" : "Play", togglePi).build())
+             .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_next, "Next", nextPi).build())
+             .setOngoing(currentMediaPlaying);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                b.setStyle(new Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2));
+            }
             nm.notify(PLAYBACK_NOTIF_ID, b.build());
         } catch (Exception ignored) {
         }
     }
 
+    private static final String MEDIA_METADATA_BRIDGE_JS =
+            "(function(){"
+            + "if(window.__llMediaBridgeInstalled)return;"
+            + "window.__llMediaBridgeInstalled=true;"
+            + "function syncMedia(){"
+            + "  try{"
+            + "    if(!window.LLMediaBridge)return;"
+            + "    var v=document.querySelector('video,audio');"
+            + "    var playing=false;"
+            + "    if(v && !v.paused && v.readyState>=2){playing=true;}"
+            + "    var title='',artist='';"
+            + "    if(navigator.mediaSession && navigator.mediaSession.metadata){"
+            + "      title=navigator.mediaSession.metadata.title||'';"
+            + "      artist=navigator.mediaSession.metadata.artist||'';"
+            + "    }"
+            + "    if(!title){"
+            + "      var ytmT=document.querySelector('ytmusic-player-bar .title');"
+            + "      var ytmA=document.querySelector('ytmusic-player-bar .byline');"
+            + "      if(ytmT)title=(ytmT.textContent||'').trim();"
+            + "      if(ytmA)artist=(ytmA.textContent||'').trim().split('•')[0].trim();"
+            + "    }"
+            + "    if(!title){"
+            + "      var ytT=document.querySelector('h1.ytd-watch-metadata, .slim-video-information-title');"
+            + "      var ytA=document.querySelector('#owner #channel-name a, .slim-owner-icon-and-title');"
+            + "      if(ytT)title=(ytT.textContent||'').trim();"
+            + "      if(ytA)artist=(ytA.textContent||'').trim();"
+            + "    }"
+            + "    if(!title && document.title){"
+            + "      title=document.title.replace(/\\s*-\\s*YouTube( Music)?$/i,'').trim();"
+            + "    }"
+            + "    if(!artist && location.hostname){"
+            + "      artist=location.hostname.replace(/^www\\./,'');"
+            + "    }"
+            + "    if(title && (playing || v)){"
+            + "      window.LLMediaBridge.onMediaState(title,artist,playing);"
+            + "    }"
+            + "  }catch(e){}"
+            + "}"
+            + "setInterval(syncMedia,1800);"
+            + "document.addEventListener('play',syncMedia,true);"
+            + "document.addEventListener('pause',syncMedia,true);"
+            + "document.addEventListener('loadedmetadata',syncMedia,true);"
+            + "syncMedia();"
+            + "})();";
+
     private void injectClientScripts(WebView view) {
         if (view == null) return;
         view.evaluateJavascript(AdBlockEngine.BACKGROUND_PLAYBACK_JS, null);
         view.evaluateJavascript(AdBlockEngine.COSMETIC_AD_BLOCK_JS, null);
+        view.evaluateJavascript(MEDIA_METADATA_BRIDGE_JS, null);
     }
 
     private void requestMediaAudioFocus() {
@@ -1140,13 +1387,19 @@ public class WebAppActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        handler.removeCallbacks(sleepTimerRunnable);
         if (fileUploadCallback != null) {
             fileUploadCallback.onReceiveValue(null);
             fileUploadCallback = null;
         }
         abortPendingBlob();
         abandonMediaAudioFocus();
+        NowPlayingHelper.clearWebMedia(this);
         updatePlaybackNotification(false);
+        try {
+            unregisterReceiver(mediaCommandReceiver);
+        } catch (Exception ignored) {
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             CookieManager.getInstance().flush();
         }
