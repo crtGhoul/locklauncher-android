@@ -75,8 +75,16 @@ public final class GlassThemeHelper {
         return m;
     }
 
+    public static String getGlassMode(Context ctx) {
+        return getMode(ctx);
+    }
+
     public static void setMode(Context ctx, String mode) {
         prefs(ctx).edit().putString(KEY_GLASS_MODE, mode).apply();
+    }
+
+    public static void setGlassMode(Context ctx, String mode) {
+        setMode(ctx, mode);
     }
 
     public static String getSubTheme(Context ctx) {
@@ -95,12 +103,24 @@ public final class GlassThemeHelper {
         return Math.max(0, Math.min(25, prefs(ctx).getInt(KEY_GLASS_BLUR, DEFAULT_BLUR)));
     }
 
+    public static int getBlurLevel(Context ctx) {
+        return getBlurRadius(ctx);
+    }
+
     public static void setBlurRadius(Context ctx, int blur) {
         prefs(ctx).edit().putInt(KEY_GLASS_BLUR, Math.max(0, Math.min(25, blur))).apply();
     }
 
+    public static void setBlurLevel(Context ctx, int blur) {
+        setBlurRadius(ctx, blur);
+    }
+
     public static void resetBlurRadius(Context ctx) {
         setBlurRadius(ctx, DEFAULT_BLUR);
+    }
+
+    public static void resetBlurLevel(Context ctx) {
+        resetBlurRadius(ctx);
     }
 
     public static int getSurfaceOpacityPct(Context ctx) {
@@ -142,12 +162,24 @@ public final class GlassThemeHelper {
         return Math.max(0, Math.min(360, prefs(ctx).getInt(KEY_GLASS_HUE, DEFAULT_HUE)));
     }
 
+    public static int getThemeHue(Context ctx) {
+        return getAccentHue(ctx);
+    }
+
     public static void setAccentHue(Context ctx, int hue) {
         prefs(ctx).edit().putInt(KEY_GLASS_HUE, Math.max(0, Math.min(360, hue))).apply();
     }
 
+    public static void setThemeHue(Context ctx, int hue) {
+        setAccentHue(ctx, hue);
+    }
+
     public static void resetAccentHue(Context ctx) {
         setAccentHue(ctx, DEFAULT_HUE);
+    }
+
+    public static void resetThemeHue(Context ctx) {
+        resetAccentHue(ctx);
     }
 
     /** Saturation 0..100 representing 0.00..1.00 (default 50 -> 0.5). */
@@ -155,20 +187,40 @@ public final class GlassThemeHelper {
         return Math.max(0, Math.min(100, prefs(ctx).getInt(KEY_GLASS_SAT, DEFAULT_SAT_PCT)));
     }
 
+    public static int getSaturationPct(Context ctx) {
+        return getAccentSatPct(ctx);
+    }
+
     public static void setAccentSatPct(Context ctx, int satPct) {
         prefs(ctx).edit().putInt(KEY_GLASS_SAT, Math.max(0, Math.min(100, satPct))).apply();
+    }
+
+    public static void setSaturationPct(Context ctx, int satPct) {
+        setAccentSatPct(ctx, satPct);
     }
 
     public static void resetAccentSatPct(Context ctx) {
         setAccentSatPct(ctx, DEFAULT_SAT_PCT);
     }
 
+    public static void resetSaturationPct(Context ctx) {
+        resetAccentSatPct(ctx);
+    }
+
     public static boolean isUseWallpaperAccent(Context ctx) {
         return prefs(ctx).getBoolean(KEY_GLASS_WALLPAPER_ACCENT, false);
     }
 
+    public static boolean isWallpaperAccent(Context ctx) {
+        return isUseWallpaperAccent(ctx);
+    }
+
     public static void setUseWallpaperAccent(Context ctx, boolean use) {
         prefs(ctx).edit().putBoolean(KEY_GLASS_WALLPAPER_ACCENT, use).apply();
+    }
+
+    public static void setWallpaperAccent(Context ctx, boolean use) {
+        setUseWallpaperAccent(ctx, use);
     }
 
     /** Icon size inside glass surfaces: 70..130% (default 100%). */
@@ -176,12 +228,37 @@ public final class GlassThemeHelper {
         return Math.max(70, Math.min(130, prefs(ctx).getInt(KEY_GLASS_ICON_SCALE, DEFAULT_ICON_SCALE_PCT)));
     }
 
+    public static int getIconScaleInsideGlass(Context ctx) {
+        return getIconScalePct(ctx);
+    }
+
     public static void setIconScalePct(Context ctx, int pct) {
         prefs(ctx).edit().putInt(KEY_GLASS_ICON_SCALE, Math.max(70, Math.min(130, pct))).apply();
     }
 
+    public static void setIconScaleInsideGlass(Context ctx, int pct) {
+        setIconScalePct(ctx, pct);
+    }
+
     public static void resetIconScalePct(Context ctx) {
         setIconScalePct(ctx, DEFAULT_ICON_SCALE_PCT);
+    }
+
+    public static void resetIconScaleInsideGlass(Context ctx) {
+        resetIconScalePct(ctx);
+    }
+
+    public static void resetAll(Context ctx) {
+        setMode(ctx, MODE_FROSTED);
+        setSubTheme(ctx, SUB_DARK);
+        resetBlurRadius(ctx);
+        resetSurfaceOpacityPct(ctx);
+        resetDarknessPct(ctx);
+        resetAccentHue(ctx);
+        resetAccentSatPct(ctx);
+        setUseWallpaperAccent(ctx, true);
+        resetIconScalePct(ctx);
+        refreshAllSurfaces(ctx);
     }
 
     // ---- Color & Surface Computation ----
@@ -297,10 +374,15 @@ public final class GlassThemeHelper {
         return new LayerDrawable(new Drawable[]{base, frostTop});
     }
 
-    /** Applies the unified glass drawable to a View. */
+    /** Applies the unified glass drawable to a View with int corner radius in dp. */
     public static void applyToView(Context ctx, View view, int cornerRadiusDp) {
         if (ctx == null || view == null) return;
         view.setBackground(buildGlassDrawable(ctx, dp(ctx, cornerRadiusDp)));
+    }
+
+    /** Applies the unified glass drawable to a View with float corner radius in dp. */
+    public static void applyToView(Context ctx, View view, float cornerRadiusDp) {
+        applyToView(ctx, view, Math.round(cornerRadiusDp));
     }
 
     /**
