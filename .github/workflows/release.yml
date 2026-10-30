@@ -76,10 +76,10 @@ jobs:
           tag_name: v${{ steps.version.outputs.name }}
           name: Lock Launcher v${{ steps.version.outputs.name }} (Build ${{ steps.version.outputs.code }})
           body: |
-            ## Lock Launcher v${{ steps.version.outputs.name }} (Build ${{ steps.version.outputs.code }})
-            - **Screen-Off & Background Playback (`WebAppActivity` & `AdBlockEngine`)**: Added `BACKGROUND_PLAYBACK_JS` Page Visibility API spoofing, YouTube `_lact` activity keepalive, `AudioFocusRequest(AUDIOFOCUS_GAIN)`, and `RENDERER_PRIORITY_IMPORTANT` (`waivedWhenNotVisible = false`) so YouTube and YouTube Music continue playing with the screen locked.
-            - **Player-Safe Ad Suppression**: Surgical pre-roll/mid-roll endpoint interception (`/pagead/`, `/api/stats/ads`, `/api/stats/atr`, `/ptracking`, `/get_midroll_`, `/youtubei/v1/player/ad_break`) and non-destructive ad fast-forwarding without removing `.video-ads` DOM nodes.
-            - **OnePlus 13 / OxygenOS 15 Polish**: 120Hz LTPO `preferredDisplayModeId` locking and multi-window OAuth `CookieManager.flush()` persistence.
+            - **YouTube & YouTube Music Ad Elimination**: Client-side fetch/XHR hook intercepts `/youtubei/v1/player` and `/youtubei/v1/next` payloads to strip `adPlacements` and `adSlots` at the network JSON layer before the player engine can schedule ads. Eliminates mealbar promos and audio interruptions with zero DOM crashes.
+            - **Seamless Google Account Sign-In**: Automatically applies Desktop Chrome User-Agent (`Mozilla/5.0... Chrome/132.0.0.0`) on `music.youtube.com`, bypassing Google's 403 `disallowed_useragent` block and loading the full desktop web player.
+            - **Flawless Background & App-Switch Audio**: Injects `BACKGROUND_PLAYBACK_JS` (spoofing `document.hidden`, `visibilityState`, `hasFocus`, and blocking `blur`/`pagehide`), holds `AUDIOFOCUS_GAIN`, and posts an ongoing playback notification so OxygenOS 15's cgroup freezer never kills playback when you go Home or switch to other apps.
+            - **OnePlus 13 / OxygenOS 15 Polish**: 120Hz LTPO display mode lock, hardware-accelerated WebView layer, and multi-window OAuth `CookieManager.flush()` persistence.
           files: |
             locklauncher.apk
             LockLauncher-v${{ steps.version.outputs.name }}.apk

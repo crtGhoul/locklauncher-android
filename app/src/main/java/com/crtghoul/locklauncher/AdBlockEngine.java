@@ -200,7 +200,7 @@ public class AdBlockEngine {
             if (host != null) {
                 host = host.toLowerCase();
 
-                // 1. Surgical YouTube Ad & Telemetry Interception (MUST run before YouTube host whitelist).
+                // 1. Surgical YouTube & YouTube Music Ad & Telemetry Interception (MUST run before YouTube host whitelist).
                 // Blocks pre-roll/mid-roll ad metadata, pagead beacons, and ad impression pings
                 // while leaving core video streams (googlevideo.com/videoplayback) and player JS untouched.
                 if (host.equals("youtube.com") || host.endsWith(".youtube.com")) {
@@ -210,10 +210,12 @@ public class AdBlockEngine {
                             || path.startsWith("/ptracking")
                             || path.startsWith("/get_midroll_")
                             || path.contains("/youtubei/v1/player/ad_break")
+                            || path.contains("/youtubei/v1/att/get")
                             || lowerUrl.contains("&adformat=")
                             || lowerUrl.contains("?adformat=")
                             || lowerUrl.contains("&ad_type=")
-                            || lowerUrl.contains("googleads.g.doubleclick.net")) {
+                            || lowerUrl.contains("googleads.g.doubleclick.net")
+                            || lowerUrl.contains("pubads.g.doubleclick.net")) {
                         return true;
                     }
                     return false;
@@ -329,9 +331,10 @@ public class AdBlockEngine {
     /**
      * Flawless Background & Screen-Off Playback Injection for YouTube & YouTube Music:
      * 1. Spoofs Page Visibility API (document.hidden = false, document.visibilityState = 'visible').
-     * 2. Suppresses visibilitychange, webkitvisibilitychange, and pagehide listeners in capture phase.
-     * 3. Keeps YouTube's internal activity tracker (_lact) fresh so "Continue watching?" never pauses audio.
-     * 4. Auto-resumes HTML5 <video>/<audio> if Chromium's compositor briefly pauses media when the screen locks.
+     * 2. Spoofs hasFocus() on both window and document so YouTube Music never knows you switched apps.
+     * 3. Intercepts EventTarget.prototype.addEventListener to block visibilitychange, blur, pagehide, and freeze listeners across window and document.
+     * 4. Keeps YouTube's internal activity tracker (_lact) fresh so "Continue watching?" never pauses audio.
+     * 5. Auto-resumes HTML5 <video>/<audio> if Android/Chromium briefly pauses media when switching apps.
      */
     public static final String BACKGROUND_PLAYBACK_JS =
             "javascript:(function() {" +
@@ -342,37 +345,49 @@ public class AdBlockEngine {
             "    Object.defineProperty(Document.prototype, 'webkitHidden', { get: function() { return false; }, configurable: true });" +
             "    Object.defineProperty(Document.prototype, 'visibilityState', { get: function() { return 'visible'; }, configurable: true });" +
             "    Object.defineProperty(Document.prototype, 'webkitVisibilityState', { get: function() { return 'visible'; }, configurable: true });" +
+            "    document.hasFocus = function() { return true; };" +
+            "    window.hasFocus = function() { return true; };" +
+            "  } catch (e) {}" +
+            "  try {" +
+            "    Object.defineProperty(window, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });" +
+            "    Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });" +
+            "    Object.defineProperty(window, 'onpagehide', { get: function() { return null; }, set: function() {}, configurable: true });" +
+            "    Object.defineProperty(window, 'onblur', { get: function() { return null; }, set: function() {}, configurable: true });" +
             "  } catch (e) {}" +
             "  var blockEvents = { 'visibilitychange': 1, 'webkitvisibilitychange': 1, 'mozvisibilitychange': 1, 'pagehide': 1, 'freeze': 1 };" +
-            "  window.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
-            "  document.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
-            "  document.addEventListener('webkitvisibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
-            "  window.addEventListener('pagehide', function(e) { e.stopImmediatePropagation(); }, true);" +
-            "  var origDocAdd = Document.prototype.addEventListener;" +
-            "  Document.prototype.addEventListener = function(type, listener, options) {" +
-            "    if (blockEvents[type]) return;" +
-            "    return origDocAdd.call(this, type, listener, options);" +
-            "  };" +
+            "  try {" +
+            "    var origEventTargetAdd = EventTarget.prototype.addEventListener;" +
+            "    EventTarget.prototype.addEventListener = function(type, listener, options) {" +
+            "      if (blockEvents[type]) return;" +
+            "      if (type === 'blur' && (this === window || this === document)) return;" +
+            "      return origEventTargetAdd.call(this, type, listener, options);" +
+            "    };" +
+            "  } catch (e) {}" +
             "  var h = (location.hostname || '').toLowerCase();" +
             "  if (h.indexOf('youtube.com') !== -1) {" +
             "    window.addEventListener('blur', function(e) {" +
             "      if (e.target === window || e.target === document) e.stopImmediatePropagation();" +
             "    }, true);" +
-            "    setInterval(function() { window._lact = Date.now(); }, 25000);" +
+            "    setInterval(function() { window._lact = Date.now(); }, 20000);" +
             "    document.addEventListener('pause', function(e) {" +
             "      var el = e.target;" +
-            "      if (el && el.tagName === 'VIDEO' && window.__llAppBackgrounded && !el.ended) {" +
-            "        setTimeout(function() { try { el.play(); } catch(err) {} }, 60);" +
+            "      if (el && (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') && window.__llAppBackgrounded && !el.ended) {" +
+            "        setTimeout(function() { try { el.play(); } catch(err) {} }, 50);" +
             "      }" +
             "    }, true);" +
             "  }" +
             "})();";
 
     /**
-     * Scoped Cosmetic Ad-Blocker & Non-Destructive YouTube Ad Skipper:
-     * - On YouTube: NEVER removes .video-ads or .ytp-ad-module DOM nodes (which crashes #movie_player).
-     *   Instead, hides feed/companion ad slots via CSS and fast-forwards/skips active ad breaks non-destructively.
-     * - On regular websites: Applies strict cosmetic CSS hiding third-party ad slots without mutating OAuth flows.
+     * Airtight Ad & Promotion Neutralization Engine:
+     * 1. REAL-TIME API RESPONSE INTERCEPTION (Fetch & XHR):
+     *    Intercepts YouTube & YouTube Music's `/youtubei/v1/player` and `/youtubei/v1/next` endpoints.
+     *    Strips `adPlacements`, `adSlots`, and `playerAds` before the player engine receives them.
+     *    Result: The player plays the track directly as if on YouTube Music Premium (zero audio/video ads scheduled)!
+     * 2. SCOPED COSMETIC STYLING:
+     *    Hides YouTube Music mealbar upsell dialogs ("Get Music Premium"), statement banners, and feed ad slots.
+     * 3. FALLBACK SKIPPER & POPUP DISMISSER:
+     *    Automatically clicks "Dismiss" on any trial/upgrade popups and auto-skips any ad break fallback.
      */
     public static final String COSMETIC_AD_BLOCK_JS =
             "javascript:(function() {" +
@@ -380,29 +395,111 @@ public class AdBlockEngine {
             "    var h = (location.hostname || '').toLowerCase();" +
             "    if (h.indexOf('accounts.google.com') !== -1 || h.indexOf('myaccount.google.com') !== -1) return;" +
             "    if (h.indexOf('youtube.com') !== -1) {" +
+            "      if (!window.__llYtApiHooked) {" +
+            "        window.__llYtApiHooked = true;" +
+            "        var stripAdsFromJson = function(json) {" +
+            "          if (!json || typeof json !== 'object') return json;" +
+            "          var adProps = ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams'];" +
+            "          for (var i = 0; i < adProps.length; i++) {" +
+            "            if (json[adProps[i]]) delete json[adProps[i]];" +
+            "          }" +
+            "          if (json.playbackTracking) {" +
+            "            if (json.playbackTracking.qoeUrl) delete json.playbackTracking.qoeUrl;" +
+            "            if (json.playbackTracking.atrUrl) delete json.playbackTracking.atrUrl;" +
+            "          }" +
+            "          return json;" +
+            "        };" +
+            "        if (window.fetch) {" +
+            "          var rawFetch = window.fetch;" +
+            "          window.fetch = async function() {" +
+            "            var response = await rawFetch.apply(this, arguments);" +
+            "            try {" +
+            "              var url = typeof arguments[0] === 'string' ? arguments[0] : (arguments[0] && arguments[0].url) || '';" +
+            "              if (url.indexOf('/youtubei/v1/player') !== -1 || url.indexOf('/youtubei/v1/next') !== -1) {" +
+            "                var clone = response.clone();" +
+            "                var json = await clone.json();" +
+            "                stripAdsFromJson(json);" +
+            "                return new Response(JSON.stringify(json), {" +
+            "                  status: response.status," +
+            "                  statusText: response.statusText," +
+            "                  headers: response.headers" +
+            "                });" +
+            "              }" +
+            "            } catch (err) {}" +
+            "            return response;" +
+            "          };" +
+            "        }" +
+            "        if (window.XMLHttpRequest) {" +
+            "          var rawOpen = XMLHttpRequest.prototype.open;" +
+            "          var rawSend = XMLHttpRequest.prototype.send;" +
+            "          XMLHttpRequest.prototype.open = function(method, url) {" +
+            "            this.__reqUrl = url;" +
+            "            return rawOpen.apply(this, arguments);" +
+            "          };" +
+            "          XMLHttpRequest.prototype.send = function() {" +
+            "            var url = this.__reqUrl || '';" +
+            "            if (url.indexOf('/youtubei/v1/player') !== -1 || url.indexOf('/youtubei/v1/next') !== -1) {" +
+            "              var self = this;" +
+            "              var onReady = this.onreadystatechange;" +
+            "              this.onreadystatechange = function() {" +
+            "                if (self.readyState === 4 && self.status === 200) {" +
+            "                  try {" +
+            "                    var text = self.responseText;" +
+            "                    if (text && (text.indexOf('adPlacements') !== -1 || text.indexOf('adSlots') !== -1 || text.indexOf('playerAds') !== -1)) {" +
+            "                      var json = JSON.parse(text);" +
+            "                      stripAdsFromJson(json);" +
+            "                      var newText = JSON.stringify(json);" +
+            "                      Object.defineProperty(self, 'responseText', { value: newText, writable: true });" +
+            "                      Object.defineProperty(self, 'response', { value: newText, writable: true });" +
+            "                    }" +
+            "                  } catch (e) {}" +
+            "                }" +
+            "                if (onReady) onReady.apply(this, arguments);" +
+            "              };" +
+            "            }" +
+            "            return rawSend.apply(this, arguments);" +
+            "          };" +
+            "        }" +
+            "      }" +
             "      var ytStyle = document.getElementById('ll-yt-adblock-css');" +
             "      if (!ytStyle) {" +
             "        ytStyle = document.createElement('style');" +
             "        ytStyle.id = 'll-yt-adblock-css';" +
             "        ytStyle.textContent = '" +
+            "          ytmusic-mealbar-promo-renderer, ytmusic-upsell-dialog-renderer, " +
+            "          ytmusic-ad-slot-renderer, ytmusic-statement-banner-renderer, " +
+            "          ytmusic-guide-entry-renderer[is-primary-cta], .ytmusic-mealbar-promo-renderer, " +
+            "          #mealbar, tp-yt-paper-dialog:has(ytmusic-mealbar-promo-renderer), " +
+            "          tp-yt-paper-dialog:has(ytmusic-upsell-dialog-renderer), " +
             "          ytm-promoted-sparkles-web-renderer, ytm-promoted-video-renderer, " +
             "          ytm-companion-slot, ytm-statement-banner-renderer, ytm-brand-promo-shelf-renderer, " +
             "          ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer, " +
             "          ytd-promoted-sparkles-web-renderer, ytd-display-ad-renderer, " +
             "          .ytp-ad-overlay-container, .ytp-ad-message-container, " +
-            "          #masthead-ad, #player-ads { display: none !important; }';" +
+            "          #masthead-ad, #player-ads { display: none !important; height: 0 !important; visibility: hidden !important; pointer-events: none !important; }';" +
             "        (document.head || document.documentElement).appendChild(ytStyle);" +
             "      }" +
             "      if (!window.__llYtAdObserver) {" +
             "        window.__llYtAdObserver = true;" +
             "        var skipYtAd = function() {" +
+            "          var dismissBtns = document.querySelectorAll(" +
+            "            \"ytmusic-mealbar-promo-renderer #dismiss-button, ytmusic-upsell-dialog-renderer #dismiss-button, \" +" +
+            "            \"tp-yt-paper-dialog #dismiss-button, #dismiss-button, button[aria-label=\\\"Dismiss\\\"], button[aria-label=\\\"No thanks\\\"]\"" +
+            "          );" +
+            "          for (var d = 0; d < dismissBtns.length; d++) {" +
+            "            try { dismissBtns[d].click(); } catch(e) {}" +
+            "          }" +
             "          var player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');" +
-            "          var isAd = player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));" +
-            "          var video = document.querySelector('video.html5-main-video') || document.querySelector('video');" +
+            "          var isAd = !!(" +
+            "            document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay, .ytp-ad-text, [class*=\\\"ad-showing\\\"], [class*=\\\"ad-interrupting\\\"], ytmusic-player-bar[is-showing-ad], [is-ad-playing=\\\"true\\\"]') ||" +
+            "            document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, button[class*=\\\"ad-skip\\\"], .ytmusic-skip-ad-button') ||" +
+            "            (player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting')))" +
+            "          );" +
+            "          var video = document.querySelector('video') || document.querySelector('audio');" +
             "          if (isAd && video) {" +
             "            window.__llWasAdPlaying = true;" +
             "            video.muted = true;" +
-            "            if (isFinite(video.duration) && video.duration > 0.5) {" +
+            "            if (isFinite(video.duration) && video.duration > 0.1) {" +
             "              video.currentTime = video.duration;" +
             "            } else {" +
             "              video.playbackRate = 16.0;" +
@@ -412,12 +509,12 @@ public class AdBlockEngine {
             "            video.muted = false;" +
             "            if (video.playbackRate > 2.0) video.playbackRate = 1.0;" +
             "          }" +
-            "          var skipBtns = document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, button[class*=\"ad-skip\"]');" +
+            "          var skipBtns = document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, button[class*=\\\"ad-skip\\\"], .ytmusic-skip-ad-button, [aria-label*=\\\"Skip ad\\\"], [aria-label*=\\\"Skip\\\"]');" +
             "          for (var i = 0; i < skipBtns.length; i++) {" +
             "            try { skipBtns[i].click(); } catch(e) {}" +
             "          }" +
             "        };" +
-            "        setInterval(skipYtAd, 250);" +
+            "        setInterval(skipYtAd, 200);" +
             "      }" +
             "      return;" +
             "    }" +

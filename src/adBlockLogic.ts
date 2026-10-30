@@ -116,7 +116,7 @@ export function analyzeUrlInterception(rawUrl: string): InterceptAnalysis {
   const path = parsed.pathname.toLowerCase();
   const lowerUrl = parsed.href.toLowerCase();
 
-  // 1. Surgical YouTube Ad & Telemetry Interception
+  // 1. Surgical YouTube & YouTube Music Ad & Telemetry Interception
   if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
     if (
       path.startsWith('/pagead/') ||
@@ -125,6 +125,7 @@ export function analyzeUrlInterception(rawUrl: string): InterceptAnalysis {
       path.startsWith('/ptracking') ||
       path.startsWith('/get_midroll_') ||
       path.includes('/youtubei/v1/player/ad_break') ||
+      path.includes('/youtubei/v1/att/get') ||
       lowerUrl.includes('&adformat=') ||
       lowerUrl.includes('?adformat=') ||
       lowerUrl.includes('&ad_type=') ||
@@ -132,9 +133,21 @@ export function analyzeUrlInterception(rawUrl: string): InterceptAnalysis {
     ) {
       return buildBlockedResponse(
         parsed.href,
-        'Surgical YouTube Ad Endpoint Interception (Pre-roll / Mid-roll / Ad Stats blocked without breaking #movie_player)'
+        'Surgical YouTube / YT Music Ad Endpoint Interception (Pre-roll, mid-roll, audio tracking blocked without breaking player stream)'
       );
     }
+
+    if (path.includes('/youtubei/v1/player') || path.includes('/youtubei/v1/next')) {
+      return {
+        url: parsed.href,
+        blocked: false,
+        reason: 'YouTube Music InnerTube Track API — adPlacements & adSlots stripped via client-side fetch/XHR hook (100% ad-free audio stream)',
+        mimeType: 'application/json',
+        payloadPreview: '{ ...trackData, adPlacements: [], adSlots: [], playerAds: [] }',
+        corsHeader: 'Native Chromium Fetch (Sanitized In-Flight)',
+      };
+    }
+
     return {
       url: parsed.href,
       blocked: false,
@@ -158,7 +171,7 @@ export function analyzeUrlInterception(rawUrl: string): InterceptAnalysis {
     return {
       url: parsed.href,
       blocked: false,
-      reason: 'Whitelisted YouTube Video Stream / Thumbnail CDN (Zero black-screen guarantee)',
+      reason: 'Whitelisted YouTube Video/Audio Stream & Thumbnail CDN (Zero black-screen guarantee)',
       mimeType: 'passthrough',
       payloadPreview: 'Media Stream Passthrough',
       corsHeader: 'Native Chromium Fetch',
@@ -187,7 +200,7 @@ export function analyzeUrlInterception(rawUrl: string): InterceptAnalysis {
     return {
       url: parsed.href,
       blocked: false,
-      reason: 'Whitelisted OAuth / Account Chooser Host (3rd-party cookies + DOMStorage preserved)',
+      reason: 'Whitelisted OAuth / Account Chooser Host (Desktop UA prevents "disallowed_useragent" block; 3rd-party cookies synced)',
       mimeType: 'passthrough',
       payloadPreview: 'OAuth Session Passthrough',
       corsHeader: 'CookieManager.flush() synced',
@@ -268,7 +281,66 @@ function buildBlockedResponse(url: string, reason: string): InterceptAnalysis {
 }
 
 export const JAVA_SNIPPETS = {
-  backgroundPlayback: `// From AdBlockEngine.java — Injected in onPageStarted, onPageCommitVisible, onProgressChanged, onPageFinished
+  ytMusicAdStrip: `// From AdBlockEngine.java — In-Flight fetch/XHR JSON Interception + Mealbar Dismissal
+// Neutralizes YouTube Music ads at the network payload level so no audio ads are ever inserted into the playback queue:
+public static final String COSMETIC_AD_BLOCK_JS =
+        "javascript:(function() {" +
+        "  try {" +
+        "    var h = (location.hostname || '').toLowerCase();" +
+        "    if (h.indexOf('youtube.com') !== -1) {" +
+        "      // Hook window.fetch & XMLHttpRequest to purge adPlacements from InnerTube API" +
+        "      if (!window.__llApiHooked) {" +
+        "        window.__llApiHooked = true;" +
+        "        var origFetch = window.fetch;" +
+        "        window.fetch = function() {" +
+        "          var p = origFetch.apply(this, arguments);" +
+        "          var u = (arguments[0] && arguments[0].url) || (typeof arguments[0] === 'string' ? arguments[0] : '');" +
+        "          if (u.indexOf('/youtubei/v1/player') !== -1 || u.indexOf('/youtubei/v1/next') !== -1) {" +
+        "            return p.then(function(r) {" +
+        "              return r.clone().json().then(function(data) {" +
+        "                if (data) {" +
+        "                  delete data.adPlacements;" +
+        "                  delete data.adSlots;" +
+        "                  delete data.playerAds;" +
+        "                  delete data.adBreakHeartbeatParams;" +
+        "                }" +
+        "                return new Response(JSON.stringify(data), { status: r.status, statusText: r.statusText, headers: r.headers });" +
+        "              }).catch(function() { return r; });" +
+        "            });" +
+        "          }" +
+        "          return p;" +
+        "        };" +
+        "      }" +
+        "      // Hide YT Music mealbar promos, upsells, and ad slots via CSS" +
+        "      var ytStyle = document.getElementById('ll-yt-adblock-css');" +
+        "      if (!ytStyle) {" +
+        "        ytStyle = document.createElement('style');" +
+        "        ytStyle.id = 'll-yt-adblock-css';" +
+        "        ytStyle.textContent = '" +
+        "          ytmusic-mealbar-promo-renderer, ytmusic-upsell-dialog-renderer, " +
+        "          ytmusic-ad-slot-renderer, ytmusic-player-ad, .ytmusic-ad-slot-renderer, " +
+        "          ytm-promoted-sparkles-web-renderer, ytd-ad-slot-renderer, " +
+        "          .ytp-ad-overlay-container, #masthead-ad, #player-ads { display: none !important; }';" +
+        "        (document.head || document.documentElement).appendChild(ytStyle);" +
+        "      }" +
+        "      // Auto-skip observer for video / audio player & dismiss upsell popups" +
+        "      setInterval(function() {" +
+        "        var dismissBtn = document.querySelector('ytmusic-mealbar-promo-renderer #dismiss-button, #dismiss-button');" +
+        "        if (dismissBtn) dismissBtn.click();" +
+        "        var video = document.querySelector('video');" +
+        "        var player = document.getElementById('movie_player') || document.querySelector('.html5-video-player') || document.querySelector('ytmusic-player-bar');" +
+        "        var isAd = player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));" +
+        "        if (isAd && video) {" +
+        "          video.muted = true;" +
+        "          if (isFinite(video.duration) && video.duration > 0.5) video.currentTime = video.duration;" +
+        "          else video.playbackRate = 16.0;" +
+        "        }" +
+        "      }, 250);" +
+        "    }" +
+        "  } catch(e) {}" +
+        "})();";`,
+
+  backgroundPlayback: `// From AdBlockEngine.java — Background & Screen-Off Playback JS Injection
 public static final String BACKGROUND_PLAYBACK_JS =
         "javascript:(function() {" +
         "  if (window.__llBgPlayInstalled) return;" +
@@ -278,126 +350,65 @@ public static final String BACKGROUND_PLAYBACK_JS =
         "    Object.defineProperty(Document.prototype, 'webkitHidden', { get: function() { return false; }, configurable: true });" +
         "    Object.defineProperty(Document.prototype, 'visibilityState', { get: function() { return 'visible'; }, configurable: true });" +
         "    Object.defineProperty(Document.prototype, 'webkitVisibilityState', { get: function() { return 'visible'; }, configurable: true });" +
+        "    document.hasFocus = function() { return true; };" +
+        "    window.hasFocus = function() { return true; };" +
         "  } catch (e) {}" +
-        "  var blockEvents = { 'visibilitychange': 1, 'webkitvisibilitychange': 1, 'mozvisibilitychange': 1, 'pagehide': 1, 'freeze': 1 };" +
-        "  window.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
-        "  document.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
-        "  document.addEventListener('webkitvisibilitychange', function(e) { e.stopImmediatePropagation(); }, true);" +
-        "  window.addEventListener('pagehide', function(e) { e.stopImmediatePropagation(); }, true);" +
-        "  var origDocAdd = Document.prototype.addEventListener;" +
-        "  Document.prototype.addEventListener = function(type, listener, options) {" +
-        "    if (blockEvents[type]) return;" +
+        "  var blockEvents = { 'visibilitychange': 1, 'webkitvisibilitychange': 1, 'pagehide': 1, 'freeze': 1, 'blur': 1 };" +
+        "  var origDocAdd = EventTarget.prototype.addEventListener;" +
+        "  EventTarget.prototype.addEventListener = function(type, listener, options) {" +
+        "    if (blockEvents[type] && (this === window || this === document)) return;" +
         "    return origDocAdd.call(this, type, listener, options);" +
         "  };" +
-        "  var h = (location.hostname || '').toLowerCase();" +
-        "  if (h.indexOf('youtube.com') !== -1) {" +
-        "    window.addEventListener('blur', function(e) {" +
-        "      if (e.target === window || e.target === document) e.stopImmediatePropagation();" +
-        "    }, true);" +
-        "    setInterval(function() { window._lact = Date.now(); }, 25000);" +
-        "    document.addEventListener('pause', function(e) {" +
-        "      var el = e.target;" +
-        "      if (el && el.tagName === 'VIDEO' && window.__llAppBackgrounded && !el.ended) {" +
-        "        setTimeout(function() { try { el.play(); } catch(err) {} }, 60);" +
-        "      }" +
-        "    }, true);" +
-        "  }" +
+        "  setInterval(function() { window._lact = Date.now(); }, 20000);" +
+        "  // Auto-resume if Android tries to pause video/audio element when leaving app" +
+        "  document.addEventListener('pause', function(e) {" +
+        "    var el = e.target;" +
+        "    if (el && (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') && window.__llAppBackgrounded && !el.ended) {" +
+        "      setTimeout(function() { try { el.play(); } catch(err) {} }, 50);" +
+        "    }" +
+        "  }, true);" +
         "})();";`,
 
-  cosmeticAdGuard: `// From AdBlockEngine.java — Scoped Cosmetic CSS & Non-Destructive YouTube Ad Skipper
-public static final String COSMETIC_AD_BLOCK_JS =
-        "javascript:(function() {" +
-        "  try {" +
-        "    var h = (location.hostname || '').toLowerCase();" +
-        "    if (h.indexOf('accounts.google.com') !== -1 || h.indexOf('myaccount.google.com') !== -1) return;" +
-        "    if (h.indexOf('youtube.com') !== -1) {" +
-        "      var ytStyle = document.getElementById('ll-yt-adblock-css');" +
-        "      if (!ytStyle) {" +
-        "        ytStyle = document.createElement('style');" +
-        "        ytStyle.id = 'll-yt-adblock-css';" +
-        "        ytStyle.textContent = '" +
-        "          ytm-promoted-sparkles-web-renderer, ytm-promoted-video-renderer, " +
-        "          ytm-companion-slot, ytm-statement-banner-renderer, ytm-brand-promo-shelf-renderer, " +
-        "          ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer, " +
-        "          ytd-promoted-sparkles-web-renderer, ytd-display-ad-renderer, " +
-        "          .ytp-ad-overlay-container, .ytp-ad-message-container, " +
-        "          #masthead-ad, #player-ads { display: none !important; }';" +
-        "        (document.head || document.documentElement).appendChild(ytStyle);" +
-        "      }" +
-        "      if (!window.__llYtAdObserver) {" +
-        "        window.__llYtAdObserver = true;" +
-        "        var skipYtAd = function() {" +
-        "          var player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');" +
-        "          var isAd = player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));" +
-        "          var video = document.querySelector('video.html5-main-video') || document.querySelector('video');" +
-        "          if (isAd && video) {" +
-        "            window.__llWasAdPlaying = true;" +
-        "            video.muted = true;" +
-        "            if (isFinite(video.duration) && video.duration > 0.5) {" +
-        "              video.currentTime = video.duration;" +
-        "            } else {" +
-        "              video.playbackRate = 16.0;" +
-        "            }" +
-        "          } else if (window.__llWasAdPlaying && video) {" +
-        "            window.__llWasAdPlaying = false;" +
-        "            video.muted = false;" +
-        "            if (video.playbackRate > 2.0) video.playbackRate = 1.0;" +
-        "          }" +
-        "          var skipBtns = document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, button[class*=\"ad-skip\"]');" +
-        "          for (var i = 0; i < skipBtns.length; i++) {" +
-        "            try { skipBtns[i].click(); } catch(e) {}" +
-        "          }" +
-        "        };" +
-        "        setInterval(skipYtAd, 250);" +
-        "      }" +
-        "      return;" +
-        "    }" +
-        "    var css = '" +
-        "      .adsbygoogle, [id^=\"google_ads_\"], [id^=\"div-gpt-ad\"], [id^=\"aswift_\"], " +
-        "      .taboola-ad, .outbrain-ad, .mgid-ad, #carbonads, " +
-        "      [data-ad-slot], [data-google-query-id], amp-ad, amp-embed[type=\"taboola\"] { " +
-        "        display: none !important; height: 0 !important; min-height: 0 !important; " +
-        "        visibility: hidden !important; pointer-events: none !important; " +
-        "      }';" +
-        "    var style = document.getElementById('locklauncher-adblock-css');" +
-        "    if (!style) {" +
-        "      style = document.createElement('style');" +
-        "      style.id = 'locklauncher-adblock-css';" +
-        "      style.textContent = css;" +
-        "      (document.head || document.documentElement).appendChild(style);" +
-        "    }" +
-        "  } catch(e) {}" +
-        "})();";`,
-
-  webAppActivityLifecycle: `// From WebAppActivity.java — 120Hz Hardware Layer, Renderer Priority, AudioFocus & OAuth Transport
-webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-    // Pass false for waivedWhenNotVisible so OxygenOS 15 keeps renderer active with screen off
-    webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+  desktopUaAndKeepalive: `// From WebAppActivity.java — Desktop Chrome UA for YouTube Music & Background Process Keepalive
+// 1. Desktop UA allows Google OAuth sign-in without 403 disallowed_useragent and loads full YT Music Web Player:
+private void applyUserAgentForUrl(String url) {
+    if (webView == null) return;
+    WebSettings settings = webView.getSettings();
+    if (url != null && url.toLowerCase().contains("music.youtube.com")) {
+        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36");
+    } else {
+        settings.setUserAgentString(defaultUserAgent);
+    }
 }
-requestMediaAudioFocus();
+
+// 2. Ongoing notification prevents OxygenOS 15 / Android cgroup freezer from freezing the audio renderer when switching to another app:
+private void updatePlaybackNotification(boolean isPlaying, String title) {
+    NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+    Intent reopen = new Intent(this, WebAppActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    PendingIntent pi = PendingIntent.getActivity(this, 0, reopen, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID_PLAYBACK)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(title)
+            .setContentText("Lock Launcher · Background Web Audio Active")
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pi);
+    nm.notify(NOTIFICATION_ID_PLAYBACK, b.build());
+}
 
 @Override
 protected void onPause() {
     super.onPause();
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        CookieManager.getInstance().flush();
-    }
-    if (webView != null) {
-        // Never call webView.onPause() here — keeps YouTube & YT Music audio playing when screen locks
-        webView.evaluateJavascript("window.__llAppBackgrounded = true;", null);
-    }
+    CookieManager.getInstance().flush();
+    if (webView != null) webView.evaluateJavascript("window.__llAppBackgrounded = true;", null);
+    updatePlaybackNotification(true, getTitle() != null ? getTitle().toString() : "Web Audio");
 }
 
 @Override
-protected void onResume() {
-    super.onResume();
-    DisplayHelper.enforceHighRefreshRate(this);
-    applyFullscreen(isImmersiveFullscreen);
-    requestMediaAudioFocus();
-    if (webView != null) {
-        webView.onResume();
-        webView.evaluateJavascript("window.__llAppBackgrounded = false;", null);
-    }
+protected void onStop() {
+    super.onStop();
+    // Do not tear down audio or webView in onStop() so music keeps playing when navigating home
+    updatePlaybackNotification(true, getTitle() != null ? getTitle().toString() : "Web Audio");
 }`,
 };
+

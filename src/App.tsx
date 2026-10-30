@@ -109,28 +109,28 @@ const INITIAL_SHORTCUTS: AppShortcut[] = [
 
 const PRESET_TEST_URLS = [
   {
-    label: 'YouTube Pre-Roll Ad Break API',
+    label: 'YouTube Music InnerTube Track API (Ad Stripped)',
+    url: 'https://music.youtube.com/youtubei/v1/player?key=AIzaSyA',
+  },
+  {
+    label: 'YouTube Music Audio Telemetry (Blocked)',
+    url: 'https://music.youtube.com/youtubei/v1/att/get?key=AIzaSyA',
+  },
+  {
+    label: 'YouTube Pre-Roll Ad Break API (Blocked)',
     url: 'https://m.youtube.com/youtubei/v1/player/ad_break?key=AIzaSyA',
   },
   {
-    label: 'YouTube Pagead Interaction Ping',
-    url: 'https://m.youtube.com/pagead/interaction/?ai=Chf82_adformat=1',
+    label: 'YouTube Video & Audio Media Stream (Protected)',
+    url: 'https://rr2---sn-ab5l6nzy.googlevideo.com/videoplayback?expire=173999&mime=audio/mp4',
   },
   {
-    label: 'YouTube Video Playback Stream (Protected)',
-    url: 'https://rr2---sn-ab5l6nzy.googlevideo.com/videoplayback?expire=173999&mime=video/mp4',
-  },
-  {
-    label: 'Google OAuth Account Chooser (Protected)',
+    label: 'Google OAuth Account Chooser (Desktop UA)',
     url: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=youtube_web',
   },
   {
-    label: 'DoubleClick Ad SDK Script',
+    label: 'DoubleClick Ad SDK Script (Blocked)',
     url: 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js',
-  },
-  {
-    label: 'Rogue Store Redirect Intent (Blocked)',
-    url: 'intent://details?id=com.scam.adware#Intent;scheme=market;end',
   },
 ];
 
@@ -177,7 +177,7 @@ export default function App() {
   // Workbench states
   const [activeWorkbenchTab, setActiveWorkbenchTab] = useState<'inspector' | 'code'>('inspector');
   const [probeUrl, setProbeUrl] = useState(PRESET_TEST_URLS[0].url);
-  const [selectedCodeTab, setSelectedCodeTab] = useState<keyof typeof JAVA_SNIPPETS>('backgroundPlayback');
+  const [selectedCodeTab, setSelectedCodeTab] = useState<keyof typeof JAVA_SNIPPETS>('ytMusicAdStrip');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Advance simulated media timer even when screen is locked (proving background playback)
@@ -740,6 +740,45 @@ export default function App() {
                       </div>
                     )}
 
+                    {/* Ongoing Background Media Notification (Applies when returning Home while playing) */}
+                    {isPlayingMedia && (
+                      <div className="mb-3 p-3 rounded-2xl bg-indigo-950/60 border border-indigo-500/40 text-xs">
+                        <div className="flex items-center justify-between text-indigo-300 mb-1">
+                          <span className="font-semibold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Background Audio Active
+                          </span>
+                          <span className="font-mono tabular-nums text-indigo-200">
+                            {formatTime(playbackSeconds)}
+                          </span>
+                        </div>
+                        <p className="text-white font-medium text-[11px] truncate">
+                          YT Music · Ad-Free Background Stream
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Ongoing notification prevents OxygenOS 15 process kill. Switched to other apps uninterrupted.
+                        </p>
+                        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-indigo-500/30">
+                          <button
+                            onClick={() => setIsPlayingMedia((p) => !p)}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] flex items-center gap-1"
+                          >
+                            <Pause className="w-3 h-3" />
+                            <span>Pause</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const ytm = shortcuts.find((s) => s.id === 'ytm') || shortcuts[0];
+                              setActiveWebApp(ytm);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 font-medium text-[11px]"
+                          >
+                            Return to WebApp
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {!cleanModeHidden && (
                       <div className="grid grid-cols-4 gap-2.5">
                         {filteredShortcuts.map((app, index) => (
@@ -764,7 +803,7 @@ export default function App() {
 
                   <div className="pt-3 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-400">
                     <span>Tap YouTube, YT Music, or ChatGPT to test WebAppActivity</span>
-                    <span className="font-mono">v2.16</span>
+                    <span className="font-mono">v2.17</span>
                   </div>
                 </div>
               )}
@@ -950,6 +989,16 @@ export default function App() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-xl">
                   <button
+                    onClick={() => setSelectedCodeTab('ytMusicAdStrip')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                      selectedCodeTab === 'ytMusicAdStrip'
+                        ? 'bg-slate-800 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    1. YT Music API Ad Strip & CSS
+                  </button>
+                  <button
                     onClick={() => setSelectedCodeTab('backgroundPlayback')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
                       selectedCodeTab === 'backgroundPlayback'
@@ -957,27 +1006,17 @@ export default function App() {
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    1. Background Playback JS
+                    2. Background Audio JS Injection
                   </button>
                   <button
-                    onClick={() => setSelectedCodeTab('cosmeticAdGuard')}
+                    onClick={() => setSelectedCodeTab('desktopUaAndKeepalive')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                      selectedCodeTab === 'cosmeticAdGuard'
+                      selectedCodeTab === 'desktopUaAndKeepalive'
                         ? 'bg-slate-800 text-white'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    2. Scoped Ad Guard JS
-                  </button>
-                  <button
-                    onClick={() => setSelectedCodeTab('webAppActivityLifecycle')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                      selectedCodeTab === 'webAppActivityLifecycle'
-                        ? 'bg-slate-800 text-white'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    3. WebAppActivity Lifecycle
+                    3. Desktop UA & Keepalive Service
                   </button>
                 </div>
 

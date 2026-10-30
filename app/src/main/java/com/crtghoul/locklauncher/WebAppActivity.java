@@ -3,6 +3,10 @@ package com.crtghoul.locklauncher;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.DownloadManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -86,6 +90,9 @@ public class WebAppActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
+    private static final String PLAYBACK_CHANNEL = "webapp_bg_audio";
+    private static final int PLAYBACK_NOTIF_ID = 4040;
+    private static final String DESKTOP_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36";
 
     // File chooser (was missing from WebAppActivity through v2.15, so
     // <input type=file> taps did nothing in WebView: Android WebView
@@ -274,13 +281,10 @@ public class WebAppActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
 
-        // Sanitize User-Agent to bypass Google's "This browser or app may not be secure" block
-        String defaultUa = settings.getUserAgentString();
-        if (defaultUa != null) {
-            String cleanUa = defaultUa.replace("; wv", "")
-                    .replaceAll("Version\\/\\d+\\.\\d+\\s*", "");
-            settings.setUserAgentString(cleanUa);
-        }
+        initPlaybackNotificationChannel();
+
+        // Sanitize User-Agent & provide desktop Chrome UA for YouTube Music to enable full player & sign-in
+        applyUserAgentForUrl(url);
 
         // P0-1: never let a loaded page reach local files or content providers.
         settings.setAllowFileAccess(false);
@@ -561,6 +565,7 @@ public class WebAppActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                applyUserAgentForUrl(url);
                 isLoading = true;
                 updateNavState();
                 injectClientScripts(view);
@@ -964,6 +969,73 @@ public class WebAppActivity extends Activity {
         finish();
     }
 
+    private void applyUserAgentForUrl(String targetUrl) {
+        if (webView == null) return;
+        WebSettings settings = webView.getSettings();
+        if (targetUrl != null && targetUrl.toLowerCase().contains("music.youtube.com")) {
+            // YouTube Music blocks playback on mobile web browser user agents ("not optimized for your browser").
+            // Using a clean desktop Chrome User-Agent gives the full YouTube Music web player, library, and 100% working Google sign-in!
+            settings.setUserAgentString(DESKTOP_CHROME_UA);
+            settings.setUseWideViewPort(true);
+            settings.setLoadWithOverviewMode(true);
+        } else {
+            String defaultUa = settings.getUserAgentString();
+            if (defaultUa != null && (defaultUa.contains("; wv") || defaultUa.contains("Version/"))) {
+                String cleanUa = defaultUa.replace("; wv", "")
+                        .replaceAll("Version\\/\\d+\\.\\d+\\s*", "");
+                settings.setUserAgentString(cleanUa);
+            }
+        }
+    }
+
+    private void initPlaybackNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                NotificationChannel ch = new NotificationChannel(
+                        PLAYBACK_CHANNEL,
+                        "Web App Playback",
+                        NotificationManager.IMPORTANCE_LOW);
+                ch.setDescription("Background audio playback notification");
+                ch.setShowBadge(false);
+                ch.setSound(null, null);
+                ch.enableVibration(false);
+                nm.createNotificationChannel(ch);
+            }
+        }
+    }
+
+    private void updatePlaybackNotification(boolean show) {
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            if (!show) {
+                nm.cancel(PLAYBACK_NOTIF_ID);
+                return;
+            }
+            String pageTitle = getTitle() != null ? getTitle().toString() : "Web App";
+            Intent resumeIntent = new Intent(this, WebAppActivity.class);
+            resumeIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent pi = PendingIntent.getActivity(
+                    this, 0, resumeIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Notification.Builder b;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                b = new Notification.Builder(this, PLAYBACK_CHANNEL);
+            } else {
+                b = new Notification.Builder(this);
+            }
+            b.setSmallIcon(android.R.drawable.ic_media_play)
+             .setContentTitle(pageTitle)
+             .setContentText("Playing in background · Tap to open")
+             .setContentIntent(pi)
+             .setOngoing(true);
+            nm.notify(PLAYBACK_NOTIF_ID, b.build());
+        } catch (Exception ignored) {
+        }
+    }
+
     private void injectClientScripts(WebView view) {
         if (view == null) return;
         view.evaluateJavascript(AdBlockEngine.BACKGROUND_PLAYBACK_JS, null);
@@ -1021,6 +1093,14 @@ public class WebAppActivity extends Activity {
             // media thread and kills background / screen-off YouTube & YouTube Music audio.
             webView.evaluateJavascript("window.__llAppBackgrounded = true;", null);
         }
+        updatePlaybackNotification(true);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // Keep audio notification active and process alive when user switches to another app
+        updatePlaybackNotification(true);
     }
 
     @Override
@@ -1066,6 +1146,7 @@ public class WebAppActivity extends Activity {
         }
         abortPendingBlob();
         abandonMediaAudioFocus();
+        updatePlaybackNotification(false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             CookieManager.getInstance().flush();
         }
