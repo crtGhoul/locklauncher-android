@@ -322,11 +322,14 @@ public class IslandService extends Service {
             return;
         }
 
-        // Check 2: Media Session State
-        MediaController media = !mediaDismissed ? getActiveMediaController() : null;
-        if (media != null) {
-            showMediaPill(media);
-            return;
+        // Check 2: Unified Media Session State (WebApp YT Music/YouTube + System MediaController)
+        if (!mediaDismissed) {
+            NowPlayingHelper.MediaState npState = NowPlayingHelper.getActiveState(this);
+            MediaController media = getActiveMediaController();
+            if (npState != null || media != null) {
+                showMediaPill(npState, media);
+                return;
+            }
         }
 
         // Default State: Clean Minimalist Island Capsule
@@ -351,7 +354,7 @@ public class IslandService extends Service {
         chargingRippleAnimator = IslandGlowHelper.startChargingRipple(pill);
     }
 
-    private void showMediaPill(MediaController mc) {
+    private void showMediaPill(NowPlayingHelper.MediaState npState, MediaController mc) {
         LinearLayout pill = new LinearLayout(this);
         pill.setOrientation(LinearLayout.HORIZONTAL);
         pill.setGravity(Gravity.CENTER_VERTICAL);
@@ -360,72 +363,72 @@ public class IslandService extends Service {
 
         TextView musicIcon = new TextView(this);
         musicIcon.setText("🎵 ");
-        musicIcon.setTextSize(14);
+        musicIcon.setTextSize(13);
         pill.addView(musicIcon);
-        // Music wave bars: driven by the REAL playing state only.
-        // getActiveMediaController() returns only STATE_PLAYING
-        // controllers, and showMediaPill is only called with one.
+
         android.widget.LinearLayout waveContainer = new android.widget.LinearLayout(this);
         waveContainer.setOrientation(android.widget.LinearLayout.HORIZONTAL);
         waveContainer.setGravity(android.view.Gravity.CENTER_VERTICAL);
         pill.addView(waveContainer);
 
-        MediaMetadata meta = mc.getMetadata();
         String title = "Now Playing";
         String artist = "";
-        if (meta != null) {
-            String t = meta.getString(MediaMetadata.METADATA_KEY_TITLE);
-            if (t != null && !t.isEmpty()) title = t;
-            String a = meta.getString(MediaMetadata.METADATA_KEY_ARTIST);
-            if (a != null && !a.isEmpty()) artist = " · " + a;
+        boolean isPlaying = true;
+        if (npState != null && npState.title != null && !npState.title.isEmpty()) {
+            title = npState.title;
+            if (npState.artist != null && !npState.artist.isEmpty()) {
+                artist = " · " + npState.artist;
+            }
+            isPlaying = npState.isPlaying;
+        } else if (mc != null) {
+            MediaMetadata meta = mc.getMetadata();
+            if (meta != null) {
+                String t = meta.getString(MediaMetadata.METADATA_KEY_TITLE);
+                if (t != null && !t.isEmpty()) title = t;
+                String a = meta.getString(MediaMetadata.METADATA_KEY_ARTIST);
+                if (a != null && !a.isEmpty()) artist = " · " + a;
+            }
         }
 
+        // Do not attach a consuming OnClickListener on textInfo so tapping the pill expands the Island Music Square cleanly
         TextView textInfo = new TextView(this);
-        textInfo.setText(title + artist);
+        textInfo.setText(" " + title + artist);
         textInfo.setTextColor(0xFFFFFFFF);
         textInfo.setTextSize(12);
         textInfo.setMaxLines(1);
         textInfo.setEllipsize(android.text.TextUtils.TruncateAt.END);
         textInfo.setMaxWidth(dp(150));
-        textInfo.setPadding(0, 0, dp(10), 0);
+        textInfo.setPadding(dp(4), 0, dp(10), 0);
         pill.addView(textInfo);
 
         // Play/Pause control
         TextView btnPlayPause = new TextView(this);
-        btnPlayPause.setText("⏸️ ");
-        btnPlayPause.setTextSize(15);
-        btnPlayPause.setPadding(dp(4), 0, dp(6), 0);
+        btnPlayPause.setText(isPlaying ? "⏸ " : "▶ ");
+        btnPlayPause.setTextColor(0xFFFF4B4B);
+        btnPlayPause.setTextSize(14);
+        btnPlayPause.setPadding(dp(6), dp(2), dp(6), dp(2));
         btnPlayPause.setOnClickListener(v -> {
-            try {
-                mc.getTransportControls().pause();
-                rebuild();
-            } catch (Exception ignored) {}
+            HapticHelper.tick(v);
+            NowPlayingHelper.sendCommand(this, NowPlayingHelper.CMD_TOGGLE);
+            mainHandler.postDelayed(this::rebuild, 120);
         });
         pill.addView(btnPlayPause);
 
         // Next Track control
         TextView btnNext = new TextView(this);
-        btnNext.setText("⏭️ ");
-        btnNext.setTextSize(15);
-        btnNext.setPadding(dp(4), 0, dp(2), 0);
+        btnNext.setText("⏭");
+        btnNext.setTextColor(0xFFFFFFFF);
+        btnNext.setTextSize(13);
+        btnNext.setPadding(dp(4), dp(2), dp(2), dp(2));
         btnNext.setOnClickListener(v -> {
-            try {
-                mc.getTransportControls().skipToNext();
-                rebuild();
-            } catch (Exception ignored) {}
+            HapticHelper.tick(v);
+            NowPlayingHelper.sendCommand(this, NowPlayingHelper.CMD_NEXT);
+            mainHandler.postDelayed(this::rebuild, 150);
         });
         pill.addView(btnNext);
 
-        textInfo.setOnClickListener(v -> {
-            try {
-                if (mc.getSessionActivity() != null) {
-                    mc.getSessionActivity().send();
-                }
-            } catch (Exception ignored) {}
-        });
-
         attachPillView(pill);
-        musicWaveAnimator = IslandGlowHelper.startMusicWave(waveContainer, true);
+        musicWaveAnimator = IslandGlowHelper.startMusicWave(waveContainer, isPlaying);
     }
 
     /**
@@ -683,6 +686,115 @@ public class IslandService extends Service {
         header.addView(btnClose);
 
         card.addView(header);
+
+        // Live Music Square Card inside Expanded Island (WebApp YT Music / YouTube or System Media)
+        NowPlayingHelper.MediaState activeMedia = NowPlayingHelper.getActiveState(this);
+        if (activeMedia != null && activeMedia.title != null && !activeMedia.title.isEmpty()) {
+            LinearLayout musicSquare = new LinearLayout(this);
+            musicSquare.setOrientation(LinearLayout.HORIZONTAL);
+            musicSquare.setGravity(Gravity.CENTER_VERTICAL);
+            GradientDrawable msBg = new GradientDrawable();
+            msBg.setColor(0x36FFFFFF);
+            msBg.setCornerRadius(dp(16));
+            msBg.setStroke(dp(1), 0x45FFFFFF);
+            musicSquare.setBackground(msBg);
+            musicSquare.setPadding(dp(12), dp(10), dp(10), dp(10));
+            LinearLayout.LayoutParams msLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            msLp.bottomMargin = dp(10);
+            musicSquare.setLayoutParams(msLp);
+
+            // Album / Brand Art Square
+            ImageView artSquare = new ImageView(this);
+            LinearLayout.LayoutParams artLp = new LinearLayout.LayoutParams(dp(42), dp(42));
+            artLp.rightMargin = dp(10);
+            artSquare.setLayoutParams(artLp);
+            android.graphics.Bitmap artBmp = WebLogoHelper.getBuiltinBrandLogo(this,
+                    activeMedia.url != null && !activeMedia.url.isEmpty() ? activeMedia.url : "https://music.youtube.com");
+            if (artBmp != null) {
+                artSquare.setImageBitmap(artBmp);
+            } else {
+                artSquare.setImageResource(R.drawable.ic_launcher);
+            }
+            artSquare.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                NowPlayingHelper.openActivePlayer(IslandService.this);
+                showCollapsed();
+            });
+            musicSquare.addView(artSquare);
+
+            // Track Info + Tap to Open
+            LinearLayout infoCol = new LinearLayout(this);
+            infoCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+            infoCol.setLayoutParams(infoLp);
+            infoCol.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                NowPlayingHelper.openActivePlayer(IslandService.this);
+                showCollapsed();
+            });
+
+            TextView tvTrack = new TextView(this);
+            tvTrack.setText((activeMedia.isPlaying ? "▮▯▮ " : "▯▯▯ ") + activeMedia.title);
+            tvTrack.setTextColor(0xFFFFFFFF);
+            tvTrack.setTextSize(12.5f);
+            tvTrack.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            tvTrack.setSingleLine(true);
+            tvTrack.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            infoCol.addView(tvTrack);
+
+            TextView tvArtist = new TextView(this);
+            String subText = (activeMedia.artist != null && !activeMedia.artist.isEmpty())
+                    ? activeMedia.artist
+                    : "Playing in background";
+            tvArtist.setText(subText + " · Tap to open ↗");
+            tvArtist.setTextColor(0xCCFFFFFF);
+            tvArtist.setTextSize(10.5f);
+            tvArtist.setSingleLine(true);
+            tvArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            infoCol.addView(tvArtist);
+            musicSquare.addView(infoCol);
+
+            // Transport Controls
+            TextView bPrev = new TextView(this);
+            bPrev.setText("⏮");
+            bPrev.setTextColor(0xFFFFFFFF);
+            bPrev.setTextSize(14);
+            bPrev.setPadding(dp(6), dp(4), dp(6), dp(4));
+            bPrev.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                NowPlayingHelper.sendCommand(IslandService.this, NowPlayingHelper.CMD_PREV);
+                mainHandler.postDelayed(this::showExpanded, 150);
+            });
+            musicSquare.addView(bPrev);
+
+            TextView bToggle = new TextView(this);
+            bToggle.setText(activeMedia.isPlaying ? "⏸" : "▶");
+            bToggle.setTextColor(0xFFFF4B4B);
+            bToggle.setTextSize(15);
+            bToggle.setPadding(dp(8), dp(4), dp(8), dp(4));
+            bToggle.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                NowPlayingHelper.sendCommand(IslandService.this, NowPlayingHelper.CMD_TOGGLE);
+                mainHandler.postDelayed(this::showExpanded, 150);
+            });
+            musicSquare.addView(bToggle);
+
+            TextView bNext = new TextView(this);
+            bNext.setText("⏭");
+            bNext.setTextColor(0xFFFFFFFF);
+            bNext.setTextSize(14);
+            bNext.setPadding(dp(6), dp(4), dp(6), dp(4));
+            bNext.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                NowPlayingHelper.sendCommand(IslandService.this, NowPlayingHelper.CMD_NEXT);
+                mainHandler.postDelayed(this::showExpanded, 150);
+            });
+            musicSquare.addView(bNext);
+
+            card.addView(musicSquare);
+        }
 
         // Divider
         View div = new View(this);

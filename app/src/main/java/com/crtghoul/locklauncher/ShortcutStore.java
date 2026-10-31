@@ -452,6 +452,33 @@ public class ShortcutStore {
         prefs(ctx).edit().putBoolean("glass_icon_backgrounds", enabled).apply();
     }
 
+    /**
+     * Wallpaper-Adaptive Chameleon Icon Blending (v2.22):
+     * When enabled (default true), app icons strip harsh opaque background plates
+     * and blend into the active system wallpaper using a translucent wallpaper-tinted
+     * glass squircle plate + color-harmonized foreground glyph.
+     */
+    public static boolean isWallpaperBlendIcons(Context ctx) {
+        return prefs(ctx).getBoolean("wallpaper_blend_icons", true);
+    }
+
+    public static void setWallpaperBlendIcons(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean("wallpaper_blend_icons", enabled).apply();
+    }
+
+    /** Blend intensity 0..100% (default 65%). */
+    public static int getWallpaperBlendIntensity(Context ctx) {
+        return Math.max(0, Math.min(100, prefs(ctx).getInt("wallpaper_blend_intensity_pct", 65)));
+    }
+
+    public static void setWallpaperBlendIntensity(Context ctx, int pct) {
+        prefs(ctx).edit().putInt("wallpaper_blend_intensity_pct", Math.max(0, Math.min(100, pct))).apply();
+    }
+
+    public static void resetWallpaperBlendIntensity(Context ctx) {
+        setWallpaperBlendIntensity(ctx, 65);
+    }
+
     public static final String SHAPE_SYSTEM = "system";
     public static final String SHAPE_CIRCLE = "circle";
     public static final String SHAPE_SQUARE = "square";
@@ -483,6 +510,19 @@ public class ShortcutStore {
 
     public static void setEdgeSidebarOn(Context ctx, boolean on) {
         prefs(ctx).edit().putBoolean("edge_sidebar_on", on).apply();
+    }
+
+    /**
+     * Installed Web App Mode: by default (false), Web Apps launch as clean standalone
+     * installed apps with the return/forward/restart/fullscreen bar hidden inside a mini
+     * top pull-pill. When true, the full sleek Top Bar is pinned at the top of the screen.
+     */
+    public static boolean isWebAppTopBarVisible(Context ctx) {
+        return prefs(ctx).getBoolean("webapp_top_bar_visible", false);
+    }
+
+    public static void setWebAppTopBarVisible(Context ctx, boolean visible) {
+        prefs(ctx).edit().putBoolean("webapp_top_bar_visible", visible).apply();
     }
 
     /** Places a shortcut into the first empty slot if available, or appends up to MAX. */

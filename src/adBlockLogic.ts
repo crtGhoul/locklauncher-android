@@ -360,25 +360,66 @@ public static final String BACKGROUND_PLAYBACK_JS =
         "  }, true);" +
         "})();";`,
 
-  desktopUaAndKeepalive: `// From WebAppActivity.java — Power Controls (PiP, Sleep Timer, Audio-Only OLED, Desktop UA)
-private void showWebAppControlMenu() {
-    String[] options = new String[] {
-            "Picture-in-Picture (PiP) Window",
-            audioOnlyOledMode ? "Disable Audio-Only OLED Saver" : "Enable Audio-Only OLED Saver",
-            sleepTimerMinutes > 0 ? "Cancel Sleep Timer (" + sleepTimerMinutes + "m active)" : "Set Sleep Timer (15m / 30m / 60m)",
-            forceDesktopUa ? "Switch to Mobile User-Agent" : "Switch to Desktop User-Agent",
-            "Copy Current URL"
-    };
-    new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-            .setTitle(getTitle() != null ? getTitle() : "Web App Controls")
-            .setItems(options, (d, which) -> {
-                if (which == 0) enterWebAppPipMode();
-                else if (which == 1) {
-                    audioOnlyOledMode = !audioOnlyOledMode;
-                    webView.evaluateJavascript("document.documentElement.classList.toggle('__ll-audio-only', " + audioOnlyOledMode + ");", null);
-                } else if (which == 2) showSleepTimerPicker();
-            })
-            .show();
+  desktopUaAndKeepalive: `// From WebAppActivity.java & NowPlayingHelper.java — Top-Left Music Square MediaSession + Android 14/15 Tap to Open
+private void syncMediaSessionState() {
+    if (mediaSession == null) return;
+    int state = isPlayingMedia ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED;
+    long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE
+            | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_SKIP_TO_NEXT
+            | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP;
+    mediaSession.setPlaybackState(new PlaybackState.Builder()
+            .setActions(actions)
+            .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+            .build());
+    // Attach MediaSession.Token to Notification.MediaStyle so Top-Left Swipe-Down shows Music Square
+    Notification.MediaStyle style = new Notification.MediaStyle()
+            .setShowActionsInCompactView(0, 1, 2)
+            .setMediaSession(mediaSession.getSessionToken());
+}
+
+// Android 14/15 BAL-compliant Tap to Open (NowPlayingHelper.java)
+public static void sendPendingIntentCompat(PendingIntent pi) throws PendingIntent.CanceledException {
+    if (Build.VERSION.SDK_INT >= 34) {
+        ActivityOptions opts = ActivityOptions.makeBasic();
+        opts.setPendingIntentBackgroundActivityStartMode(
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+        pi.send(opts.toBundle());
+    } else {
+        pi.send();
+    }
+}`,
+
+  wallpaperChameleonBlend: `// From DynamicThemeHelper.java & IconUtil.java — Chameleon Wallpaper-Adaptive App Icon Blending
+public static Bitmap renderWallpaperBlendDrawable(Context ctx, Drawable d) {
+    Bitmap out = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+    Canvas c = new Canvas(out);
+    float scaleFrac = GlassThemeHelper.getIconScalePct(ctx) / 100f;
+    float blendFrac = ShortcutStore.getWallpaperBlendIntensity(ctx) / 100f;
+
+    // 1. Draw translucent Wallpaper-Tinted Squircle Glass Plate + luminous specular border
+    drawGlassTilePlate(ctx, c);
+
+    // 2. Strip harsh opaque AdaptiveIcon background & harmonize foreground glyph with WallpaperColors
+    if (d != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            && d instanceof AdaptiveIconDrawable) {
+        AdaptiveIconDrawable aid = (AdaptiveIconDrawable) d;
+        Drawable fg = aid.getForeground();
+        if (fg != null) {
+            Drawable mutated = fg.mutate();
+            int inset = (int) (SIZE * (0.03f + (1f - scaleFrac) * 0.18f));
+            Bitmap fgBmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+            Canvas fgCanvas = new Canvas(fgBmp);
+            mutated.setBounds(-inset, -inset, SIZE + inset, SIZE + inset);
+            mutated.draw(fgCanvas);
+
+            Paint fgPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            fgPaint.setColorFilter(new ColorMatrixColorFilter(
+                    DynamicThemeHelper.buildChameleonColorMatrix(ctx, blendFrac * 0.72f)));
+            c.drawBitmap(fgBmp, 0, 0, fgPaint);
+            return shapeMask(ctx, out);
+        }
+    }
+    return shapeMask(ctx, out);
 }`,
 
   githubAutoRelease: `# From .github/workflows/release.yml — Automatic APK Build, Repo Sync & GitHub Release
@@ -390,5 +431,5 @@ on:
 
 # Builds locklauncher.apk via aapt2 + javac + d8 + zipalign + apksigner,
 # commits the compiled locklauncher.apk back to the branch ([skip ci]),
-# and publishes LockLauncher-v2.20.apk to GitHub Releases automatically.`,
+# and publishes LockLauncher-v2.22.apk (Build 60) to GitHub Releases automatically.`,
 };

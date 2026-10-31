@@ -265,10 +265,10 @@ public class SpringAnimator {
     public static final class Flip {
         private Flip() {}
 
-        /** Bounds of a view in window coordinates. */
+        /** Bounds of a view in screen coordinates (works across separate WindowManager overlay windows). */
         public static Rect measure(View view) {
             int[] loc = new int[2];
-            view.getLocationInWindow(loc);
+            view.getLocationOnScreen(loc);
             return new Rect(loc[0], loc[1],
                     loc[0] + view.getWidth(), loc[1] + view.getHeight());
         }

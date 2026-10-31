@@ -2,14 +2,43 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Lock Launcher Workbench & Simulator</title>
     <meta name="description" content="Interactive Android launcher simulator, WebAppActivity container preview, and AdBlockEngine security workbench for Lock Launcher (OnePlus 13 / OxygenOS 15)." />
     <meta property="og:title" content="Lock Launcher Workbench & Simulator" />
     <meta property="og:description" content="Interactive Android launcher simulator, WebAppActivity container preview, and AdBlockEngine security workbench for Lock Launcher (OnePlus 13 / OxygenOS 15)." />
+    <meta name="theme-color" content="#090A0F" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Lock Launcher" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        try {
+          var canvas = document.createElement('canvas');
+          canvas.width = 180;
+          canvas.height = 180;
+          var ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#090A0F';
+            ctx.fillRect(0, 0, 180, 180);
+            ctx.fillStyle = '#1E293B';
+            ctx.fillRect(28, 52, 124, 46);
+            ctx.fillStyle = '#EF4444';
+            ctx.fillRect(38, 60, 30, 30);
+            ctx.fillStyle = '#38BDF8';
+            ctx.fillRect(46, 22, 88, 20);
+            var link = document.createElement('link');
+            link.rel = 'apple-touch-icon';
+            link.href = canvas.toDataURL('image/png');
+            document.head.appendChild(link);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="bg-[#090A0F] text-zinc-100 antialiased selection:bg-zinc-700 selection:text-white">
     <div id="root"></div>

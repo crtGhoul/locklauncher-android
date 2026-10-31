@@ -54,20 +54,21 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import android.media.MediaMetadata;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
+import java.lang.ref.WeakReference;
+
 /**
- * Standalone Immersive 100% Ad-Free Web App Container.
+ * Standalone Immersive 100% Ad-Free Installed Web App Container (v2.21).
  * Features:
- * - Floating Minimalist Web Navigation Dock with Back (◀), Forward (▶), Refresh/Stop (↻/✕),
- *   Domain Pill, Fullscreen Toggle (⛶/🗗), and Close (✕).
- * - Smooth Multi-Account Authentication: Seamless Google, Microsoft, and OAuth account switching
- *   with full cross-origin cookie persistence and popup window transport routing.
- * - Anti-Block User-Agent: Sanitized Chrome Mobile headers preventing Google's embedded WebView security block.
- * - Hardware Gesture Support: Android 13+ OnBackInvokedCallback and hardware back history traversal.
- * - 100% True Fullscreen: Supports HTML5 video/canvas/game onShowCustomView fullscreen.
- * - Airtight Ad & Popup Suppression (AppForge/appmaka architecture):
- *   1. Blocks rogue store redirects (market://, intent://) and malicious popup dialog traps.
- *   2. Network request interceptor across 220+ ad networks with MIME-safe null payloads.
- *   3. Continuous DOM ad & overlay cleanup via MutationObserver.
+ * - Installed App Standalone Mode: Launches full-bleed with zero bottom browser chrome covering
+ *   YouTube Music or YouTube controls; includes a sleek collapsible TOP bar (Return, Forward,
+ *   Restart, Domain/Power Menu, Install as App, Fullscreen, Hide Bar, Close).
+ * - Native Android MediaSession integration: Populates the system Top-Left Swipe-Down Music Square
+ *   and Lock Screen media player with live artwork, track metadata, and hardware transport controls.
+ * - Instant Tap-to-Open Resume (singleTask + onNewIntent): Tapping the Music Square, Dynamic Island,
+ *   or notification resumes the active WebApp session immediately without reloading the page.
  * - 120Hz Hardware-Accelerated Rendering on LTPO Displays.
  */
 public class WebAppActivity extends Activity {
@@ -75,23 +76,44 @@ public class WebAppActivity extends Activity {
     public static final String EXTRA_URL = "url";
     public static final String EXTRA_TITLE = "title";
 
+    private static volatile WeakReference<WebAppActivity> sActiveInstance = new WeakReference<>(null);
+    private static volatile String sLastLoadedUrl = "";
+
+    public static boolean isAlive() {
+        WebAppActivity act = sActiveInstance.get();
+        return act != null && !act.isFinishing() && !act.isDestroyed();
+    }
+
+    public static String getActiveUrl() {
+        WebAppActivity act = sActiveInstance.get();
+        if (act != null && act.webView != null && act.webView.getUrl() != null) {
+            return act.webView.getUrl();
+        }
+        return sLastLoadedUrl;
+    }
+
     private WebView webView;
     private ProgressBar progressBar;
     private FrameLayout fullscreenContainer;
     private LinearLayout webNavBar;
+    private View webTopHandle;
     private TextView btnBack;
     private TextView btnForward;
     private TextView btnRefresh;
     private TextView textDomain;
+    private TextView btnInstallWebApp;
     private TextView btnToggleFullscreen;
+    private TextView btnHideTopBar;
     private TextView btnClose;
     private View customView;
     private WebChromeClient.CustomViewCallback customViewCallback;
     private boolean isImmersiveFullscreen = false;
+    private boolean isTopBarVisible = false;
     private boolean isLoading = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
+    private MediaSession mediaSession;
     private static final String PLAYBACK_CHANNEL = "webapp_bg_audio";
     private static final int PLAYBACK_NOTIF_ID = 4040;
     private static final String DESKTOP_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36";
@@ -122,18 +144,9 @@ public class WebAppActivity extends Activity {
         Toast.makeText(WebAppActivity.this, "Sleep timer finished — playback paused", Toast.LENGTH_SHORT).show();
     };
 
-    // File chooser (was missing from WebAppActivity through v2.15, so
-    // <input type=file> taps did nothing in WebView: Android WebView
-    // shows no picker on its own; Chrome does this itself.)
     private static final int REQ_FILE_CHOOSER = 4101;
     private ValueCallback<Uri[]> fileUploadCallback;
 
-    // Blob-download saver state. DownloadManager cannot fetch blob:/data:
-    // URLs (they live inside the page), so a blob download is fetched by
-    // page JS, split into base64 chunks, and written here to Downloads.
-    // The interface methods are gated on pendingBlobActive: a page can
-    // only write a file while a real download the user triggered is in
-    // progress, and only to Downloads, under a sanitized filename.
     private boolean pendingBlobActive = false;
     private boolean pendingBlobStarted = false;
     private String pendingBlobMime;
@@ -147,80 +160,86 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        sActiveInstance = new WeakReference<>(this);
         DisplayHelper.enforceHighRefreshRate(this);
 
         // Window edge-to-edge hardware acceleration
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            getWindow().setStatusBarColor(0x00000000);
-            getWindow().setNavigationBarColor(0x00000000);
+            getWindow().setStatusBarColor(0xFF090A0F);
+            getWindow().setNavigationBarColor(0xFF090A0F);
         }
 
         setContentView(R.layout.activity_web_app);
 
-        // Standard clean edge-to-edge view by default
         applyFullscreen(false);
 
-        String url = getIntent().getStringExtra(EXTRA_URL);
-        if (url == null && getIntent().getData() != null) {
-            url = getIntent().getDataString();
-        }
-        if (url == null || url.trim().isEmpty()) {
-            finish();
-            return;
-        }
-        // P0-1: only http/https may be loaded as the initial URL. Any other
-        // scheme (intent:, file:, javascript:, market:, ...) is rejected
-        // instead of being handed to WebView, which would otherwise follow it.
-        try {
-            String scheme = Uri.parse(url.trim()).getScheme();
-            if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+        String url = extractSafeHttpUrl(getIntent());
+        if (url == null) {
+            if (sLastLoadedUrl != null && !sLastLoadedUrl.isEmpty()) {
+                url = sLastLoadedUrl;
+            } else {
                 finish();
                 return;
             }
-        } catch (Exception e) {
-            finish();
-            return;
         }
+        sLastLoadedUrl = url;
 
-        String title = getIntent().getStringExtra(EXTRA_TITLE);
-        // P0-1: an attacker-controlled EXTRA_TITLE must not reach the window
-        // title / Recents task description verbatim. Strip control characters
-        // and cap length; the host fallback below covers the empty case.
-        if (title != null) {
-            title = title.replaceAll("[\\p{Cntrl}]", "").trim();
-            if (title.length() > 80) title = title.substring(0, 80);
-            if (title.isEmpty()) title = null;
-        }
-        if (title == null || title.trim().isEmpty()) {
-            try {
-                title = Uri.parse(url).getHost();
-                if (title != null && title.startsWith("www.")) title = title.substring(4);
-            } catch (Exception e) {
-                title = "Web App";
-            }
-        }
-        if (title == null) title = "Web App";
-
+        String title = sanitizeTitle(getIntent().getStringExtra(EXTRA_TITLE), url);
         setTitle(title);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            setTaskDescription(new ActivityManager.TaskDescription(title, null, 0xFF101223));
+            setTaskDescription(new ActivityManager.TaskDescription(title, null, 0xFF090A0F));
         }
 
         progressBar = findViewById(R.id.web_progress);
         webView = findViewById(R.id.web_view);
         fullscreenContainer = findViewById(R.id.fullscreen_custom_view_container);
         webNavBar = findViewById(R.id.web_nav_bar);
+        webTopHandle = findViewById(R.id.web_top_handle);
         btnBack = findViewById(R.id.btn_web_back);
         btnForward = findViewById(R.id.btn_web_forward);
         btnRefresh = findViewById(R.id.btn_web_refresh);
         textDomain = findViewById(R.id.text_web_domain);
+        btnInstallWebApp = findViewById(R.id.btn_install_webapp);
         btnToggleFullscreen = findViewById(R.id.btn_toggle_fullscreen);
+        btnHideTopBar = findViewById(R.id.btn_hide_top_bar);
         btnClose = findViewById(R.id.btn_web_close);
+
+        // Installed Standalone App Mode: top bar is hidden by default unless user enabled it
+        isTopBarVisible = ShortcutStore.isWebAppTopBarVisible(this);
+        applyTopBarVisibility(isTopBarVisible, false);
+
+        if (webTopHandle != null) {
+            GlassThemeHelper.applyToView(this, webTopHandle, 12);
+            webTopHandle.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                applyTopBarVisibility(true, true);
+            });
+            webTopHandle.setOnLongClickListener(v -> {
+                HapticHelper.tick(v);
+                showWebAppControlMenu();
+                return true;
+            });
+        }
+
+        if (btnHideTopBar != null) {
+            btnHideTopBar.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                applyTopBarVisibility(false, true);
+            });
+        }
+
+        if (btnInstallWebApp != null) {
+            btnInstallWebApp.setOnClickListener(v -> {
+                HapticHelper.tick(v);
+                installCurrentWebAppAsStandalone();
+            });
+        }
 
         // Setup Back Button
         if (btnBack != null) {
             btnBack.setOnClickListener(v -> {
+                HapticHelper.tick(v);
                 if (webView != null && webView.canGoBack()) {
                     webView.goBack();
                 }
@@ -230,6 +249,7 @@ public class WebAppActivity extends Activity {
         // Setup Forward Button
         if (btnForward != null) {
             btnForward.setOnClickListener(v -> {
+                HapticHelper.tick(v);
                 if (webView != null && webView.canGoForward()) {
                     webView.goForward();
                 }
@@ -239,6 +259,7 @@ public class WebAppActivity extends Activity {
         // Setup Refresh / Stop Button
         if (btnRefresh != null) {
             btnRefresh.setOnClickListener(v -> {
+                HapticHelper.tick(v);
                 if (webView != null) {
                     if (isLoading) {
                         webView.stopLoading();
@@ -261,9 +282,13 @@ public class WebAppActivity extends Activity {
         // Setup Fullscreen Toggle Button
         if (btnToggleFullscreen != null) {
             btnToggleFullscreen.setOnClickListener(v -> {
+                HapticHelper.tick(v);
                 isImmersiveFullscreen = !isImmersiveFullscreen;
                 applyFullscreen(isImmersiveFullscreen);
                 btnToggleFullscreen.setText(isImmersiveFullscreen ? "🗗" : "⛶");
+                if (isImmersiveFullscreen) {
+                    applyTopBarVisibility(false, true);
+                }
                 Toast.makeText(this, isImmersiveFullscreen ? "Immersive Fullscreen" : "Standard View", Toast.LENGTH_SHORT).show();
             });
         }
@@ -272,6 +297,8 @@ public class WebAppActivity extends Activity {
         if (btnClose != null) {
             btnClose.setOnClickListener(v -> finish());
         }
+
+        initMediaSession();
 
         // Enable Cookies and 3rd-party cookies (essential for Google Account switching & cross-origin OAuth)
         CookieManager cookieManager = CookieManager.getInstance();
@@ -535,7 +562,7 @@ public class WebAppActivity extends Activity {
                     customViewCallback = null;
                 }
                 webView.setVisibility(View.VISIBLE);
-                if (webNavBar != null) webNavBar.setVisibility(View.VISIBLE);
+                applyTopBarVisibility(isTopBarVisible, false);
 
                 applyFullscreen(isImmersiveFullscreen);
             }
@@ -927,6 +954,163 @@ public class WebAppActivity extends Activity {
         }
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null) return;
+        setIntent(intent);
+        String newUrl = extractSafeHttpUrl(intent);
+        if (newUrl == null || newUrl.isEmpty() || webView == null) {
+            // Resumed via "Tap to open" — keep current page & audio playing uninterrupted
+            return;
+        }
+        String currentUrl = webView.getUrl();
+        if (currentUrl != null && !currentUrl.isEmpty()) {
+            try {
+                String curHost = Uri.parse(currentUrl).getHost();
+                String newHost = Uri.parse(newUrl).getHost();
+                if (curHost != null && newHost != null && curHost.equalsIgnoreCase(newHost)) {
+                    // Already running this web app (e.g., music.youtube.com) — do not reload and kill playback!
+                    return;
+                }
+            } catch (Exception ignored) {
+            }
+            if (currentUrl.equalsIgnoreCase(newUrl)) {
+                return;
+            }
+        }
+        sLastLoadedUrl = newUrl;
+        String newTitle = sanitizeTitle(intent.getStringExtra(EXTRA_TITLE), newUrl);
+        setTitle(newTitle);
+        applyUserAgentForUrl(newUrl);
+        webView.loadUrl(newUrl);
+        updateNavState();
+    }
+
+    private String extractSafeHttpUrl(Intent intent) {
+        if (intent == null) return null;
+        String url = intent.getStringExtra(EXTRA_URL);
+        if ((url == null || url.trim().isEmpty()) && intent.getData() != null) {
+            url = intent.getDataString();
+        }
+        if (url == null || url.trim().isEmpty()) return null;
+        try {
+            String trimmed = url.trim();
+            String scheme = Uri.parse(trimmed).getScheme();
+            if (scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+                return trimmed;
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private String sanitizeTitle(String rawTitle, String fallbackUrl) {
+        String title = rawTitle;
+        if (title != null) {
+            title = title.replaceAll("[\\p{Cntrl}]", "").trim();
+            if (title.length() > 80) title = title.substring(0, 80);
+            if (title.isEmpty()) title = null;
+        }
+        if (title == null || title.isEmpty()) {
+            try {
+                title = Uri.parse(fallbackUrl).getHost();
+                if (title != null && title.startsWith("www.")) title = title.substring(4);
+            } catch (Exception e) {
+                title = "Web App";
+            }
+        }
+        return (title == null || title.isEmpty()) ? "Web App" : title;
+    }
+
+    private void applyTopBarVisibility(boolean showBar, boolean animate) {
+        isTopBarVisible = showBar;
+        ShortcutStore.setWebAppTopBarVisible(this, showBar);
+        if (webNavBar != null) {
+            GlassThemeHelper.applyToView(this, webNavBar, 0);
+            if (showBar) {
+                webNavBar.setVisibility(View.VISIBLE);
+                if (animate) {
+                    SpringAnimator.animateTranslationY(webNavBar, -dp(48), 0f, 0f, null);
+                } else {
+                    webNavBar.setTranslationY(0f);
+                }
+            } else {
+                webNavBar.setVisibility(View.GONE);
+            }
+        }
+        if (webTopHandle != null) {
+            webTopHandle.setVisibility((showBar || isImmersiveFullscreen) ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
+    }
+
+    private void installCurrentWebAppAsStandalone() {
+        if (webView == null) return;
+        String curUrl = webView.getUrl();
+        if (curUrl == null || curUrl.isEmpty()) curUrl = sLastLoadedUrl;
+        if (curUrl == null || curUrl.isEmpty()) return;
+
+        String label = getTitle() != null ? getTitle().toString().trim() : "";
+        label = label.replaceAll("\\s*-\\s*YouTube Music$", "")
+                .replaceAll("\\s*-\\s*YouTube$", "").trim();
+        if (label.isEmpty() || label.length() > 28) {
+            label = sanitizeTitle(null, curUrl);
+        }
+
+        Shortcut sc = new Shortcut(Shortcut.TYPE_URL, "", curUrl, label);
+        Bitmap brand = WebLogoHelper.getBuiltinBrandLogo(this, curUrl);
+        if (brand != null) {
+            IconUtil.saveCustomIcon(this, sc.id, brand);
+        } else {
+            WebLogoHelper.fetchFaviconAsync(this, curUrl, sc.id, null);
+        }
+
+        // 1. Add to Lock Launcher active profile if not already present
+        int prof = ShortcutStore.activeProfile(this);
+        java.util.List<Shortcut> homeList = ShortcutStore.loadPadded(this, prof);
+        boolean existsOnHome = false;
+        for (Shortcut existing : homeList) {
+            if (existing != null && Shortcut.TYPE_URL.equals(existing.type)
+                    && curUrl.equalsIgnoreCase(existing.url)) {
+                existsOnHome = true;
+                break;
+            }
+        }
+        if (!existsOnHome) {
+            ShortcutStore.addOrPlaceShortcut(homeList, sc);
+            ShortcutStore.save(this, prof, homeList);
+        }
+
+        // 2. Also add to Dynamic Island if room is available
+        java.util.List<Shortcut> islandList = ShortcutStore.loadIsland(this);
+        boolean existsInIsland = false;
+        for (Shortcut existing : islandList) {
+            if (existing != null && Shortcut.TYPE_URL.equals(existing.type)
+                    && curUrl.equalsIgnoreCase(existing.url)) {
+                existsInIsland = true;
+                break;
+            }
+        }
+        if (!existsInIsland && islandList.size() < ShortcutStore.MAX) {
+            islandList.add(sc);
+            ShortcutStore.saveIsland(this, islandList);
+            IslandService.refresh(this);
+        }
+
+        // 3. Pin as a standalone Installed App icon on the system Home screen & switch to Installed Mode (hide bar)
+        applyTopBarVisibility(false, true);
+        boolean pinned = IconUtil.pinShortcutToHomeScreen(this, sc);
+        Toast.makeText(this,
+                pinned
+                        ? "Installed " + label + " as standalone app (Top bar tucked)"
+                        : "Installed " + label + " to Lock Launcher Home & Island",
+                Toast.LENGTH_LONG).show();
+    }
+
     private void updateNavState() {
         if (webView == null) return;
 
@@ -949,6 +1133,7 @@ public class WebAppActivity extends Activity {
         if (textDomain != null) {
             String curUrl = webView.getUrl();
             if (curUrl != null && !curUrl.isEmpty()) {
+                sLastLoadedUrl = curUrl;
                 try {
                     Uri u = Uri.parse(curUrl);
                     String host = u.getHost();
@@ -964,25 +1149,31 @@ public class WebAppActivity extends Activity {
 
     private void showWebAppControlMenu() {
         if (webView == null) return;
-        String curUrl = webView.getUrl() != null ? webView.getUrl() : "";
+        String curUrl = webView.getUrl() != null ? webView.getUrl() : sLastLoadedUrl;
         String[] options = new String[] {
-                "Picture-in-Picture (PiP) Window",
-                audioOnlyOledMode ? "Disable Audio-Only OLED Saver" : "Enable Audio-Only OLED Saver",
-                sleepTimerMinutes > 0 ? "Cancel Sleep Timer (" + sleepTimerMinutes + "m active)" : "Set Sleep Timer (15m / 30m / 60m)",
-                forceDesktopUa ? "Switch to Mobile User-Agent" : "Switch to Desktop User-Agent",
-                "Copy Current URL"
+                "📲 Install as Standalone App (Home & Island)",
+                isTopBarVisible ? "▲ Hide Top Bar (Installed App Full View)" : "▾ Show Top Navigation Bar (Return / Forward / Reload)",
+                "📺 Picture-in-Picture (PiP) Floating Window",
+                audioOnlyOledMode ? "☀️ Disable Audio-Only OLED Saver" : "🌑 Enable Audio-Only OLED Saver",
+                sleepTimerMinutes > 0 ? "⏰ Cancel Sleep Timer (" + sleepTimerMinutes + "m active)" : "⏰ Set Sleep Timer (15m / 30m / 60m)",
+                forceDesktopUa ? "📱 Switch to Mobile User-Agent" : "💻 Switch to Desktop User-Agent",
+                "🔗 Copy Current URL"
         };
         new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
-                .setTitle(getTitle() != null ? getTitle() : "Web App Controls")
+                .setTitle(getTitle() != null ? getTitle() : "Installed Web App")
                 .setItems(options, (d, which) -> {
                     if (which == 0) {
-                        enterWebAppPipMode();
+                        installCurrentWebAppAsStandalone();
                     } else if (which == 1) {
+                        applyTopBarVisibility(!isTopBarVisible, true);
+                    } else if (which == 2) {
+                        enterWebAppPipMode();
+                    } else if (which == 3) {
                         audioOnlyOledMode = !audioOnlyOledMode;
                         String js = "document.documentElement.classList.toggle('__ll-audio-only', " + audioOnlyOledMode + ");";
                         webView.evaluateJavascript(js, null);
                         Toast.makeText(this, audioOnlyOledMode ? "Audio-Only OLED mode enabled" : "Video display restored", Toast.LENGTH_SHORT).show();
-                    } else if (which == 2) {
+                    } else if (which == 4) {
                         if (sleepTimerMinutes > 0) {
                             handler.removeCallbacks(sleepTimerRunnable);
                             sleepTimerMinutes = 0;
@@ -991,12 +1182,12 @@ public class WebAppActivity extends Activity {
                         } else {
                             showSleepTimerPicker();
                         }
-                    } else if (which == 3) {
+                    } else if (which == 5) {
                         forceDesktopUa = !forceDesktopUa;
                         applyUserAgentForUrl(curUrl);
                         webView.reload();
                         Toast.makeText(this, forceDesktopUa ? "Desktop mode enabled" : "Standard mode enabled", Toast.LENGTH_SHORT).show();
-                    } else if (which == 4) {
+                    } else if (which == 6) {
                         android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                         if (cm != null) {
                             cm.setPrimaryClip(android.content.ClipData.newPlainText("URL", curUrl));
@@ -1040,7 +1231,10 @@ public class WebAppActivity extends Activity {
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, android.content.res.Configuration newConfig) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
         if (webNavBar != null) {
-            webNavBar.setVisibility(isInPictureInPictureMode ? View.GONE : View.VISIBLE);
+            webNavBar.setVisibility(isInPictureInPictureMode ? View.GONE : (isTopBarVisible ? View.VISIBLE : View.GONE));
+        }
+        if (webTopHandle != null) {
+            webTopHandle.setVisibility(isInPictureInPictureMode ? View.GONE : (isTopBarVisible ? View.GONE : View.VISIBLE));
         }
     }
 
@@ -1066,9 +1260,7 @@ public class WebAppActivity extends Activity {
                         | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
             } else {
                 getWindow().getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
             }
         }
     }
@@ -1085,6 +1277,11 @@ public class WebAppActivity extends Activity {
             webView.goBack();
             return;
         }
+        // If playing audio, move task to back instead of destroying so music continues playing!
+        if (currentMediaPlaying) {
+            moveTaskToBack(true);
+            return;
+        }
         finish();
     }
 
@@ -1092,8 +1289,6 @@ public class WebAppActivity extends Activity {
         if (webView == null) return;
         WebSettings settings = webView.getSettings();
         if (forceDesktopUa || (targetUrl != null && targetUrl.toLowerCase().contains("music.youtube.com"))) {
-            // YouTube Music blocks playback on mobile web browser user agents ("not optimized for your browser").
-            // Using a clean desktop Chrome User-Agent gives the full YouTube Music web player, library, and 100% working Google sign-in!
             settings.setUserAgentString(DESKTOP_CHROME_UA);
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
@@ -1124,6 +1319,87 @@ public class WebAppActivity extends Activity {
         }
     }
 
+    /**
+     * Initializes a real Android MediaSession so Android 12/13/14/15 & OxygenOS 15
+     * display the native "Music Square" media player card when swiping down from the top-left!
+     */
+    private void initMediaSession() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                mediaSession = new MediaSession(this, "LockLauncherWebMedia");
+                mediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS
+                        | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+                mediaSession.setCallback(new MediaSession.Callback() {
+                    @Override
+                    public void onPlay() {
+                        if (!currentMediaPlaying) {
+                            executeWebMediaCommand(NowPlayingHelper.CMD_TOGGLE);
+                        }
+                    }
+
+                    @Override
+                    public void onPause() {
+                        if (currentMediaPlaying) {
+                            executeWebMediaCommand(NowPlayingHelper.CMD_TOGGLE);
+                        }
+                    }
+
+                    @Override
+                    public void onSkipToNext() {
+                        executeWebMediaCommand(NowPlayingHelper.CMD_NEXT);
+                    }
+
+                    @Override
+                    public void onSkipToPrevious() {
+                        executeWebMediaCommand(NowPlayingHelper.CMD_PREV);
+                    }
+
+                    @Override
+                    public void onStop() {
+                        if (currentMediaPlaying) {
+                            executeWebMediaCommand(NowPlayingHelper.CMD_TOGGLE);
+                        }
+                    }
+                });
+                mediaSession.setActive(true);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void syncMediaSessionState(String displayTitle, String displayArtist, Bitmap artBmp, PendingIntent sessionPi) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && mediaSession != null) {
+            try {
+                if (sessionPi != null) {
+                    mediaSession.setSessionActivity(sessionPi);
+                }
+                MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder()
+                        .putString(MediaMetadata.METADATA_KEY_TITLE, displayTitle)
+                        .putString(MediaMetadata.METADATA_KEY_ARTIST, displayArtist)
+                        .putString(MediaMetadata.METADATA_KEY_ALBUM, "Lock Launcher · Ad-Free Stream");
+                if (artBmp != null) {
+                    metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, artBmp);
+                    metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON, artBmp);
+                }
+                mediaSession.setMetadata(metaBuilder.build());
+
+                long actions = PlaybackState.ACTION_PLAY
+                        | PlaybackState.ACTION_PAUSE
+                        | PlaybackState.ACTION_PLAY_PAUSE
+                        | PlaybackState.ACTION_SKIP_TO_NEXT
+                        | PlaybackState.ACTION_SKIP_TO_PREVIOUS;
+                PlaybackState state = new PlaybackState.Builder()
+                        .setActions(actions)
+                        .setState(currentMediaPlaying ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
+                                PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                        .build();
+                mediaSession.setPlaybackState(state);
+                mediaSession.setActive(true);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     private final class MediaBridge {
         @JavascriptInterface
         public void onMediaState(String title, String artist, boolean isPlaying) {
@@ -1138,9 +1414,10 @@ public class WebAppActivity extends Activity {
             currentMediaPlaying = isPlaying;
             if (changed) {
                 handler.post(() -> {
-                    String curUrl = webView != null ? webView.getUrl() : "";
+                    String curUrl = webView != null ? webView.getUrl() : sLastLoadedUrl;
                     NowPlayingHelper.updateWebMedia(WebAppActivity.this, currentMediaTitle, currentMediaArtist, currentMediaPlaying, curUrl);
                     updatePlaybackNotification(true);
+                    IslandService.refresh(WebAppActivity.this);
                 });
             }
         }
@@ -1171,6 +1448,7 @@ public class WebAppActivity extends Activity {
             currentMediaPlaying = !currentMediaPlaying;
             NowPlayingHelper.updateWebMedia(this, currentMediaTitle, currentMediaArtist, currentMediaPlaying, webView.getUrl());
             updatePlaybackNotification(true);
+            IslandService.refresh(this);
         }
         webView.evaluateJavascript(js, null);
     }
@@ -1181,20 +1459,38 @@ public class WebAppActivity extends Activity {
             if (nm == null) return;
             if (!show) {
                 nm.cancel(PLAYBACK_NOTIF_ID);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && mediaSession != null) {
+                    try { mediaSession.setActive(false); } catch (Exception ignored) {}
+                }
                 return;
             }
+            String activeUrl = (webView != null && webView.getUrl() != null) ? webView.getUrl() : sLastLoadedUrl;
             String displayTitle = (currentMediaTitle != null && !currentMediaTitle.isEmpty())
                     ? currentMediaTitle
-                    : (getTitle() != null ? getTitle().toString() : "Web App");
+                    : (getTitle() != null ? getTitle().toString() : "YT Music");
             String displayArtist = (currentMediaArtist != null && !currentMediaArtist.isEmpty())
                     ? currentMediaArtist + (currentMediaPlaying ? " · Playing" : " · Paused")
                     : "Playing in background · Tap to open";
 
             Intent resumeIntent = new Intent(this, WebAppActivity.class);
-            resumeIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            resumeIntent.setAction("com.crtghoul.locklauncher.OPEN_WEB_APP");
+            if (activeUrl != null && !activeUrl.isEmpty()) {
+                resumeIntent.putExtra(EXTRA_URL, activeUrl);
+                resumeIntent.setData(Uri.parse(activeUrl));
+            }
+            resumeIntent.putExtra(EXTRA_TITLE, displayTitle);
+            resumeIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
             PendingIntent pi = PendingIntent.getActivity(
                     this, 0, resumeIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Bitmap artBmp = WebLogoHelper.getBuiltinBrandLogo(this, activeUrl != null ? activeUrl : "https://music.youtube.com");
+            if (artBmp == null) {
+                artBmp = IconUtil.letterIcon(displayTitle, 0xFFFF0033);
+            }
+            syncMediaSessionState(displayTitle, displayArtist, artBmp, pi);
 
             Intent prevIntent = new Intent(NowPlayingHelper.ACTION_MEDIA_COMMAND).setPackage(getPackageName())
                     .putExtra(NowPlayingHelper.EXTRA_CMD, NowPlayingHelper.CMD_PREV);
@@ -1218,6 +1514,7 @@ public class WebAppActivity extends Activity {
                 b = new Notification.Builder(this);
             }
             b.setSmallIcon(currentMediaPlaying ? android.R.drawable.ic_media_play : android.R.drawable.ic_media_pause)
+             .setLargeIcon(artBmp)
              .setContentTitle(displayTitle)
              .setContentText(displayArtist)
              .setContentIntent(pi)
@@ -1230,7 +1527,12 @@ public class WebAppActivity extends Activity {
              .addAction(new Notification.Action.Builder(android.R.drawable.ic_media_next, "Next", nextPi).build())
              .setOngoing(currentMediaPlaying);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                b.setStyle(new Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2));
+                Notification.MediaStyle style = new Notification.MediaStyle()
+                        .setShowActionsInCompactView(0, 1, 2);
+                if (mediaSession != null) {
+                    style.setMediaSession(mediaSession.getSessionToken());
+                }
+                b.setStyle(style);
             }
             nm.notify(PLAYBACK_NOTIF_ID, b.build());
         } catch (Exception ignored) {
@@ -1275,7 +1577,7 @@ public class WebAppActivity extends Activity {
             + "    }"
             + "  }catch(e){}"
             + "}"
-            + "setInterval(syncMedia,1800);"
+            + "setInterval(syncMedia,1500);"
             + "document.addEventListener('play',syncMedia,true);"
             + "document.addEventListener('pause',syncMedia,true);"
             + "document.addEventListener('loadedmetadata',syncMedia,true);"
@@ -1353,6 +1655,7 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        sActiveInstance = new WeakReference<>(this);
         DisplayHelper.enforceHighRefreshRate(this);
         applyFullscreen(isImmersiveFullscreen);
         requestMediaAudioFocus();
@@ -1396,6 +1699,14 @@ public class WebAppActivity extends Activity {
         abandonMediaAudioFocus();
         NowPlayingHelper.clearWebMedia(this);
         updatePlaybackNotification(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && mediaSession != null) {
+            try {
+                mediaSession.setActive(false);
+                mediaSession.release();
+            } catch (Exception ignored) {
+            }
+            mediaSession = null;
+        }
         try {
             unregisterReceiver(mediaCommandReceiver);
         } catch (Exception ignored) {

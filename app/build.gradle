@@ -3,8 +3,8 @@ plugins {
 }
 
 def versionPropsFile = file('../version.properties')
-def vCode = 58
-def vName = '2.20'
+def vCode = 60
+def vName = '2.22'
 if (versionPropsFile.canRead()) {
     def Properties versionProps = new Properties()
     versionProps.load(new FileInputStream(versionPropsFile))

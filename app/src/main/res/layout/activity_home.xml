@@ -195,23 +195,38 @@
                 android:textColor="#BBFFFFFF" />
         </LinearLayout>
 
-        <!-- Live Now Playing Media Pill (Nothing OS / Dynamic Media Bar) -->
+        <!-- Live Music Square Widget (Nothing OS / OxygenOS 15 Top-Left Music Square + Tap to Open) -->
         <LinearLayout
             android:id="@+id/home_now_playing_bar"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
+            android:minHeight="62dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/dock_card"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingStart="14dp"
-            android:paddingEnd="8dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:clickable="true"
+            android:focusable="true"
             android:visibility="gone">
+
+            <!-- Album / Brand Artwork Square -->
+            <ImageView
+                android:id="@+id/now_playing_art"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginEnd="12dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_launcher"
+                android:contentDescription="Now Playing Artwork" />
 
             <LinearLayout
                 android:id="@+id/now_playing_info_container"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center_vertical"
@@ -223,7 +238,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="#FFFFFF"
-                    android:textSize="12.5sp"
+                    android:textSize="13sp"
                     android:fontFamily="sans-serif-medium"
                     android:singleLine="true"
                     android:ellipsize="end"
@@ -233,17 +248,18 @@
                     android:id="@+id/now_playing_artist"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="#AAFFFFFF"
-                    android:textSize="10.5sp"
+                    android:layout_marginTop="2dp"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="11sp"
                     android:singleLine="true"
                     android:ellipsize="end"
-                    android:text="Tap to open player" />
+                    android:text="Tap to open player ↗" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/btn_media_prev"
                 android:layout_width="34dp"
-                android:layout_height="34dp"
+                android:layout_height="36dp"
                 android:gravity="center"
                 android:text="⏮"
                 android:textColor="#FFFFFF"
@@ -253,23 +269,39 @@
 
             <TextView
                 android:id="@+id/btn_media_toggle"
-                android:layout_width="36dp"
-                android:layout_height="34dp"
+                android:layout_width="38dp"
+                android:layout_height="36dp"
                 android:gravity="center"
                 android:text="⏸"
                 android:textColor="#FF4B4B"
-                android:textSize="14sp"
+                android:textSize="15sp"
                 android:clickable="true"
                 android:focusable="true" />
 
             <TextView
                 android:id="@+id/btn_media_next"
                 android:layout_width="34dp"
-                android:layout_height="34dp"
+                android:layout_height="36dp"
                 android:gravity="center"
                 android:text="⏭"
                 android:textColor="#FFFFFF"
                 android:textSize="13sp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/btn_media_open"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:gravity="center"
+                android:background="@drawable/btn_ghost"
+                android:text="OPEN ↗"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:fontFamily="sans-serif-medium"
                 android:clickable="true"
                 android:focusable="true" />
         </LinearLayout>

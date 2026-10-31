@@ -91,7 +91,8 @@ public class IconUtil {
         String cacheKey = (s.id != null ? s.id : "") + "_" + (s.pkg != null ? s.pkg : "") + "_" + (s.type != null ? s.type : "")
                 + "_" + (s.iconMode != null ? s.iconMode : "") + "_" + s.iconColor + "_" + (s.iconEmoji != null ? s.iconEmoji : "")
                 + "_" + s.profileSerial + "_" + ShortcutStore.getIconShape(ctx) + "_" + ShortcutStore.isMinimalIcons(ctx)
-                + "_" + ShortcutStore.isGlassIconBackgrounds(ctx) + "_" + GlassThemeHelper.getMode(ctx)
+                + "_" + ShortcutStore.isGlassIconBackgrounds(ctx) + "_" + ShortcutStore.isWallpaperBlendIcons(ctx)
+                + "_" + ShortcutStore.getWallpaperBlendIntensity(ctx) + "_" + GlassThemeHelper.getMode(ctx)
                 + "_" + GlassThemeHelper.getSubTheme(ctx) + "_" + GlassThemeHelper.getSurfaceOpacityPct(ctx)
                 + "_" + GlassThemeHelper.getDarknessPct(ctx) + "_" + GlassThemeHelper.getAccentHue(ctx)
                 + "_" + GlassThemeHelper.getIconScalePct(ctx) + "_" + IconPackManager.getActiveIconPack(ctx);
@@ -113,7 +114,7 @@ public class IconUtil {
             return cb;
         }
         Bitmap b;
-        boolean alreadyMinimalForeground = false;
+        boolean alreadyProcessedPlate = false;
         if (Shortcut.ICON_EMOJI.equals(s.iconMode)) {
             b = emojiBitmap(
                     s.iconEmoji == null || s.iconEmoji.isEmpty() ? "\uD83D\uDE80" : s.iconEmoji,
@@ -133,11 +134,14 @@ public class IconUtil {
                                     Drawable cloneDrawable = acts.get(0).getBadgedIcon(0);
                                     if (ShortcutStore.isMinimalIcons(ctx)) {
                                         b = renderMinimalDrawable(ctx, cloneDrawable);
-                                        alreadyMinimalForeground = true;
+                                        alreadyProcessedPlate = true;
+                                    } else if (ShortcutStore.isWallpaperBlendIcons(ctx)) {
+                                        b = renderWallpaperBlendDrawable(ctx, cloneDrawable);
+                                        alreadyProcessedPlate = true;
                                     } else {
                                         b = drawableToBitmap(cloneDrawable);
                                     }
-                                    Bitmap finished = finishIcon(ctx, b, !alreadyMinimalForeground);
+                                    Bitmap finished = finishIcon(ctx, b, !alreadyProcessedPlate);
                                     sIconLru.put(cacheKey, finished);
                                     return finished;
                                 }
@@ -155,7 +159,10 @@ public class IconUtil {
                         Drawable d = pm.getApplicationIcon(s.pkg);
                         if (ShortcutStore.isMinimalIcons(ctx)) {
                             b = renderMinimalDrawable(ctx, d);
-                            alreadyMinimalForeground = true;
+                            alreadyProcessedPlate = true;
+                        } else if (ShortcutStore.isWallpaperBlendIcons(ctx)) {
+                            b = renderWallpaperBlendDrawable(ctx, d);
+                            alreadyProcessedPlate = true;
                         } else {
                             b = drawableToBitmap(d);
                         }
@@ -177,9 +184,73 @@ public class IconUtil {
                 b = letterIcon(label, s.iconColor);
             }
         }
-        Bitmap finished = finishIcon(ctx, b, !alreadyMinimalForeground);
+        Bitmap finished = finishIcon(ctx, b, !alreadyProcessedPlate);
         sIconLru.put(cacheKey, finished);
         return finished;
+    }
+
+    /**
+     * Renders an app Drawable in Chameleon Wallpaper-Blend mode:
+     * Replaces harsh opaque adaptive icon background plates with a translucent
+     * wallpaper-tinted frosted squircle plate and harmonizes the foreground glyph
+     * with the active system wallpaper's primary & secondary palette.
+     */
+    public static Bitmap renderWallpaperBlendDrawable(Context ctx, Drawable d) {
+        Bitmap out = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(out);
+        float scaleFrac = GlassThemeHelper.getIconScalePct(ctx) / 100f;
+        float blendFrac = ShortcutStore.getWallpaperBlendIntensity(ctx) / 100f;
+
+        drawGlassTilePlate(ctx, c);
+
+        if (d != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && d instanceof android.graphics.drawable.AdaptiveIconDrawable) {
+            android.graphics.drawable.AdaptiveIconDrawable aid =
+                    (android.graphics.drawable.AdaptiveIconDrawable) d;
+
+            // Subtly blend the app's own background layer at low opacity so brand identity hints through
+            Drawable bg = aid.getBackground();
+            if (bg != null && blendFrac < 0.85f) {
+                Drawable mutBg = bg.mutate();
+                Bitmap bgBmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+                Canvas bgCanvas = new Canvas(bgBmp);
+                mutBg.setBounds(0, 0, SIZE, SIZE);
+                mutBg.draw(bgCanvas);
+                Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                bgPaint.setAlpha((int) ((1f - blendFrac) * 95f));
+                bgPaint.setColorFilter(new android.graphics.ColorMatrixColorFilter(
+                        DynamicThemeHelper.buildChameleonColorMatrix(ctx, blendFrac)));
+                c.drawBitmap(bgBmp, 0, 0, bgPaint);
+            }
+
+            Drawable fg = aid.getForeground();
+            if (fg != null) {
+                Drawable mutated = fg.mutate();
+                int inset = (int) (SIZE * (0.03f + (1f - scaleFrac) * 0.18f));
+                Bitmap fgBmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+                Canvas fgCanvas = new Canvas(fgBmp);
+                mutated.setBounds(-inset, -inset, SIZE + inset, SIZE + inset);
+                mutated.draw(fgCanvas);
+
+                Paint fgPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                fgPaint.setColorFilter(new android.graphics.ColorMatrixColorFilter(
+                        DynamicThemeHelper.buildChameleonColorMatrix(ctx, blendFrac * 0.72f)));
+                c.drawBitmap(fgBmp, 0, 0, fgPaint);
+                return shapeMask(ctx, out);
+            }
+        }
+
+        // Fallback for non-adaptive drawables
+        Bitmap raw = drawableToBitmap(d);
+        if (raw != null) {
+            int pad = (int) (SIZE * 0.14f / Math.max(0.75f, scaleFrac));
+            pad = Math.max(4, Math.min(SIZE / 3, pad));
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            p.setColorFilter(new android.graphics.ColorMatrixColorFilter(
+                    DynamicThemeHelper.buildChameleonColorMatrix(ctx, blendFrac * 0.75f)));
+            c.drawBitmap(raw, null, new RectF(pad, pad, SIZE - pad, SIZE - pad), p);
+        }
+        return shapeMask(ctx, out);
     }
 
     /**
@@ -194,7 +265,7 @@ public class IconUtil {
         boolean glassBg = ShortcutStore.isGlassIconBackgrounds(ctx);
         float scaleFrac = GlassThemeHelper.getIconScalePct(ctx) / 100f;
 
-        if (glassBg) {
+        if (glassBg || ShortcutStore.isWallpaperBlendIcons(ctx)) {
             drawGlassTilePlate(ctx, c);
         }
 
@@ -222,13 +293,27 @@ public class IconUtil {
 
                 // Desaturate and boost luminance for crisp minimal glyph appearance
                 Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-                android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix(new float[]{
-                        0.35f, 0.55f, 0.10f, 0, 55,
-                        0.35f, 0.55f, 0.10f, 0, 55,
-                        0.35f, 0.55f, 0.10f, 0, 60,
-                        0,     0,     0,     1, 0
-                });
-                p.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
+                if (ShortcutStore.isWallpaperBlendIcons(ctx)) {
+                    DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
+                    float rTint = Color.red(tc.primaryAccent) / 255f;
+                    float gTint = Color.green(tc.primaryAccent) / 255f;
+                    float bTint = Color.blue(tc.primaryAccent) / 255f;
+                    android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix(new float[]{
+                            0.35f * rTint, 0.55f * rTint, 0.10f * rTint, 0, 68 * rTint + 25,
+                            0.35f * gTint, 0.55f * gTint, 0.10f * gTint, 0, 68 * gTint + 25,
+                            0.35f * bTint, 0.55f * bTint, 0.10f * bTint, 0, 72 * bTint + 30,
+                            0,             0,             0,             1, 0
+                    });
+                    p.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
+                } else {
+                    android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix(new float[]{
+                            0.35f, 0.55f, 0.10f, 0, 55,
+                            0.35f, 0.55f, 0.10f, 0, 55,
+                            0.35f, 0.55f, 0.10f, 0, 60,
+                            0,     0,     0,     1, 0
+                    });
+                    p.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
+                }
                 c.drawBitmap(fgBmp, 0, 0, p);
                 return shapeMask(ctx, out);
             }
@@ -248,10 +333,29 @@ public class IconUtil {
 
     private static void drawGlassTilePlate(Context ctx, Canvas c) {
         Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-        int surfaceColor = GlassThemeHelper.resolveSurfaceFillColor(ctx);
-        fill.setColor(surfaceColor);
         RectF rect = new RectF(2, 2, SIZE - 2, SIZE - 2);
         String shape = ShortcutStore.getIconShape(ctx);
+        boolean wpBlend = ShortcutStore.isWallpaperBlendIcons(ctx);
+
+        if (wpBlend) {
+            DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
+            float blendFrac = ShortcutStore.getWallpaperBlendIntensity(ctx) / 100f;
+            int baseAlpha = Math.max(58, Math.min(205, (int) (85 + blendFrac * 85)));
+            int c1 = Color.argb(baseAlpha,
+                    (int) (Color.red(tc.primaryAccent) * 0.42f + 14),
+                    (int) (Color.green(tc.primaryAccent) * 0.42f + 16),
+                    (int) (Color.blue(tc.primaryAccent) * 0.42f + 26));
+            int c2 = Color.argb(Math.max(44, baseAlpha - 28),
+                    (int) (Color.red(tc.secondaryAccent) * 0.36f + 10),
+                    (int) (Color.green(tc.secondaryAccent) * 0.36f + 12),
+                    (int) (Color.blue(tc.secondaryAccent) * 0.36f + 22));
+            fill.setShader(new android.graphics.LinearGradient(
+                    0, 0, SIZE, SIZE, c1, c2, android.graphics.Shader.TileMode.CLAMP));
+        } else {
+            int surfaceColor = GlassThemeHelper.resolveSurfaceFillColor(ctx);
+            fill.setColor(surfaceColor);
+        }
+
         if (ShortcutStore.SHAPE_CIRCLE.equals(shape)) {
             c.drawOval(rect, fill);
         } else if (ShortcutStore.SHAPE_SQUARE.equals(shape)) {
@@ -263,7 +367,16 @@ public class IconUtil {
         Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
         border.setStyle(Paint.Style.STROKE);
         border.setStrokeWidth(3f);
-        border.setColor(0x48FFFFFF);
+        if (wpBlend) {
+            DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
+            int rimColor = Color.argb(125,
+                    Math.min(255, (Color.red(tc.primaryAccent) + 255) / 2),
+                    Math.min(255, (Color.green(tc.primaryAccent) + 255) / 2),
+                    Math.min(255, (Color.blue(tc.primaryAccent) + 255) / 2));
+            border.setColor(rimColor);
+        } else {
+            border.setColor(0x48FFFFFF);
+        }
         if (ShortcutStore.SHAPE_CIRCLE.equals(shape)) {
             c.drawOval(rect, border);
         } else if (ShortcutStore.SHAPE_SQUARE.equals(shape)) {
@@ -276,15 +389,7 @@ public class IconUtil {
     public static Bitmap folderBitmap(Context ctx, Shortcut folder) {
         Bitmap out = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(out);
-        Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(GlassThemeHelper.resolveSurfaceFillColor(ctx));
-        float rad = SIZE * 0.28f;
-        canvas.drawRoundRect(new RectF(0, 0, SIZE, SIZE), rad, rad, bg);
-        Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
-        stroke.setStyle(Paint.Style.STROKE);
-        stroke.setStrokeWidth(SIZE * 0.035f);
-        stroke.setColor(0x52FFFFFF);
-        canvas.drawRoundRect(new RectF(2, 2, SIZE - 2, SIZE - 2), rad, rad, stroke);
+        drawGlassTilePlate(ctx, canvas);
 
         List<Shortcut> items = folder.folderItems;
         if (items != null && !items.isEmpty()) {
@@ -347,15 +452,21 @@ public class IconUtil {
         if (applyMonochromeAndGlassWrap && ShortcutStore.isMinimalIcons(ctx)) {
             b = toMonochrome(b);
         }
-        if (applyMonochromeAndGlassWrap && ShortcutStore.isGlassIconBackgrounds(ctx)
-                && (!IconPackManager.getActiveIconPack(ctx).isEmpty() || ShortcutStore.isMinimalIcons(ctx))) {
+        boolean wpBlend = ShortcutStore.isWallpaperBlendIcons(ctx);
+        if (applyMonochromeAndGlassWrap && (wpBlend || (ShortcutStore.isGlassIconBackgrounds(ctx)
+                && (!IconPackManager.getActiveIconPack(ctx).isEmpty() || ShortcutStore.isMinimalIcons(ctx))))) {
             Bitmap wrapped = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
             Canvas c = new Canvas(wrapped);
             drawGlassTilePlate(ctx, c);
             float scale = GlassThemeHelper.getIconScalePct(ctx) / 100f;
-            int pad = Math.max(6, Math.min(SIZE / 3, (int) (SIZE * (0.16f / Math.max(0.75f, scale)))));
-            c.drawBitmap(b, null, new RectF(pad, pad, SIZE - pad, SIZE - pad),
-                    new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
+            int pad = Math.max(6, Math.min(SIZE / 3, (int) (SIZE * (0.14f / Math.max(0.75f, scale)))));
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            if (wpBlend) {
+                float blendFrac = ShortcutStore.getWallpaperBlendIntensity(ctx) / 100f;
+                p.setColorFilter(new android.graphics.ColorMatrixColorFilter(
+                        DynamicThemeHelper.buildChameleonColorMatrix(ctx, blendFrac * 0.68f)));
+            }
+            c.drawBitmap(b, null, new RectF(pad, pad, SIZE - pad, SIZE - pad), p);
             b = wrapped;
         }
         return shapeMask(ctx, b);
@@ -667,7 +778,7 @@ public class IconUtil {
                 return intent;
             }
 
-            // Standalone ad-free true fullscreen native Web App container
+            // Standalone ad-free true fullscreen native Installed Web App container
             Intent appWindow = new Intent(ctx, WebAppActivity.class);
             appWindow.setAction("com.crtghoul.locklauncher.OPEN_WEB_APP");
             appWindow.putExtra(WebAppActivity.EXTRA_URL, url);
@@ -677,7 +788,9 @@ public class IconUtil {
             appWindow.setData(uri);
             appWindow.setComponent(new ComponentName(ctx, WebAppActivity.class));
             appWindow.setPackage(ctx.getPackageName());
-            appWindow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+            appWindow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
             return appWindow;
         } catch (Exception e) {
             return null;
@@ -827,19 +940,22 @@ public class IconUtil {
                     } catch (Exception ignored) {
                     }
                 }
+                // Primary launch path: direct startActivity or LauncherApps.startMainActivity.
+                // (Avoids Android 14/15 silent PendingIntent BAL drops when tapped from Home or Overlay!)
                 Intent launch = launchIntent(ctx, s);
                 if (launch != null) {
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
                     try {
-                        PendingIntent pi = PendingIntent.getActivity(
-                                ctx, (int) (System.currentTimeMillis() & 0xffff), launch,
-                                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-                        pi.send();
+                        ctx.startActivity(launch);
                         return true;
                     } catch (Exception e) {
                         try {
-                            ctx.startActivity(launch);
-                            return true;
+                            PendingIntent pi = PendingIntent.getActivity(
+                                    ctx, (int) (System.currentTimeMillis() & 0xffff), launch,
+                                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                            if (NowPlayingHelper.sendPendingIntentCompat(ctx, pi)) {
+                                return true;
+                            }
                         } catch (Exception ignored) {}
                     }
                 }

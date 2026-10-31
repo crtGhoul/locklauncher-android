@@ -253,11 +253,17 @@ public class HomeActivity extends Activity {
                             overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
                             return true;
                         } else {
-                            if (ShortcutStore.isHomeCleanMode(HomeActivity.this) && appsRevealedInCleanMode) {
+                            boolean isTopLeftSwipe = e1.getX() < (getResources().getDisplayMetrics().widthPixels * 0.55f);
+                            if (ShortcutStore.isHomeCleanMode(HomeActivity.this) && appsRevealedInCleanMode && !isTopLeftSwipe) {
                                 toggleCleanModeApps();
                                 return true;
                             }
-                            // Swipe down -> Open notification shade
+                            updateLiveHeader();
+                            View npBar = findViewById(R.id.home_now_playing_bar);
+                            if (npBar != null && npBar.getVisibility() == View.VISIBLE) {
+                                SpringAnimator.scalePulse(npBar);
+                            }
+                            // Swipe down -> Open notification shade (displays system MediaSession Music Square on top-left swipe)
                             expandNotificationShade();
                             return true;
                         }
@@ -423,6 +429,8 @@ public class HomeActivity extends Activity {
             updateLiveHeader();
         }
     };
+    private Object wallpaperColorsListener;
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -437,6 +445,25 @@ public class HomeActivity extends Activity {
                 registerReceiver(notificationBadgeReceiver, filter);
             }
         } catch (Exception ignored) {}
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            try {
+                android.app.WallpaperManager wm = android.app.WallpaperManager.getInstance(this);
+                if (wm != null && wallpaperColorsListener == null) {
+                    android.app.WallpaperManager.OnColorsChangedListener listener = (colors, which) -> {
+                        IconUtil.clearCache();
+                        applyDynamicTheming();
+                        loadShortcuts();
+                        GlassThemeHelper.refreshAllSurfaces(HomeActivity.this);
+                    };
+                    wallpaperColorsListener = listener;
+                    wm.addOnColorsChangedListener(listener, timeHandler);
+                }
+            } catch (Exception ignored) {}
+        }
+        // Clear icon cache on resume if wallpaper blend is active so returning from wallpaper picker updates icons immediately
+        if (ShortcutStore.isWallpaperBlendIcons(this)) {
+            IconUtil.clearCache();
+        }
         // Apply dynamic grid columns
         if (gridView != null) {
             gridView.setNumColumns(ShortcutStore.homeGridColumns(this));
@@ -456,6 +483,15 @@ public class HomeActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && wallpaperColorsListener != null) {
+            try {
+                android.app.WallpaperManager wm = android.app.WallpaperManager.getInstance(this);
+                if (wm != null) {
+                    wm.removeOnColorsChangedListener((android.app.WallpaperManager.OnColorsChangedListener) wallpaperColorsListener);
+                }
+            } catch (Exception ignored) {}
+            wallpaperColorsListener = null;
+        }
         if (appWidgetHost != null) {
             try {
                 appWidgetHost.stopListening();
@@ -551,24 +587,41 @@ public class HomeActivity extends Activity {
                 glanceBattery.setVisibility(View.GONE);
             }
         }
-        // 🎵 Live Now Playing Media Pill (WebAppActivity YouTube Music / YouTube & System Media)
+        // 🎵 Live Music Square Widget (WebAppActivity YouTube Music / YouTube & System Media)
         View nowPlayingBar = findViewById(R.id.home_now_playing_bar);
         if (nowPlayingBar != null) {
             NowPlayingHelper.MediaState media = NowPlayingHelper.getActiveState(this);
             if (media != null && media.title != null && !media.title.isEmpty()) {
                 nowPlayingBar.setVisibility(View.VISIBLE);
+                ImageView npArt = findViewById(R.id.now_playing_art);
                 TextView npTitle = findViewById(R.id.now_playing_title);
                 TextView npArtist = findViewById(R.id.now_playing_artist);
                 TextView btnPrev = findViewById(R.id.btn_media_prev);
                 TextView btnToggle = findViewById(R.id.btn_media_toggle);
                 TextView btnNext = findViewById(R.id.btn_media_next);
+                TextView btnOpen = findViewById(R.id.btn_media_open);
                 View infoBox = findViewById(R.id.now_playing_info_container);
+
+                if (npArt != null) {
+                    Bitmap artBmp = WebLogoHelper.getBuiltinBrandLogo(this,
+                            media.url != null && !media.url.isEmpty() ? media.url : "https://music.youtube.com");
+                    if (artBmp != null) {
+                        npArt.setImageBitmap(artBmp);
+                    } else {
+                        npArt.setImageResource(R.drawable.ic_launcher);
+                    }
+                    npArt.setOnClickListener(v -> {
+                        HapticHelper.tick(v);
+                        SpringAnimator.scalePulse(v);
+                        NowPlayingHelper.openActivePlayer(this);
+                    });
+                }
 
                 String prefix = media.isPlaying ? "▮▯▮  " : "▯▯▯  ";
                 if (npTitle != null) npTitle.setText(prefix + media.title);
                 if (npArtist != null) {
                     String sub = (media.artist != null && !media.artist.isEmpty()) ? media.artist : "Playing in background";
-                    npArtist.setText(sub + "  ·  Tap to open");
+                    npArtist.setText(sub + "  ·  Tap to open ↗");
                 }
                 if (btnToggle != null) {
                     btnToggle.setText(media.isPlaying ? "⏸" : "▶");
@@ -593,12 +646,21 @@ public class HomeActivity extends Activity {
                         NowPlayingHelper.sendCommand(this, NowPlayingHelper.CMD_NEXT);
                     });
                 }
+                View.OnClickListener openPlayerClick = v -> {
+                    HapticHelper.tick(v);
+                    SpringAnimator.scalePulse(nowPlayingBar);
+                    boolean opened = NowPlayingHelper.openActivePlayer(this);
+                    if (!opened) {
+                        Toast.makeText(this, "Opening player...", Toast.LENGTH_SHORT).show();
+                    }
+                };
                 if (infoBox != null) {
-                    infoBox.setOnClickListener(v -> {
-                        HapticHelper.tick(v);
-                        NowPlayingHelper.openActivePlayer(this);
-                    });
+                    infoBox.setOnClickListener(openPlayerClick);
                 }
+                if (btnOpen != null) {
+                    btnOpen.setOnClickListener(openPlayerClick);
+                }
+                nowPlayingBar.setOnClickListener(openPlayerClick);
             } else {
                 nowPlayingBar.setVisibility(View.GONE);
             }
@@ -660,6 +722,20 @@ public class HomeActivity extends Activity {
         });
         opts.add("Create New Folder");
         acts.add(this::createNewFolderDialog);
+        boolean wpBlend = ShortcutStore.isWallpaperBlendIcons(this);
+        opts.add(wpBlend
+                ? "Blend Apps into Wallpaper: ON (Chameleon Glass)"
+                : "Blend Apps into Wallpaper: OFF (Tap to Enable)");
+        acts.add(() -> {
+            boolean nextBlend = !wpBlend;
+            ShortcutStore.setWallpaperBlendIcons(this, nextBlend);
+            IconUtil.clearCache();
+            loadShortcuts();
+            GlassThemeHelper.refreshAllSurfaces(this);
+            Toast.makeText(this, nextBlend
+                    ? "Apps now blend into your wallpaper (Chameleon Glass)"
+                    : "Standard app icon plates restored", Toast.LENGTH_SHORT).show();
+        });
         opts.add("Change Wallpaper");
         acts.add(() -> {
             try {
@@ -1678,12 +1754,13 @@ public class HomeActivity extends Activity {
         EditText editName = dialogView.findViewById(R.id.url_name);
         EditText editUrl = dialogView.findViewById(R.id.url_value);
         CheckBox chkPin = dialogView.findViewById(R.id.chk_pin_home);
+        if (chkPin != null) chkPin.setChecked(true);
         if (defaultUrl != null && !defaultUrl.isEmpty()) editUrl.setText(defaultUrl);
         if (defaultTitle != null && !defaultTitle.isEmpty()) editName.setText(defaultTitle);
         new AlertDialog.Builder(this)
-                .setTitle("Add Web App")
+                .setTitle("Install Web App (Standalone Mode)")
                 .setView(dialogView)
-                .setPositiveButton("Add", (d, which) -> {
+                .setPositiveButton("Install App", (d, which) -> {
                     String u = editUrl.getText().toString().trim();
                     if (u.isEmpty()) return;
                     if (!u.startsWith("http://") && !u.startsWith("https://")) {
@@ -1724,6 +1801,8 @@ public class HomeActivity extends Activity {
                     } else {
                         WebLogoHelper.fetchFaviconAsync(this, u, sc.id, (logo) -> loadShortcuts());
                     }
+                    // Default installed Web Apps to clean Standalone Mode (top bar hidden until pulled down)
+                    ShortcutStore.setWebAppTopBarVisible(this, false);
                     ShortcutStore.save(this, p, shortcuts);
                     loadShortcuts();
                     BaseDockWidget.refreshAll(this);
@@ -1731,7 +1810,7 @@ public class HomeActivity extends Activity {
                     if (chkPin != null && chkPin.isChecked()) {
                         IconUtil.pinShortcutToHomeScreen(this, sc);
                     }
-                    Toast.makeText(this, n + " added as Web App", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Installed " + n + " as standalone Web App", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();

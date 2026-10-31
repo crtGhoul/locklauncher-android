@@ -107,7 +107,7 @@
             android:exported="false"
             android:hardwareAccelerated="true"
             android:supportsPictureInPicture="true"
-            android:documentLaunchMode="intoExisting"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:theme="@android:style/Theme.Material.NoActionBar">
         </activity>

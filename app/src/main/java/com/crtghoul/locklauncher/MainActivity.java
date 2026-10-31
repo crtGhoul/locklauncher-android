@@ -923,6 +923,45 @@ public class MainActivity extends Activity {
             });
         }
 
+        Switch swWpBlend = findViewById(R.id.switch_wallpaper_blend_icons);
+        if (swWpBlend != null) {
+            swWpBlend.setChecked(ShortcutStore.isWallpaperBlendIcons(this));
+            swWpBlend.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setWallpaperBlendIcons(this, on);
+                IconUtil.clearCache();
+                persist();
+                toast(on ? "Chameleon Wallpaper Blend enabled" : "Wallpaper Blend disabled");
+            });
+        }
+
+        SeekBar seekWpBlend = findViewById(R.id.seek_wallpaper_blend_intensity);
+        TextView txtWpBlend = findViewById(R.id.val_wallpaper_blend_intensity);
+        if (seekWpBlend != null) {
+            int curBlend = ShortcutStore.getWallpaperBlendIntensity(this);
+            seekWpBlend.setProgress(curBlend);
+            if (txtWpBlend != null) txtWpBlend.setText(curBlend + "%");
+            seekWpBlend.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                    if (txtWpBlend != null) txtWpBlend.setText(v + "%");
+                }
+                @Override public void onStartTrackingTouch(SeekBar s) {}
+                @Override public void onStopTrackingTouch(SeekBar s) {
+                    ShortcutStore.setWallpaperBlendIntensity(MainActivity.this, s.getProgress());
+                    IconUtil.clearCache();
+                    persist();
+                }
+            });
+        }
+        View resetWpBlend = findViewById(R.id.reset_wallpaper_blend_intensity);
+        if (resetWpBlend != null) {
+            resetWpBlend.setOnClickListener(v -> {
+                ShortcutStore.resetWallpaperBlendIntensity(this);
+                IconUtil.clearCache();
+                syncIconControlsFromPrefs();
+                persist();
+            });
+        }
+
         int[] shapeBtnIds = {R.id.btn_shape_system, R.id.btn_shape_circle, R.id.btn_shape_square, R.id.btn_shape_rounded};
         String[] shapeVals = {ShortcutStore.SHAPE_SYSTEM, ShortcutStore.SHAPE_CIRCLE, ShortcutStore.SHAPE_SQUARE, ShortcutStore.SHAPE_ROUNDED};
         for (int i = 0; i < shapeBtnIds.length; i++) {
@@ -958,6 +997,15 @@ public class MainActivity extends Activity {
 
         Switch swGlassIconBg = findViewById(R.id.switch_glass_icon_bg);
         if (swGlassIconBg != null) swGlassIconBg.setChecked(ShortcutStore.isGlassIconBackgrounds(this));
+
+        Switch swWpBlend = findViewById(R.id.switch_wallpaper_blend_icons);
+        if (swWpBlend != null) swWpBlend.setChecked(ShortcutStore.isWallpaperBlendIcons(this));
+
+        int curBlend = ShortcutStore.getWallpaperBlendIntensity(this);
+        SeekBar seekWpBlend = findViewById(R.id.seek_wallpaper_blend_intensity);
+        TextView txtWpBlend = findViewById(R.id.val_wallpaper_blend_intensity);
+        if (seekWpBlend != null) seekWpBlend.setProgress(curBlend);
+        if (txtWpBlend != null) txtWpBlend.setText(curBlend + "%");
 
         String shape = ShortcutStore.getIconShape(this);
         int[] shapeBtnIds = {R.id.btn_shape_system, R.id.btn_shape_circle, R.id.btn_shape_square, R.id.btn_shape_rounded};

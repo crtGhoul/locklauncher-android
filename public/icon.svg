@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="50%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#090A0F" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#6366F1" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)" stroke="#334155" stroke-width="8" />
+  <!-- Dynamic Island Capsule -->
+  <rect x="136" y="68" width="240" height="54" rx="27" fill="#05070B" stroke="url(#accent)" stroke-width="4" />
+  <circle cx="174" cy="95" r="10" fill="#38BDF8" />
+  <rect x="200" y="88" width="110" height="14" rx="7" fill="#E2E8F0" opacity="0.85" />
+  <circle cx="342" cy="95" r="9" fill="#10B981" />
+  <!-- Music Square & Launcher Grid -->
+  <rect x="96" y="158" width="320" height="106" rx="28" fill="#1E293B" stroke="#475569" stroke-width="3" />
+  <rect x="118" y="180" width="62" height="62" rx="16" fill="#EF4444" />
+  <polygon points="142,197 142,225 166,211" fill="#FFFFFF" />
+  <rect x="198" y="188" width="136" height="16" rx="8" fill="#F8FAFC" />
+  <rect x="198" y="216" width="96" height="12" rx="6" fill="#94A3B8" />
+  <!-- Bottom Glass Dock -->
+  <rect x="96" y="366" width="320" height="78" rx="34" fill="#1E293B" stroke="url(#accent)" stroke-width="3" />
+  <rect x="128" y="385" width="40" height="40" rx="12" fill="#38BDF8" />
+  <rect x="198" y="385" width="40" height="40" rx="12" fill="#A855F7" />
+  <rect x="268" y="385" width="40" height="40" rx="12" fill="#10B981" />
+  <rect x="338" y="385" width="40" height="40" rx="12" fill="#F59E0B" />
+</svg>
