@@ -51,6 +51,7 @@ public class NowPlayingHelper {
         public final boolean isPlaying;
         public final boolean isWebApp;
         public final String webUrl;
+        public final String url;
         public final String sourcePkg;
         public final PendingIntent contentIntent;
 
@@ -61,6 +62,7 @@ public class NowPlayingHelper {
             this.isPlaying = isPlaying;
             this.isWebApp = isWebApp;
             this.webUrl = webUrl;
+            this.url = webUrl;
             this.sourcePkg = sourcePkg;
             this.contentIntent = contentIntent;
         }
@@ -231,7 +233,7 @@ public class NowPlayingHelper {
                 opts.setPendingIntentBackgroundActivityStartMode(
                         ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
                 return opts.toBundle();
-            } catch ( Throwable ignored) {
+            } catch (Throwable ignored) {
             }
         }
         return null;
@@ -256,8 +258,8 @@ public class NowPlayingHelper {
      * Opens the active media player (WebAppActivity or native music app).
      * Guaranteed to work from HomeActivity, IslandService overlay, or Notification shade.
      */
-    public static void openActivePlayer(Context ctx) {
-        if (ctx == null) return;
+    public static boolean openActivePlayer(Context ctx) {
+        if (ctx == null) return false;
         MediaState st = getActiveState(ctx);
 
         // 1. If WebAppActivity is active or we have a WebApp media state, bring WebAppActivity to front
@@ -280,7 +282,7 @@ public class NowPlayingHelper {
                         | Intent.FLAG_ACTIVITY_SINGLE_TOP
                         | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                 ctx.startActivity(resume);
-                return;
+                return true;
             } catch (Exception ignored) {
             }
         }
@@ -288,7 +290,7 @@ public class NowPlayingHelper {
         // 2. If system MediaState has a contentIntent, send it with Android 14/15 BAL opt-in
         if (st != null && st.contentIntent != null) {
             if (sendPendingIntentCompat(ctx, st.contentIntent)) {
-                return;
+                return true;
             }
         }
 
@@ -299,7 +301,7 @@ public class NowPlayingHelper {
                 if (launch != null) {
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
                     ctx.startActivity(launch);
-                    return;
+                    return true;
                 }
             } catch (Exception ignored) {
             }
@@ -310,9 +312,11 @@ public class NowPlayingHelper {
             Intent ytm = IconUtil.buildWebIntent(ctx, "https://music.youtube.com", "YT Music");
             if (ytm != null) {
                 ctx.startActivity(ytm);
+                return true;
             }
         } catch (Exception ignored) {
         }
+        return false;
     }
 
     private static void broadcastChange(Context ctx) {
