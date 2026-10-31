@@ -1,5 +1,7 @@
 # Lock Launcher for Android
 
+**Latest release: v2.18** — [Release](https://github.com/crtGhoul/locklauncher-android/releases/tag/v2.18)
+
 [![Release](https://img.shields.io/badge/Release-v2.17-7C5CFF.svg)](https://github.com/crtGhoul/locklauncher-android/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Zero Ads](https://img.shields.io/badge/Ads-0%25%20Offline-00E676.svg)](README.md)
@@ -94,3 +96,16 @@ To enable the Dynamic Island overlay:
 ## 📄 License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+## Velazquez Lab
+
+More free tools from Cesar Velazquez: [Velazquez Lab](https://velazquez-lab.pages.dev)
+
+- GitHub: https://github.com/crtGhoul
+- Codeberg: https://codeberg.org/crtGhoul
+- YouTube: https://www.youtube.com/@VelazquezLabs
+- Reddit: https://www.reddit.com/user/Manteqaada/
+
+> Have you used Muse? If not, you can earn a free 1B tokens when you sign up with my code: 0NS5DG — redeem it in Muse Settings > Redeem token within 48 hours of joining. Joining alone does not count.
