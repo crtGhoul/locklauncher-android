@@ -1,8 +1,8 @@
 # Lock Launcher for Android
 
-**Latest release: v2.18** — [Release](https://github.com/crtGhoul/locklauncher-android/releases/tag/v2.18)
+**Latest release: v2.22** — [Release](https://github.com/crtGhoul/locklauncher-android/releases/tag/v2.22)
 
-[![Release](https://img.shields.io/badge/Release-v2.17-7C5CFF.svg)](https://github.com/crtGhoul/locklauncher-android/releases)
+[![Release](https://img.shields.io/badge/Release-v2.22-7C5CFF.svg)](https://github.com/crtGhoul/locklauncher-android/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Zero Ads](https://img.shields.io/badge/Ads-0%25%20Offline-00E676.svg)](README.md)
 [![Refresh Rate](https://img.shields.io/badge/Display-120Hz%20LTPO-FF6F00.svg)](README.md)
