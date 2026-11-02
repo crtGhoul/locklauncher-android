@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
@@ -24,6 +25,7 @@ import android.os.UserManager;
 import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.text.format.DateUtils;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
@@ -83,7 +85,7 @@ public class AppPickerActivity extends Activity {
     private Button addButton;
     private View scrollSearchActions;
     private Button btnGoogle, btnYoutube, btnPlay, btnWeb;
-    private Button chipAll, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault;
+    private Button chipAll, chipRecent, chipNotifications, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault;
     private String currentCategory = "all";
 
     // Powerhouse Calculator & Quick Settings
@@ -99,6 +101,7 @@ public class AppPickerActivity extends Activity {
         ComponentName component;
         boolean isClone;
         boolean isSystem;
+        long installTime;
         String category; // "ai", "media", "tools", "social", "system"
     }
 
@@ -147,6 +150,12 @@ public class AppPickerActivity extends Activity {
                         e.component = info.getComponentName();
                         e.isClone = isCloneOrWork;
                         e.isSystem = (info.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+                        try {
+                            PackageInfo pi = getPackageManager().getPackageInfo(pkg, 0);
+                            e.installTime = Math.max(pi.firstInstallTime, pi.lastUpdateTime);
+                        } catch (Exception ignored) {
+                            e.installTime = 0;
+                        }
                         String rawLabel = info.getLabel().toString();
                         e.rawLabel = rawLabel;
                         String customLabel = ShortcutStore.getCustomAppLabel(this, pkg, pSerial);
@@ -187,6 +196,12 @@ public class AppPickerActivity extends Activity {
                 e.label = (customLabel != null && !customLabel.trim().isEmpty()) ? customLabel : rawLbl;
                 e.icon = ri.loadIcon(pm);
                 e.isSystem = (ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+                try {
+                    PackageInfo pi = pm.getPackageInfo(pkg, 0);
+                    e.installTime = Math.max(pi.firstInstallTime, pi.lastUpdateTime);
+                } catch (Exception ignored) {
+                    e.installTime = 0;
+                }
                 e.category = classifyApp(e.pkg, e.label, e.isSystem, false);
                 if (isAppHidden) {
                     hiddenList.add(e);
@@ -215,6 +230,8 @@ public class AppPickerActivity extends Activity {
         btnWeb = findViewById(R.id.btn_search_web);
 
         chipAll = findViewById(R.id.chip_all);
+        chipRecent = findViewById(R.id.chip_recent);
+        chipNotifications = findViewById(R.id.chip_notifications);
         chipClones = findViewById(R.id.chip_clones);
         chipAi = findViewById(R.id.chip_ai);
         chipMedia = findViewById(R.id.chip_media);
@@ -259,13 +276,30 @@ public class AppPickerActivity extends Activity {
 
         // Count how many clones we found
         int cloneCount = 0;
-        for (AppEntry ae : all) if (ae.isClone) cloneCount++;
+        int notifCount = 0;
+        for (AppEntry ae : all) {
+            if (ae.isClone) cloneCount++;
+            if (LockNotificationListenerService.getCount(ae.pkg) > 0) notifCount++;
+        }
         if (chipClones != null) {
             chipClones.setText("Clones (" + cloneCount + ")");
+        }
+        if (chipNotifications != null) {
+            chipNotifications.setText(notifCount > 0 ? "Notifications (" + notifCount + ")" : "Notifications");
         }
 
         View.OnClickListener chipListener = v -> {
             if (v == chipAll) currentCategory = "all";
+            else if (v == chipRecent) currentCategory = "recent";
+            else if (v == chipNotifications) {
+                if (!LockNotificationListenerService.isPermissionGranted(this)) {
+                    Toast.makeText(this, "Notification access needed for notification badges", Toast.LENGTH_SHORT).show();
+                    try {
+                        startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                    } catch (Exception ignored) {}
+                }
+                currentCategory = "notifications";
+            }
             else if (v == chipClones) currentCategory = "clones";
             else if (v == chipAi) currentCategory = "ai";
             else if (v == chipMedia) currentCategory = "media";
@@ -278,6 +312,8 @@ public class AppPickerActivity extends Activity {
         };
 
         if (chipAll != null) chipAll.setOnClickListener(chipListener);
+        if (chipRecent != null) chipRecent.setOnClickListener(chipListener);
+        if (chipNotifications != null) chipNotifications.setOnClickListener(chipListener);
         if (chipClones != null) chipClones.setOnClickListener(chipListener);
         if (chipAi != null) chipAi.setOnClickListener(chipListener);
         if (chipMedia != null) chipMedia.setOnClickListener(chipListener);
@@ -685,6 +721,8 @@ public class AppPickerActivity extends Activity {
 
     private void updateCategoryChipStyles() {
         if (chipAll != null) chipAll.setBackgroundResource("all".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (chipRecent != null) chipRecent.setBackgroundResource("recent".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        if (chipNotifications != null) chipNotifications.setBackgroundResource("notifications".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
         if (chipClones != null) chipClones.setBackgroundResource("clones".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
         if (chipAi != null) chipAi.setBackgroundResource("ai".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
         if (chipMedia != null) chipMedia.setBackgroundResource("media".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
@@ -828,6 +866,8 @@ public class AppPickerActivity extends Activity {
 
             List<AppEntry> sourceList = "vault".equals(currentCategory) ? hiddenList : all;
             for (AppEntry e : sourceList) {
+                if ("recent".equals(currentCategory) && e.installTime <= 0) continue;
+                if ("notifications".equals(currentCategory) && LockNotificationListenerService.getCount(e.pkg) <= 0) continue;
                 if ("clones".equals(currentCategory) && !e.isClone) continue;
                 if ("ai".equals(currentCategory) && !"ai".equals(e.category)) continue;
                 if ("media".equals(currentCategory) && !"media".equals(e.category)) continue;
@@ -868,6 +908,15 @@ public class AppPickerActivity extends Activity {
                     int sa = scores.containsKey(a) ? scores.get(a) : 0;
                     int sb = scores.containsKey(b) ? scores.get(b) : 0;
                     if (sa != sb) return Integer.compare(sb, sa); // higher score first
+                    return a.label.compareToIgnoreCase(b.label);
+                });
+            } else if ("recent".equals(currentCategory)) {
+                Collections.sort(filtered, (a, b) -> Long.compare(b.installTime, a.installTime));
+            } else if ("notifications".equals(currentCategory)) {
+                Collections.sort(filtered, (a, b) -> {
+                    int ca = LockNotificationListenerService.getCount(a.pkg);
+                    int cb = LockNotificationListenerService.getCount(b.pkg);
+                    if (ca != cb) return Integer.compare(cb, ca);
                     return a.label.compareToIgnoreCase(b.label);
                 });
             } else {
@@ -940,6 +989,10 @@ public class AppPickerActivity extends Activity {
                     profileBadge.setVisibility(View.VISIBLE);
                 } else if (isRenamed) {
                     profileBadge.setText(e.rawLabel);
+                    profileBadge.setVisibility(View.VISIBLE);
+                } else if ("recent".equals(currentCategory) && e.installTime > 0) {
+                    CharSequence relTime = DateUtils.getRelativeTimeSpanString(e.installTime, System.currentTimeMillis(), DateUtils.DAY_IN_MILLIS);
+                    profileBadge.setText(relTime);
                     profileBadge.setVisibility(View.VISIBLE);
                 } else {
                     profileBadge.setVisibility(View.GONE);
