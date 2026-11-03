@@ -69,6 +69,7 @@ public class HomeActivity extends Activity {
     private String lastDateBatteryText = "";
     private final SimpleDateFormat clockFormat = new SimpleDateFormat("h:mm", Locale.getDefault());
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("EEEE, MMMM d", Locale.getDefault());
+    private int lastObservedWallpaperColor = 0;
     private int pendingSlotIndex = -1;
     private Shortcut pendingLogoShortcut = null;
     private int activeDraggedPosition = -1;
@@ -453,6 +454,15 @@ public class HomeActivity extends Activity {
         super.onResume();
         DisplayHelper.enforceHighRefreshRate(this);
         timeHandler.post(timeRunnable);
+        int currentWp = DynamicThemeHelper.extractTheme(this).primaryAccent;
+        if (lastObservedWallpaperColor != 0 && lastObservedWallpaperColor != currentWp) {
+            IconUtil.clearCache();
+            applyDynamicTheming();
+            loadShortcuts();
+            loadDock();
+            GlassThemeHelper.refreshAllSurfaces(this);
+        }
+        lastObservedWallpaperColor = currentWp;
         try {
             IntentFilter filter = new IntentFilter(LockNotificationListenerService.ACTION_NOTIFICATIONS_CHANGED);
             filter.addAction(Intent.ACTION_BATTERY_CHANGED);
@@ -759,6 +769,11 @@ public class HomeActivity extends Activity {
         opts.add(wpBlend
                 ? "Blend Apps into Wallpaper: ON (Chameleon Glass)"
                 : "Blend Apps into Wallpaper: OFF (Tap to Enable)");
+        if (wpBlend) {
+            int curPct = ShortcutStore.getWallpaperBlendIntensity(this);
+            opts.add("Wallpaper Icon Blend Intensity (" + curPct + "%)");
+            acts.add(this::showWallpaperBlendIntensityDialog);
+        }
         acts.add(() -> {
             boolean nextBlend = !wpBlend;
             ShortcutStore.setWallpaperBlendIcons(this, nextBlend);
@@ -2697,6 +2712,27 @@ public class HomeActivity extends Activity {
                         loadDock();
                         Toast.makeText(this, "Dock cleared", Toast.LENGTH_SHORT).show();
                     }
+                })
+                .show();
+    }
+
+    private void showWallpaperBlendIntensityDialog() {
+        String[] levels = {
+                "Subtle Tint (40%)",
+                "Balanced Chameleon (65% - Recommended)",
+                "Deep Wallpaper Fusion (85%)",
+                "Full Material You Monochromatic Tint (100%)"
+        };
+        int[] vals = {40, 65, 85, 100};
+        new AlertDialog.Builder(this)
+                .setTitle("Wallpaper Icon Blend Intensity")
+                .setItems(levels, (d, w) -> {
+                    ShortcutStore.setWallpaperBlendIntensity(this, vals[w]);
+                    IconUtil.clearCache();
+                    loadShortcuts();
+                    loadDock();
+                    GlassThemeHelper.refreshAllSurfaces(this);
+                    Toast.makeText(this, "Wallpaper blend set to " + vals[w] + "%", Toast.LENGTH_SHORT).show();
                 })
                 .show();
     }

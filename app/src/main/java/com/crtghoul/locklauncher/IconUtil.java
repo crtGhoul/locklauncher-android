@@ -296,43 +296,57 @@ public class IconUtil {
                 && d instanceof android.graphics.drawable.AdaptiveIconDrawable) {
             android.graphics.drawable.AdaptiveIconDrawable aid =
                     (android.graphics.drawable.AdaptiveIconDrawable) d;
-            Drawable fg = null;
+
+            Drawable mono = null;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 try {
-                    fg = aid.getMonochrome();
-                } catch (Exception ignored) {}
+                    mono = aid.getMonochrome();
+                } catch (Throwable ignored) {}
             }
-            if (fg == null) {
-                fg = aid.getForeground();
+
+            if (mono != null) {
+                DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
+                Drawable mutated = mono.mutate();
+                int inset = (int) (SIZE * (0.04f + (1f - scaleFrac) * 0.18f));
+                Bitmap monoBmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+                Canvas mc = new Canvas(monoBmp);
+                mutated.setBounds(-inset, -inset, SIZE + inset, SIZE + inset);
+                mutated.draw(mc);
+
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                p.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                        tc.glyphTint, android.graphics.PorterDuff.Mode.SRC_IN));
+                c.drawBitmap(monoBmp, 0, 0, p);
+                return shapeMask(ctx, out);
             }
+
+            Drawable fg = aid.getForeground();
             if (fg != null) {
                 Drawable mutated = fg.mutate();
-                // Adaptive foreground layers have 18% safe-zone inset built in
                 int inset = (int) (SIZE * (0.04f + (1f - scaleFrac) * 0.18f));
                 Bitmap fgBmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
                 Canvas fgCanvas = new Canvas(fgBmp);
                 mutated.setBounds(-inset, -inset, SIZE + inset, SIZE + inset);
                 mutated.draw(fgCanvas);
 
-                // Desaturate and boost luminance for crisp minimal glyph appearance
-                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
                 if (ShortcutStore.isWallpaperBlendIcons(ctx)) {
                     DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
-                    float rTint = Color.red(tc.primaryAccent) / 255f;
-                    float gTint = Color.green(tc.primaryAccent) / 255f;
-                    float bTint = Color.blue(tc.primaryAccent) / 255f;
+                    float rTint = Color.red(tc.glyphTint) / 255f;
+                    float gTint = Color.green(tc.glyphTint) / 255f;
+                    float bTint = Color.blue(tc.glyphTint) / 255f;
                     android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix(new float[]{
-                            0.35f * rTint, 0.55f * rTint, 0.10f * rTint, 0, 68 * rTint + 25,
-                            0.35f * gTint, 0.55f * gTint, 0.10f * gTint, 0, 68 * gTint + 25,
-                            0.35f * bTint, 0.55f * bTint, 0.10f * bTint, 0, 72 * bTint + 30,
-                            0,             0,             0,             1, 0
+                            0.299f * rTint * 0.7f, 0.587f * rTint * 0.7f, 0.114f * rTint * 0.7f, 0, 115 * rTint + 55,
+                            0.299f * gTint * 0.7f, 0.587f * gTint * 0.7f, 0.114f * gTint * 0.7f, 0, 115 * gTint + 55,
+                            0.299f * bTint * 0.7f, 0.587f * bTint * 0.7f, 0.114f * bTint * 0.7f, 0, 115 * bTint + 55,
+                            0,                     0,                     0,                     1, 0
                     });
                     p.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
                 } else {
                     android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix(new float[]{
-                            0.35f, 0.55f, 0.10f, 0, 55,
-                            0.35f, 0.55f, 0.10f, 0, 55,
-                            0.35f, 0.55f, 0.10f, 0, 60,
+                            0.35f, 0.55f, 0.10f, 0, 65,
+                            0.35f, 0.55f, 0.10f, 0, 65,
+                            0.35f, 0.55f, 0.10f, 0, 70,
                             0,     0,     0,     1, 0
                     });
                     p.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
@@ -362,18 +376,7 @@ public class IconUtil {
 
         if (wpBlend) {
             DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
-            float blendFrac = ShortcutStore.getWallpaperBlendIntensity(ctx) / 100f;
-            int baseAlpha = Math.max(58, Math.min(205, (int) (85 + blendFrac * 85)));
-            int c1 = Color.argb(baseAlpha,
-                    (int) (Color.red(tc.primaryAccent) * 0.42f + 14),
-                    (int) (Color.green(tc.primaryAccent) * 0.42f + 16),
-                    (int) (Color.blue(tc.primaryAccent) * 0.42f + 26));
-            int c2 = Color.argb(Math.max(44, baseAlpha - 28),
-                    (int) (Color.red(tc.secondaryAccent) * 0.36f + 10),
-                    (int) (Color.green(tc.secondaryAccent) * 0.36f + 12),
-                    (int) (Color.blue(tc.secondaryAccent) * 0.36f + 22));
-            fill.setShader(new android.graphics.LinearGradient(
-                    0, 0, SIZE, SIZE, c1, c2, android.graphics.Shader.TileMode.CLAMP));
+            fill.setColor(tc.plateFillColor);
         } else {
             int surfaceColor = GlassThemeHelper.resolveSurfaceFillColor(ctx);
             fill.setColor(surfaceColor);
@@ -389,14 +392,10 @@ public class IconUtil {
 
         Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
         border.setStyle(Paint.Style.STROKE);
-        border.setStrokeWidth(3f);
+        border.setStrokeWidth(2.5f);
         if (wpBlend) {
             DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
-            int rimColor = Color.argb(125,
-                    Math.min(255, (Color.red(tc.primaryAccent) + 255) / 2),
-                    Math.min(255, (Color.green(tc.primaryAccent) + 255) / 2),
-                    Math.min(255, (Color.blue(tc.primaryAccent) + 255) / 2));
-            border.setColor(rimColor);
+            border.setColor(tc.plateBorderColor);
         } else {
             border.setColor(0x48FFFFFF);
         }
