@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/app_picker_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#101223"
+    android:background="#D90A0D18"
     android:padding="16dp">
 
     <EditText
@@ -41,6 +42,41 @@
             <Button android:id="@+id/chip_vault" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="Vault" android:textSize="11sp" android:textColor="#FFBB55" android:paddingStart="12dp" android:paddingEnd="12dp" />
         </LinearLayout>
     </HorizontalScrollView>
+
+    <!-- Recent / Frequently Used Apps Strip -->
+    <LinearLayout
+        android:id="@+id/recent_apps_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/recent_apps_header"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RECENTLY OPENED"
+            android:textSize="11sp"
+            android:textColor="#9EFFFFFF"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="4dp"
+            android:paddingBottom="6dp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:id="@+id/recent_apps_list"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
 
     <!-- Inline Math & Calculator Result Card -->
     <LinearLayout

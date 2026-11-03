@@ -548,12 +548,27 @@ public class AppPickerActivity extends Activity {
             }
         }
 
+        DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(this);
+        View root = findViewById(R.id.app_picker_root);
+        if (root != null) {
+            root.setBackgroundColor(tc.subtleGlassTint);
+        }
+        if (isDrawerMode) {
+            setupRecentAppsStrip();
+        }
+        updateCategoryChipStyles();
+
         search.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int b, int c, int a) {}
             @Override public void onTextChanged(CharSequence s, int b, int c, int a) {
                 String query = s == null ? "" : s.toString().trim();
                 adapter.filterQuery = query;
                 adapter.applyFilter();
+
+                View recentContainer = findViewById(R.id.recent_apps_container);
+                if (recentContainer != null) {
+                    recentContainer.setVisibility(query.isEmpty() && isDrawerMode ? View.VISIBLE : View.GONE);
+                }
 
                 // 1. Live Math Calculation
                 if (ShortcutStore.isSearchCalculator(AppPickerActivity.this)) {
@@ -642,6 +657,78 @@ public class AppPickerActivity extends Activity {
         });
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (getIntent().getBooleanExtra(EXTRA_DRAWER_MODE, false)) {
+            setupRecentAppsStrip();
+        }
+    }
+
+    private void setupRecentAppsStrip() {
+        View recentContainer = findViewById(R.id.recent_apps_container);
+        LinearLayout recentList = findViewById(R.id.recent_apps_list);
+        if (recentContainer == null || recentList == null) return;
+
+        recentList.removeAllViews();
+        List<String> recentPkgs = ShortcutStore.getRecentApps(this, 8);
+        List<AppEntry> recentEntries = new ArrayList<>();
+
+        if (recentPkgs != null && !recentPkgs.isEmpty()) {
+            for (String pkg : recentPkgs) {
+                for (AppEntry ae : all) {
+                    if (pkg.equals(ae.pkg)) {
+                        recentEntries.add(ae);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (recentEntries.isEmpty()) {
+            List<AppEntry> fallback = new ArrayList<>(all);
+            Collections.sort(fallback, (a, b) -> Long.compare(b.installTime, a.installTime));
+            for (int i = 0; i < Math.min(6, fallback.size()); i++) {
+                recentEntries.add(fallback.get(i));
+            }
+        }
+
+        if (recentEntries.isEmpty()) {
+            recentContainer.setVisibility(View.GONE);
+            return;
+        }
+
+        recentContainer.setVisibility(View.VISIBLE);
+        LauncherApps la = (LauncherApps) getSystemService(Context.LAUNCHER_APPS_SERVICE);
+        LayoutInflater inflater = LayoutInflater.from(this);
+
+        for (AppEntry e : recentEntries) {
+            View item = inflater.inflate(R.layout.item_recent_app, recentList, false);
+            ImageView iconView = item.findViewById(R.id.recent_icon);
+            TextView labelView = item.findViewById(R.id.recent_label);
+
+            if (ShortcutStore.isMinimalIcons(this)
+                    || ShortcutStore.isGlassIconBackgrounds(this)
+                    || ShortcutStore.isMonochromeIcons(this)
+                    || ShortcutStore.isWallpaperBlendIcons(this)
+                    || !IconPackManager.getActiveIconPack(this).isEmpty()) {
+                Shortcut tmp = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                iconView.setImageBitmap(IconUtil.iconFor(this, tmp));
+            } else {
+                iconView.setImageDrawable(e.icon);
+            }
+
+            labelView.setText(e.label);
+
+            item.setOnClickListener(v -> {
+                ShortcutStore.recordAppLaunch(AppPickerActivity.this, e.pkg);
+                launchApp(e, la, v);
+            });
+
+            recentList.addView(item);
+        }
+    }
+
     private String classifyApp(String pkg, String label, boolean isSystem, boolean isClone) {
         if (isClone) return "clones";
         String p = pkg.toLowerCase();
@@ -720,16 +807,18 @@ public class AppPickerActivity extends Activity {
     }
 
     private void updateCategoryChipStyles() {
-        if (chipAll != null) chipAll.setBackgroundResource("all".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipRecent != null) chipRecent.setBackgroundResource("recent".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipNotifications != null) chipNotifications.setBackgroundResource("notifications".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipClones != null) chipClones.setBackgroundResource("clones".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipAi != null) chipAi.setBackgroundResource("ai".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipMedia != null) chipMedia.setBackgroundResource("media".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipTools != null) chipTools.setBackgroundResource("tools".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipSocial != null) chipSocial.setBackgroundResource("social".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipSystem != null) chipSystem.setBackgroundResource("system".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
-        if (chipVault != null) chipVault.setBackgroundResource("vault".equals(currentCategory) ? R.drawable.btn_accent : R.drawable.btn_ghost);
+        DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(this);
+        Button[] chips = {chipAll, chipRecent, chipNotifications, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault};
+        String[] cats = {"all", "recent", "notifications", "clones", "ai", "media", "tools", "social", "system", "vault"};
+        for (int i = 0; i < chips.length; i++) {
+            Button b = chips[i];
+            if (b == null) continue;
+            boolean active = cats[i].equals(currentCategory);
+            b.setBackgroundResource(active ? R.drawable.btn_accent : R.drawable.btn_ghost);
+            if (active && b.getBackground() != null) {
+                b.getBackground().setTint(tc.primaryAccent);
+            }
+        }
     }
 
     private void showAddToFolderDialog(AppEntry e) {
@@ -801,6 +890,9 @@ public class AppPickerActivity extends Activity {
     }
 
     private void performLaunchApp(AppEntry e, LauncherApps launcherApps, View sourceView) {
+        if (e != null && e.pkg != null) {
+            ShortcutStore.recordAppLaunch(this, e.pkg);
+        }
         Bundle opts = null;
         if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !e.isClone) {
             try {
@@ -866,7 +958,7 @@ public class AppPickerActivity extends Activity {
 
             List<AppEntry> sourceList = "vault".equals(currentCategory) ? hiddenList : all;
             for (AppEntry e : sourceList) {
-                if ("recent".equals(currentCategory) && e.installTime <= 0) continue;
+                if ("recent".equals(currentCategory) && e.installTime <= 0 && ShortcutStore.getAppLastLaunchTime(AppPickerActivity.this, e.pkg) <= 0) continue;
                 if ("notifications".equals(currentCategory) && LockNotificationListenerService.getCount(e.pkg) <= 0) continue;
                 if ("clones".equals(currentCategory) && !e.isClone) continue;
                 if ("ai".equals(currentCategory) && !"ai".equals(e.category)) continue;
@@ -911,7 +1003,17 @@ public class AppPickerActivity extends Activity {
                     return a.label.compareToIgnoreCase(b.label);
                 });
             } else if ("recent".equals(currentCategory)) {
-                Collections.sort(filtered, (a, b) -> Long.compare(b.installTime, a.installTime));
+                Collections.sort(filtered, (a, b) -> {
+                    long ta = ShortcutStore.getAppLastLaunchTime(AppPickerActivity.this, a.pkg);
+                    long tb = ShortcutStore.getAppLastLaunchTime(AppPickerActivity.this, b.pkg);
+                    if (ta > 0 || tb > 0) {
+                        return Long.compare(tb, ta);
+                    }
+                    int ca = ShortcutStore.getAppLaunchCount(AppPickerActivity.this, a.pkg);
+                    int cb = ShortcutStore.getAppLaunchCount(AppPickerActivity.this, b.pkg);
+                    if (ca != cb) return Integer.compare(cb, ca);
+                    return Long.compare(b.installTime, a.installTime);
+                });
             } else if ("notifications".equals(currentCategory)) {
                 Collections.sort(filtered, (a, b) -> {
                     int ca = LockNotificationListenerService.getCount(a.pkg);
@@ -969,6 +1071,7 @@ public class AppPickerActivity extends Activity {
             if (ShortcutStore.isMinimalIcons(AppPickerActivity.this)
                     || ShortcutStore.isGlassIconBackgrounds(AppPickerActivity.this)
                     || ShortcutStore.isMonochromeIcons(AppPickerActivity.this)
+                    || ShortcutStore.isWallpaperBlendIcons(AppPickerActivity.this)
                     || !IconPackManager.getActiveIconPack(AppPickerActivity.this).isEmpty()) {
                 Shortcut tmp = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
                 icon.setImageBitmap(IconUtil.iconFor(AppPickerActivity.this, tmp));

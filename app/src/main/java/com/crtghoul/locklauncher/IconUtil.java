@@ -208,6 +208,29 @@ public class IconUtil {
             android.graphics.drawable.AdaptiveIconDrawable aid =
                     (android.graphics.drawable.AdaptiveIconDrawable) d;
 
+            Drawable mono = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                try {
+                    mono = aid.getMonochrome();
+                } catch (Throwable ignored) {}
+            }
+
+            if (mono != null) {
+                DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(ctx);
+                Drawable mutated = mono.mutate();
+                int inset = (int) (SIZE * (0.04f + (1f - scaleFrac) * 0.18f));
+                Bitmap monoBmp = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888);
+                Canvas mc = new Canvas(monoBmp);
+                mutated.setBounds(-inset, -inset, SIZE + inset, SIZE + inset);
+                mutated.draw(mc);
+
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                p.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                        tc.primaryAccent, android.graphics.PorterDuff.Mode.SRC_IN));
+                c.drawBitmap(monoBmp, 0, 0, p);
+                return shapeMask(ctx, out);
+            }
+
             // Subtly blend the app's own background layer at low opacity so brand identity hints through
             Drawable bg = aid.getBackground();
             if (bg != null && blendFrac < 0.85f) {
@@ -914,6 +937,7 @@ public class IconUtil {
                 return false;
             }
             if (s.isApp()) {
+                ShortcutStore.recordAppLaunch(ctx, s.pkg);
                 KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
                 if (km != null && km.isKeyguardLocked() && ctx instanceof Activity) {
                     try {

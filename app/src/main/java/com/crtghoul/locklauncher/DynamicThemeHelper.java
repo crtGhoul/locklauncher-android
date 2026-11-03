@@ -43,36 +43,54 @@ public class DynamicThemeHelper {
         if (ctx != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             try {
                 WallpaperManager wm = WallpaperManager.getInstance(ctx);
+                WallpaperColors colors = null;
                 if (wm != null) {
-                    WallpaperColors colors = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
+                    colors = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
                     if (colors == null) {
                         colors = wm.getWallpaperColors(WallpaperManager.FLAG_LOCK);
                     }
-                    if (colors != null) {
-                        int primary = colors.getPrimaryColor().toArgb();
-                        int secondary = colors.getSecondaryColor() != null
-                                ? colors.getSecondaryColor().toArgb()
-                                : shiftHue(primary, 28f);
-                        int tertiary = colors.getTertiaryColor() != null
-                                ? colors.getTertiaryColor().toArgb()
-                                : shiftHue(primary, -32f);
+                }
 
-                        int adjustedPrimary = normalizeAccent(primary);
-                        int adjustedSecondary = normalizeAccent(secondary);
-                        int adjustedTertiary = normalizeAccent(tertiary);
+                int rawPrimary = 0;
+                int rawSecondary = 0;
+                int rawTertiary = 0;
 
-                        int glass = Color.argb(204,
-                                (int) (Color.red(adjustedPrimary) * 0.24f + 14),
-                                (int) (Color.green(adjustedPrimary) * 0.24f + 16),
-                                (int) (Color.blue(adjustedPrimary) * 0.24f + 30));
-
-                        int card = Color.argb(220,
-                                (int) (Color.red(adjustedPrimary) * 0.28f + 22),
-                                (int) (Color.green(adjustedPrimary) * 0.28f + 24),
-                                (int) (Color.blue(adjustedPrimary) * 0.28f + 40));
-
-                        return new ThemeColors(adjustedPrimary, adjustedSecondary, adjustedTertiary, glass, card);
+                if (colors != null) {
+                    rawPrimary = colors.getPrimaryColor().toArgb();
+                    if (colors.getSecondaryColor() != null) {
+                        rawSecondary = colors.getSecondaryColor().toArgb();
                     }
+                    if (colors.getTertiaryColor() != null) {
+                        rawTertiary = colors.getTertiaryColor().toArgb();
+                    }
+                }
+
+                // On Android 12+ (API 31+ / Monet), check system Material You accent
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    try {
+                        int sysAccent = ctx.getColor(android.R.color.system_accent1_500);
+                        if (sysAccent != 0) {
+                            if (rawPrimary == 0) rawPrimary = sysAccent;
+                        }
+                    } catch (Throwable ignored) {}
+                }
+
+                if (rawPrimary != 0) {
+                    int primary = normalizeAccent(rawPrimary);
+                    int secondary = rawSecondary != 0 ? normalizeAccent(rawSecondary) : shiftHue(primary, 28f);
+                    int tertiary = rawTertiary != 0 ? normalizeAccent(rawTertiary) : shiftHue(primary, -32f);
+
+                    int glass = Color.argb(204,
+                            (int) (Color.red(primary) * 0.24f + 14),
+                            (int) (Color.green(primary) * 0.24f + 16),
+                            (int) (Color.blue(primary) * 0.24f + 30));
+
+                    int card = Color.argb(220,
+                            (int) (Color.red(primary) * 0.28f + 22),
+                            (int) (Color.green(primary) * 0.28f + 24),
+                            (int) (Color.blue(primary) * 0.28f + 40));
+
+                    return new ThemeColors(primary, secondary, tertiary, glass, card);
                 }
             } catch (Exception ignored) {
             }

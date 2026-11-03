@@ -6,10 +6,36 @@ set -e
 # The repo checkout itself is the default project dir when run from it.
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PROJ=${PROJ:-$SCRIPT_DIR}
-SDK=${SDK:-$HOME/workspace/android-sdk}
-JDK_DIR=${JDK_DIR:-$HOME/workspace/jdk17/jdk-17.0.11+9}
-BT=$SDK/build-tools/34.0.0
-PLATFORM=$SDK/platforms/android-34/android.jar
+SDK=${SDK:-$HOME/android-sdk}
+
+if [ -f "$SDK/android-36/android.jar" ]; then
+  DEFAULT_PLATFORM="$SDK/android-36/android.jar"
+elif [ -f "$SDK/platforms/android-34/android.jar" ]; then
+  DEFAULT_PLATFORM="$SDK/platforms/android-34/android.jar"
+elif [ -f "$SDK/platforms/android-36/android.jar" ]; then
+  DEFAULT_PLATFORM="$SDK/platforms/android-36/android.jar"
+else
+  DEFAULT_PLATFORM=$(find "$SDK" -name "android.jar" 2>/dev/null | head -1)
+fi
+
+PLATFORM=${PLATFORM:-$DEFAULT_PLATFORM}
+
+# In CI / desktop with Android SDK build-tools, resolve binaries from build-tools if available and executable
+BT=$(find "$SDK/build-tools" -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -1)
+if [ -n "$BT" ] && [ -x "$BT/aapt2" ]; then
+  AAPT2=${AAPT2:-$BT/aapt2}
+  D8=${D8:-$BT/d8}
+  ZIPALIGN=${ZIPALIGN:-$BT/zipalign}
+  APKSIGNER=${APKSIGNER:-$BT/apksigner}
+fi
+
+AAPT2=${AAPT2:-$(command -v aapt2)}
+JAVAC=${JAVAC:-$(command -v javac)}
+D8=${D8:-$(command -v d8)}
+ZIPALIGN=${ZIPALIGN:-$(command -v zipalign)}
+APKSIGNER=${APKSIGNER:-$(command -v apksigner)}
+JAR=${JAR:-$(command -v jar)}
+KEYTOOL=${KEYTOOL:-$(command -v keytool)}
 # P1-4: single source of truth for version (do not hardcode here).
 if [ -f "$PROJ/version.properties" ]; then
   VERSION_CODE=$(grep '^versionCode=' "$PROJ/version.properties" | cut -d= -f2)
@@ -22,16 +48,14 @@ GEN=$OUT/gen
 CLS=$OUT/classes
 DEX=$OUT/dex
 
-export PATH=$BT:$JDK_DIR/bin:$PATH
-export JAVA_HOME=$JDK_DIR
 rm -rf "$OUT"
 mkdir -p "$OUT" "$GEN" "$CLS" "$DEX"
 
 echo "== aapt2 compile =="
-$BT/aapt2 compile --dir $PROJ/app/src/main/res -o $OUT/res.zip
+$AAPT2 compile --dir $PROJ/app/src/main/res -o $OUT/res.zip
 
 echo "== aapt2 link =="
-$BT/aapt2 link -o $OUT/app-unsigned.apk \
+$AAPT2 link -o $OUT/app-unsigned.apk \
   -I $PLATFORM \
   --manifest $PROJ/app/src/main/AndroidManifest.xml \
   --java $GEN \
@@ -43,7 +67,7 @@ $BT/aapt2 link -o $OUT/app-unsigned.apk \
 
 echo "== javac =="
 find $PROJ/app/src/main/java $GEN -name "*.java" > $OUT/sources.txt
-$JDK_DIR/bin/javac \
+$JAVAC \
   -encoding UTF-8 -source 8 -target 8 -nowarn \
   -cp $PLATFORM \
   -d $CLS \
@@ -52,12 +76,12 @@ $JDK_DIR/bin/javac \
 # APK with no classes.dex that still printed BUILD_OK. Fail hard instead.
 
 echo "== d8 =="
-$BT/d8 --lib $PLATFORM --min-api 28 --output $DEX \
+$D8 --lib $PLATFORM --min-api 28 --output $DEX \
   $(find $CLS -name "*.class" | tr '\n' ' ')
 
 echo "== add classes.dex =="
 cp $OUT/app-unsigned.apk $OUT/app-dex.apk
-cd $DEX && $JDK_DIR/bin/jar uf $OUT/app-dex.apk classes.dex && cd -
+cd $DEX && $JAR uf $OUT/app-dex.apk classes.dex && cd -
 
 # Fail hard if javac/d8 produced no classes.dex (a dex-less APK still
 # signs and badges cleanly, so this check is the only guard).
@@ -67,7 +91,7 @@ if [ ! -f "$DEX/classes.dex" ]; then
 fi
 
 echo "== zipalign =="
-$BT/zipalign -f 4 $OUT/app-dex.apk $OUT/app-aligned.apk
+$ZIPALIGN -f 4 $OUT/app-dex.apk $OUT/app-aligned.apk
 
 echo "== keystore =="
 # P1-4: a release keystore is supplied ONLY via env vars
@@ -87,7 +111,7 @@ else
   KS_PASS="pass:android"
   KEY_PASS="pass:android"
   if [ ! -f "$KS" ]; then
-    $JDK_DIR/bin/keytool -genkeypair -v \
+    $KEYTOOL -genkeypair -v \
       -keystore "$KS" -storepass android -keypass android \
       -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10950 \
       -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -1
@@ -95,11 +119,11 @@ else
 fi
 
 echo "== apksigner =="
-$BT/apksigner sign --ks "$KS" --ks-pass "$KS_PASS" --key-pass "$KEY_PASS" \
+$APKSIGNER sign --ks "$KS" --ks-pass "$KS_PASS" --key-pass "$KEY_PASS" \
   --out $PROJ/build-out/locklauncher.apk $OUT/app-aligned.apk
 
 echo "== verify =="
-$BT/apksigner verify --print-certs $PROJ/build-out/locklauncher.apk | head -3
-$BT/aapt2 dump badging $PROJ/build-out/locklauncher.apk | head -4
+$APKSIGNER verify --print-certs $PROJ/build-out/locklauncher.apk | head -3
+$AAPT2 dump badging $PROJ/build-out/locklauncher.apk | head -4
 ls -la $PROJ/build-out/locklauncher.apk
 echo BUILD_OK

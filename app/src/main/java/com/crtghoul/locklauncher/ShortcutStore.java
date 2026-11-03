@@ -607,6 +607,84 @@ public class ShortcutStore {
         }
     }
 
+    // --- App Launch Tracking & Recent Apps ---
+    private static final String PREF_RECENT_APPS = "locklauncher_recent_apps";
+    private static final String KEY_RECENT_LIST = "recent_history_list";
+    private static final String KEY_LAUNCH_COUNT_PREFIX = "launch_cnt_";
+
+    public static void recordAppLaunch(Context ctx, String pkg) {
+        if (ctx == null || pkg == null || pkg.isEmpty()) return;
+        try {
+            SharedPreferences p = ctx.getSharedPreferences(PREF_RECENT_APPS, Context.MODE_PRIVATE);
+            String history = p.getString(KEY_RECENT_LIST, "");
+            List<String> list = new ArrayList<>();
+            if (!history.isEmpty()) {
+                String[] parts = history.split(",");
+                for (String s : parts) {
+                    String trimmed = s.trim();
+                    if (!trimmed.isEmpty() && !trimmed.equals(pkg)) {
+                        list.add(trimmed);
+                    }
+                }
+            }
+            list.add(0, pkg);
+            while (list.size() > 25) {
+                list.remove(list.size() - 1);
+            }
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append(list.get(i));
+            }
+            int currentCount = p.getInt(KEY_LAUNCH_COUNT_PREFIX + pkg, 0);
+            p.edit()
+                    .putString(KEY_RECENT_LIST, sb.toString())
+                    .putInt(KEY_LAUNCH_COUNT_PREFIX + pkg, currentCount + 1)
+                    .putLong("launch_time_" + pkg, System.currentTimeMillis())
+                    .apply();
+        } catch (Throwable ignored) {}
+    }
+
+    public static List<String> getRecentApps(Context ctx, int max) {
+        List<String> result = new ArrayList<>();
+        if (ctx == null) return result;
+        try {
+            SharedPreferences p = ctx.getSharedPreferences(PREF_RECENT_APPS, Context.MODE_PRIVATE);
+            String history = p.getString(KEY_RECENT_LIST, "");
+            if (!history.isEmpty()) {
+                String[] parts = history.split(",");
+                for (String s : parts) {
+                    String trimmed = s.trim();
+                    if (!trimmed.isEmpty() && !result.contains(trimmed)) {
+                        result.add(trimmed);
+                        if (result.size() >= max) break;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        return result;
+    }
+
+    public static long getAppLastLaunchTime(Context ctx, String pkg) {
+        if (ctx == null || pkg == null) return 0;
+        try {
+            return ctx.getSharedPreferences(PREF_RECENT_APPS, Context.MODE_PRIVATE)
+                    .getLong("launch_time_" + pkg, 0L);
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    public static int getAppLaunchCount(Context ctx, String pkg) {
+        if (ctx == null || pkg == null) return 0;
+        try {
+            return ctx.getSharedPreferences(PREF_RECENT_APPS, Context.MODE_PRIVATE)
+                    .getInt(KEY_LAUNCH_COUNT_PREFIX + pkg, 0);
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
     private static SharedPreferences prefs(Context ctx) {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
