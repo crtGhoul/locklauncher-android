@@ -59,6 +59,16 @@ public class HomeActivity extends Activity {
     private static final int REQUEST_PICK_APP_FOR_SLOT = 2005;
     private static final int REQ_PICK_CUSTOM_LOGO = 2006;
     private static final int REQUEST_PICK_APP_FOR_ISLAND = 2007;
+    private static final int REQUEST_PICK_APP_FOR_DOCK = 2008;
+    private int pendingDockSlotIndex = -1;
+    private LinearLayout dockShelf;
+    private List<Shortcut> dockShortcuts = new ArrayList<>();
+    private List<Integer> lastLoadedWidgetIds = null;
+    private int lastLoadedProfile = -1;
+    private String lastClockText = "";
+    private String lastDateBatteryText = "";
+    private final SimpleDateFormat clockFormat = new SimpleDateFormat("h:mm", Locale.getDefault());
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("EEEE, MMMM d", Locale.getDefault());
     private int pendingSlotIndex = -1;
     private Shortcut pendingLogoShortcut = null;
     private int activeDraggedPosition = -1;
@@ -103,6 +113,8 @@ public class HomeActivity extends Activity {
         } catch (Exception ignored) {
         }
         widgetsContainer = findViewById(R.id.home_widgets_container);
+        dockShelf = findViewById(R.id.home_dock_shelf);
+        loadDock();
         clockView = findViewById(R.id.home_clock);
         dateBatteryView = findViewById(R.id.home_date_battery);
         gridView = findViewById(R.id.home_grid);
@@ -391,6 +403,10 @@ public class HomeActivity extends Activity {
             if (searchBar != null) {
                 GlassThemeHelper.applyToView(this, searchBar, 24f);
             }
+            View dockShelfView = findViewById(R.id.home_dock_shelf);
+            if (dockShelfView != null) {
+                GlassThemeHelper.applyToView(this, dockShelfView, 26f);
+            }
             View nowPlaying = findViewById(R.id.home_now_playing_bar);
             if (nowPlaying != null) {
                 GlassThemeHelper.applyToView(this, nowPlaying, 20f);
@@ -427,6 +443,7 @@ public class HomeActivity extends Activity {
                 adapter.notifyDataSetChanged();
             }
             updateLiveHeader();
+            loadDock();
         }
     };
     private Object wallpaperColorsListener;
@@ -453,6 +470,7 @@ public class HomeActivity extends Activity {
                         IconUtil.clearCache();
                         applyDynamicTheming();
                         loadShortcuts();
+                        loadDock();
                         GlassThemeHelper.refreshAllSurfaces(HomeActivity.this);
                     };
                     wallpaperColorsListener = listener;
@@ -460,16 +478,19 @@ public class HomeActivity extends Activity {
                 }
             } catch (Exception ignored) {}
         }
-        // Clear icon cache on resume if wallpaper blend is active so returning from wallpaper picker updates icons immediately
-        if (ShortcutStore.isWallpaperBlendIcons(this)) {
-            IconUtil.clearCache();
-        }
         // Apply dynamic grid columns
         if (gridView != null) {
             gridView.setNumColumns(ShortcutStore.homeGridColumns(this));
         }
         loadShortcuts();
-        loadWidgets();
+        loadDock();
+        int activeProf = ShortcutStore.activeProfile(this);
+        List<Integer> currentWidgets = ShortcutStore.homeWidgets(this, activeProf);
+        if (lastLoadedWidgetIds == null || lastLoadedProfile != activeProf || !lastLoadedWidgetIds.equals(currentWidgets)) {
+            loadWidgets();
+            lastLoadedWidgetIds = new ArrayList<>(currentWidgets);
+            lastLoadedProfile = activeProf;
+        }
         applyDynamicTheming();
     }
     @Override
@@ -530,19 +551,28 @@ public class HomeActivity extends Activity {
         if (clockView != null) {
             clockView.setVisibility(showClock ? View.VISIBLE : View.GONE);
             if (showClock) {
-                clockView.setText(new SimpleDateFormat("h:mm", Locale.getDefault()).format(new Date()));
+                String c = clockFormat.format(new Date());
+                if (!c.equals(lastClockText)) {
+                    lastClockText = c;
+                    clockView.setText(c);
+                }
             }
         }
         if (dateBatteryView != null) {
             dateBatteryView.setVisibility((showClock || showBattery) ? View.VISIBLE : View.GONE);
-            String date = showClock ? new SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(new Date()) : "";
+            String date = showClock ? dateFormat.format(new Date()) : "";
             String battery = showBattery ? IconUtil.getLiveBatteryInfo(this) : "";
+            String full = "";
             if (!date.isEmpty() && !battery.isEmpty()) {
-                dateBatteryView.setText(date + "  ·  " + battery);
+                full = date + "  ·  " + battery;
             } else if (!date.isEmpty()) {
-                dateBatteryView.setText(date);
+                full = date;
             } else if (!battery.isEmpty()) {
-                dateBatteryView.setText(battery);
+                full = battery;
+            }
+            if (!full.equals(lastDateBatteryText)) {
+                lastDateBatteryText = full;
+                dateBatteryView.setText(full);
             }
         }
         // 🌟 At a Glance Smart Bar (100% on-device next alarm, calendar, battery)
@@ -700,6 +730,9 @@ public class HomeActivity extends Activity {
         });
         opts.add("Move & Organize Apps (Push to Bottom, Sort, Clear All)");
         acts.add(this::showGridOrganizerDialog);
+        boolean dockOn = ShortcutStore.isHomeDockVisible(this);
+        opts.add("Bottom App Dock (" + (dockOn ? "5 Favorites Visible" : "Hidden") + ")");
+        acts.add(this::showDockSettingsDialog);
         boolean showEmptyOutlines = ShortcutStore.isShowEmptyGridSlots(this);
         opts.add(showEmptyOutlines ? "Hide Empty Grid Outlines (Clean Wallpaper)" : "Show Empty Grid Outlines (Edit Slots)");
         acts.add(() -> {
@@ -962,6 +995,20 @@ public class HomeActivity extends Activity {
                 Toast.makeText(this, "Placed in slot " + (pendingSlotIndex + 1), Toast.LENGTH_SHORT).show();
             }
             pendingSlotIndex = -1;
+        } else if (requestCode == REQUEST_PICK_APP_FOR_DOCK && resultCode == RESULT_OK && data != null && pendingDockSlotIndex >= 0) {
+            ArrayList<String> pkgs = data.getStringArrayListExtra(AppPickerActivity.EXTRA_PACKAGES);
+            ArrayList<String> labels = data.getStringArrayListExtra(AppPickerActivity.EXTRA_LABELS);
+            long[] serials = data.getLongArrayExtra(AppPickerActivity.EXTRA_PROFILE_SERIALS);
+            if (pkgs != null && !pkgs.isEmpty()) {
+                String pkg = pkgs.get(0);
+                String label = (labels != null && !labels.isEmpty()) ? labels.get(0) : pkg;
+                long serial = (serials != null && serials.length > 0) ? serials[0] : 0;
+                dockShortcuts.set(pendingDockSlotIndex, new Shortcut(Shortcut.TYPE_APP, pkg, "", label, serial));
+                ShortcutStore.saveHomeDock(this, dockShortcuts);
+                loadDock();
+                Toast.makeText(this, "Pinned " + label + " to Dock", Toast.LENGTH_SHORT).show();
+            }
+            pendingDockSlotIndex = -1;
         } else if (requestCode == REQ_PICK_CUSTOM_LOGO && resultCode == RESULT_OK && data != null && pendingLogoShortcut != null) {
             try {
                 Uri imageUri = data.getData();
@@ -2433,5 +2480,224 @@ public class HomeActivity extends Activity {
             });
             return v;
         }
+    }
+
+    // ---- Persistent Bottom App Dock ----
+    private void loadDock() {
+        if (dockShelf == null) return;
+        boolean isVisible = ShortcutStore.isHomeDockVisible(this);
+        dockShelf.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+        if (!isVisible) return;
+
+        dockShortcuts = ShortcutStore.loadHomeDock(this);
+        dockShelf.removeAllViews();
+        LayoutInflater inflater = LayoutInflater.from(this);
+
+        for (int i = 0; i < dockShortcuts.size() && i < ShortcutStore.HOME_DOCK_MAX; i++) {
+            final int slotIndex = i;
+            final Shortcut s = dockShortcuts.get(i);
+            View itemView = inflater.inflate(R.layout.item_dock_slot, dockShelf, false);
+            ImageView iconView = itemView.findViewById(R.id.dock_item_icon);
+            TextView badgeView = itemView.findViewById(R.id.dock_item_badge);
+
+            if (s == null || s.isEmpty()) {
+                iconView.setImageResource(R.drawable.slot_empty_target);
+                iconView.setAlpha(0.35f);
+                if (badgeView != null) badgeView.setVisibility(View.GONE);
+            } else {
+                iconView.setAlpha(1.0f);
+                iconView.setImageBitmap(IconUtil.iconFor(this, s));
+                if (badgeView != null) {
+                    if (s.isApp()) {
+                        LockNotificationListenerService.bindBadgeView(this, badgeView, s.pkg);
+                    } else {
+                        badgeView.setVisibility(View.GONE);
+                    }
+                }
+            }
+
+            // Tactile 0ms spring compression on touch
+            itemView.setOnTouchListener((touchView, event) -> {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        PressableHelper.pressDown(touchView);
+                        break;
+                    case MotionEvent.ACTION_UP:
+                        PressableHelper.release(touchView);
+                        HapticHelper.tick(touchView);
+                        break;
+                    case MotionEvent.ACTION_CANCEL:
+                        PressableHelper.release(touchView);
+                        break;
+                }
+                return false;
+            });
+
+            itemView.setOnClickListener(v -> {
+                if (s == null || s.isEmpty()) {
+                    showAddDockAppDialog(slotIndex);
+                } else {
+                    launchOrHandleShortcutDirect(s, v);
+                }
+            });
+
+            itemView.setOnLongClickListener(v -> {
+                v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                showDockItemMenu(slotIndex);
+                return true;
+            });
+
+            dockShelf.addView(itemView);
+        }
+    }
+
+    private void launchOrHandleShortcutDirect(Shortcut s, View view) {
+        if (s == null || s.isEmpty()) return;
+        if (s.isFolder()) {
+            showFolderModal(s);
+            return;
+        }
+        if (s.isApp() && ShortcutStore.isAppLocked(this, s.pkg)) {
+            BiometricHelper.authenticate(this, "Unlock " + s.label, "Authenticate to open app", new BiometricHelper.AuthCallback() {
+                @Override
+                public void onSuccess() {
+                    performFireShortcut(s, view);
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    Toast.makeText(HomeActivity.this, "Authentication required to open " + s.label, Toast.LENGTH_SHORT).show();
+                }
+            });
+            return;
+        }
+        performFireShortcut(s, view);
+    }
+
+    private void showAddDockAppDialog(int slotIndex) {
+        pendingDockSlotIndex = slotIndex;
+        Intent pickIntent = new Intent(this, AppPickerActivity.class);
+        pickIntent.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, false);
+        startActivityForResult(pickIntent, REQUEST_PICK_APP_FOR_DOCK);
+    }
+
+    private void showDockItemMenu(int slotIndex) {
+        if (slotIndex < 0 || slotIndex >= dockShortcuts.size()) return;
+        final Shortcut s = dockShortcuts.get(slotIndex);
+        List<String> opts = new ArrayList<>();
+        List<Runnable> acts = new ArrayList<>();
+
+        if (s != null && !s.isEmpty()) {
+            opts.add("🚀 Launch " + s.label);
+            acts.add(() -> performFireShortcut(s, null));
+
+            opts.add("🔄 Replace App in Dock Slot " + (slotIndex + 1));
+            acts.add(() -> showAddDockAppDialog(slotIndex));
+
+            if (slotIndex > 0) {
+                opts.add("⬅️ Move Left (to slot " + slotIndex + ")");
+                acts.add(() -> {
+                    Shortcut moved = dockShortcuts.remove(slotIndex);
+                    dockShortcuts.add(slotIndex - 1, moved);
+                    ShortcutStore.saveHomeDock(this, dockShortcuts);
+                    loadDock();
+                    Toast.makeText(this, "Moved to dock slot " + slotIndex, Toast.LENGTH_SHORT).show();
+                });
+            }
+            if (slotIndex < dockShortcuts.size() - 1) {
+                opts.add("➡️ Move Right (to slot " + (slotIndex + 2) + ")");
+                acts.add(() -> {
+                    Shortcut moved = dockShortcuts.remove(slotIndex);
+                    dockShortcuts.add(slotIndex + 1, moved);
+                    ShortcutStore.saveHomeDock(this, dockShortcuts);
+                    loadDock();
+                    Toast.makeText(this, "Moved to dock slot " + (slotIndex + 2), Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            opts.add("✏️ Custom Display Name");
+            acts.add(() -> {
+                EditText input = new EditText(this);
+                input.setText(s.label);
+                if (s.label != null) input.setSelection(s.label.length());
+                new AlertDialog.Builder(this)
+                        .setTitle("Rename Dock App")
+                        .setView(input)
+                        .setPositiveButton("Save", (d, w) -> {
+                            String n = input.getText().toString().trim();
+                            if (!n.isEmpty()) {
+                                s.label = n;
+                                ShortcutStore.saveHomeDock(this, dockShortcuts);
+                                if (s.isApp() && s.pkg != null) {
+                                    ShortcutStore.setCustomAppLabel(this, s.pkg, s.profileSerial, n);
+                                }
+                                loadDock();
+                            }
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            });
+
+            if (s.isApp()) {
+                opts.add("ℹ️ App Info");
+                acts.add(() -> {
+                    try {
+                        Intent info = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        info.setData(Uri.parse("package:" + s.pkg));
+                        startActivity(info);
+                    } catch (Exception ignored) {}
+                });
+            }
+
+            opts.add("🗑️ Remove from Dock");
+            acts.add(() -> {
+                dockShortcuts.set(slotIndex, Shortcut.createEmpty());
+                ShortcutStore.saveHomeDock(this, dockShortcuts);
+                loadDock();
+                Toast.makeText(this, "Removed from dock", Toast.LENGTH_SHORT).show();
+            });
+        } else {
+            opts.add("➕ Pick App for Dock Slot " + (slotIndex + 1));
+            acts.add(() -> showAddDockAppDialog(slotIndex));
+        }
+
+        opts.add("⚙️ Dock Settings (Toggle Visibility, Reset Defaults)");
+        acts.add(this::showDockSettingsDialog);
+
+        new AlertDialog.Builder(this)
+                .setTitle((s != null && !s.isEmpty()) ? s.label : "Dock Slot " + (slotIndex + 1))
+                .setItems(opts.toArray(new String[0]), (d, which) -> {
+                    if (which >= 0 && which < acts.size()) acts.get(which).run();
+                })
+                .show();
+    }
+
+    private void showDockSettingsDialog() {
+        boolean curVisible = ShortcutStore.isHomeDockVisible(this);
+        String[] items = {
+                curVisible ? "Hide Bottom App Dock" : "Show Bottom App Dock",
+                "Reset Dock to Default 5 Favorite Apps",
+                "Clear All Dock Apps"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Bottom App Dock Settings")
+                .setItems(items, (d, w) -> {
+                    if (w == 0) {
+                        ShortcutStore.setHomeDockVisible(this, !curVisible);
+                        loadDock();
+                        Toast.makeText(this, !curVisible ? "Dock enabled" : "Dock hidden", Toast.LENGTH_SHORT).show();
+                    } else if (w == 1) {
+                        getSharedPreferences("dock", MODE_PRIVATE).edit().remove("home_app_dock_shortcuts").apply();
+                        loadDock();
+                        Toast.makeText(this, "Dock reset to default apps", Toast.LENGTH_SHORT).show();
+                    } else if (w == 2) {
+                        List<Shortcut> empties = new ArrayList<>();
+                        for (int i = 0; i < ShortcutStore.HOME_DOCK_MAX; i++) empties.add(Shortcut.createEmpty());
+                        ShortcutStore.saveHomeDock(this, empties);
+                        loadDock();
+                        Toast.makeText(this, "Dock cleared", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
     }
 }

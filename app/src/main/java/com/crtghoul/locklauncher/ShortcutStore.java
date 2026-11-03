@@ -1,7 +1,12 @@
 package com.crtghoul.locklauncher;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.net.Uri;
+import android.provider.MediaStore;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -605,6 +610,18 @@ public class ShortcutStore {
                 saveIsland(ctx, island);
             }
         }
+
+        List<Shortcut> dock = loadHomeDock(ctx);
+        boolean dockChanged = false;
+        for (Shortcut s : dock) {
+            if (s.isApp() && pkg.equals(s.pkg) && s.profileSerial == profileSerial) {
+                s.label = trimmed;
+                dockChanged = true;
+            }
+        }
+        if (dockChanged) {
+            saveHomeDock(ctx, dock);
+        }
     }
 
     // --- App Launch Tracking & Recent Apps ---
@@ -687,5 +704,109 @@ public class ShortcutStore {
 
     private static SharedPreferences prefs(Context ctx) {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    // --- Persistent Bottom App Dock ---
+    public static final int HOME_DOCK_MAX = 5;
+    private static final String KEY_HOME_DOCK_SHORTCUTS = "home_app_dock_shortcuts";
+    private static final String KEY_HOME_DOCK_VISIBLE = "home_app_dock_visible";
+
+    public static boolean isHomeDockVisible(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_HOME_DOCK_VISIBLE, true);
+    }
+
+    public static void setHomeDockVisible(Context ctx, boolean visible) {
+        prefs(ctx).edit().putBoolean(KEY_HOME_DOCK_VISIBLE, visible).apply();
+    }
+
+    private static Shortcut resolveDefaultAppShortcut(Context ctx, Intent intent, String fallbackLabel) {
+        if (ctx == null || intent == null) return null;
+        try {
+            PackageManager pm = ctx.getPackageManager();
+            ResolveInfo ri = pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            if (ri == null || ri.activityInfo == null) {
+                List<ResolveInfo> list = pm.queryIntentActivities(intent, 0);
+                if (list != null && !list.isEmpty()) {
+                    ri = list.get(0);
+                }
+            }
+            if (ri != null && ri.activityInfo != null) {
+                String pkg = ri.activityInfo.packageName;
+                if (!ctx.getPackageName().equals(pkg) && !"android".equals(pkg)) {
+                    String label = ri.loadLabel(pm).toString();
+                    return new Shortcut(Shortcut.TYPE_APP, pkg, "", (label != null && !label.isEmpty()) ? label : fallbackLabel, 0L);
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    public static List<Shortcut> loadHomeDock(Context ctx) {
+        List<Shortcut> out = new ArrayList<>();
+        SharedPreferences p = prefs(ctx);
+        String raw = p.getString(KEY_HOME_DOCK_SHORTCUTS, null);
+        if (raw == null) {
+            // First run: smart auto-discovery of top 5 default favorites
+            Shortcut dialer = resolveDefaultAppShortcut(ctx, new Intent(Intent.ACTION_DIAL), "Phone");
+            Shortcut sms = resolveDefaultAppShortcut(ctx, new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:")), "Messages");
+            Shortcut browser = resolveDefaultAppShortcut(ctx, new Intent(Intent.ACTION_VIEW, Uri.parse("https://google.com")), "Browser");
+            Shortcut camera = resolveDefaultAppShortcut(ctx, new Intent(MediaStore.ACTION_IMAGE_CAPTURE), "Camera");
+
+            Shortcut musicOrMedia = null;
+            String[] commonPkgs = {
+                    "com.google.android.apps.youtube.music",
+                    "com.spotify.music",
+                    "com.google.android.youtube",
+                    "com.android.chrome",
+                    "com.google.android.apps.photos"
+            };
+            PackageManager pm = ctx.getPackageManager();
+            for (String pkg : commonPkgs) {
+                try {
+                    Intent launch = pm.getLaunchIntentForPackage(pkg);
+                    if (launch != null) {
+                        String label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+                        musicOrMedia = new Shortcut(Shortcut.TYPE_APP, pkg, "", label, 0L);
+                        break;
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            if (dialer != null) out.add(dialer);
+            if (sms != null) out.add(sms);
+            if (browser != null) out.add(browser);
+            if (camera != null) out.add(camera);
+            if (musicOrMedia != null) out.add(musicOrMedia);
+
+            while (out.size() < HOME_DOCK_MAX) {
+                out.add(Shortcut.createEmpty());
+            }
+            saveHomeDock(ctx, out);
+            return out;
+        }
+
+        try {
+            JSONArray a = new JSONArray(raw);
+            for (int i = 0; i < a.length() && i < HOME_DOCK_MAX; i++) {
+                out.add(Shortcut.fromJson(a.getJSONObject(i)));
+            }
+        } catch (JSONException ignored) {}
+
+        while (out.size() < HOME_DOCK_MAX) {
+            out.add(Shortcut.createEmpty());
+        }
+        return out;
+    }
+
+    public static void saveHomeDock(Context ctx, List<Shortcut> list) {
+        if (list == null) return;
+        JSONArray a = new JSONArray();
+        for (int i = 0; i < list.size() && i < HOME_DOCK_MAX; i++) {
+            Shortcut s = list.get(i);
+            try {
+                a.put(s != null ? s.toJson() : Shortcut.createEmpty().toJson());
+            } catch (JSONException ignored) {}
+        }
+        prefs(ctx).edit().putString(KEY_HOME_DOCK_SHORTCUTS, a.toString()).apply();
     }
 }

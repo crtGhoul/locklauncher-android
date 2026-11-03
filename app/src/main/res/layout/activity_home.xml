@@ -348,7 +348,21 @@
         android:orientation="vertical"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:paddingBottom="24dp">
+        android:paddingBottom="20dp"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+        <!-- Persistent Bottom App Dock (5 Favorite Apps Shelf) -->
+        <LinearLayout
+            android:id="@+id/home_dock_shelf"
+            android:layout_width="match_parent"
+            android:layout_height="62dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="8dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:visibility="visible" />
 
         <!-- Search Bar: Tap to open Searchable App Drawer -->
         <LinearLayout
