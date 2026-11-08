@@ -30,6 +30,7 @@ jobs:
 
       - name: Use preinstalled Android SDK
         run: |
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "ANDROID_HOME=$ANDROID_HOME"
           sdkmanager --version
 
