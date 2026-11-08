@@ -26,6 +26,7 @@ import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.DateUtils;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
@@ -87,6 +88,9 @@ public class AppPickerActivity extends Activity {
     private Button btnGoogle, btnYoutube, btnPlay, btnWeb;
     private Button chipAll, chipRecent, chipNotifications, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault;
     private String currentCategory = "all";
+    private GestureDetector drawerGestureDetector;
+    private boolean isDrawerMode = false;
+    private boolean launchingAppWithReveal = false;
 
     // Powerhouse Calculator & Quick Settings
     private View cardCalculator, cardQuickSetting;
@@ -124,7 +128,25 @@ public class AppPickerActivity extends Activity {
 
         SharedPreferences prefs = getSharedPreferences("drawer_prefs", MODE_PRIVATE);
         Set<String> hidden = prefs.getStringSet("hidden_apps", new HashSet<>());
-        boolean isDrawerMode = getIntent().getBooleanExtra(EXTRA_DRAWER_MODE, false);
+        isDrawerMode = getIntent().getBooleanExtra(EXTRA_DRAWER_MODE, false);
+        if (isDrawerMode) {
+            drawerGestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                    if (e1 == null || e2 == null) return false;
+                    float diffY = e2.getY() - e1.getY();
+                    float diffX = e2.getX() - e1.getX();
+                    if (diffY > 140 && Math.abs(diffY) > Math.abs(diffX) * 1.3f && velocityY > 150) {
+                        ListView lv = findViewById(R.id.app_list);
+                        if (lv == null || lv.getChildCount() == 0 || (lv.getFirstVisiblePosition() == 0 && lv.getChildAt(0) != null && lv.getChildAt(0).getTop() >= 0)) {
+                            finish();
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            });
+        }
 
         // 1. Query all apps across all user profiles (including OxygenOS cloned apps)
         LauncherApps launcherApps = (LauncherApps) getSystemService(Context.LAUNCHER_APPS_SERVICE);
@@ -950,6 +972,29 @@ public class AppPickerActivity extends Activity {
     class AppAdapter extends BaseAdapter {
         private List<AppEntry> shown = new ArrayList<>(all);
         String filterQuery = "";
+        private boolean cachedMinimal;
+        private boolean cachedGlass;
+        private boolean cachedMonochrome;
+        private boolean cachedWallpaperBlend;
+        private String cachedIconPack = "";
+
+        AppAdapter() {
+            refreshThemeCache();
+        }
+
+        void refreshThemeCache() {
+            cachedMinimal = ShortcutStore.isMinimalIcons(AppPickerActivity.this);
+            cachedGlass = ShortcutStore.isGlassIconBackgrounds(AppPickerActivity.this);
+            cachedMonochrome = ShortcutStore.isMonochromeIcons(AppPickerActivity.this);
+            cachedWallpaperBlend = ShortcutStore.isWallpaperBlendIcons(AppPickerActivity.this);
+            cachedIconPack = IconPackManager.getActiveIconPack(AppPickerActivity.this);
+        }
+
+        @Override
+        public void notifyDataSetChanged() {
+            refreshThemeCache();
+            super.notifyDataSetChanged();
+        }
 
         void applyFilter() {
             List<AppEntry> filtered = new ArrayList<>();

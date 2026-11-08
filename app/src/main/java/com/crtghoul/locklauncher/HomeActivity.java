@@ -115,6 +115,19 @@ public class HomeActivity extends Activity {
         }
         widgetsContainer = findViewById(R.id.home_widgets_container);
         dockShelf = findViewById(R.id.home_dock_shelf);
+        // Pre-warm dock & shortcuts LRU cache on background thread for 0-jank initial rendering
+        android.os.AsyncTask.THREAD_POOL_EXECUTOR.execute(() -> {
+            try {
+                List<Shortcut> dockW = ShortcutStore.loadHomeDock(HomeActivity.this);
+                for (Shortcut s : dockW) {
+                    if (s != null && !s.isEmpty()) IconUtil.iconFor(HomeActivity.this, s);
+                }
+                List<Shortcut> gridW = ShortcutStore.load(HomeActivity.this);
+                for (Shortcut s : gridW) {
+                    if (s != null && !s.isEmpty()) IconUtil.iconFor(HomeActivity.this, s);
+                }
+            } catch (Exception ignored) {}
+        });
         loadDock();
         clockView = findViewById(R.id.home_clock);
         dateBatteryView = findViewById(R.id.home_date_battery);
@@ -1265,7 +1278,7 @@ public class HomeActivity extends Activity {
         grid.setOnItemClickListener((parent, view, pos, id) -> {
             Shortcut child = items.get(pos);
             dialog.dismiss();
-            if (!IconUtil.fireShortcut(HomeActivity.this, child)) {
+            if (!IconUtil.fireShortcut(HomeActivity.this, child, view)) {
                 Toast.makeText(HomeActivity.this, IconUtil.launchFailureReason(HomeActivity.this, child), Toast.LENGTH_SHORT).show();
             }
         });
@@ -2498,6 +2511,8 @@ public class HomeActivity extends Activity {
     }
 
     // ---- Persistent Bottom App Dock ----
+    private List<Shortcut> lastLoadedDockShortcuts = null;
+
     private void loadDock() {
         if (dockShelf == null) return;
         boolean isVisible = ShortcutStore.isHomeDockVisible(this);
@@ -2505,6 +2520,54 @@ public class HomeActivity extends Activity {
         if (!isVisible) return;
 
         dockShortcuts = ShortcutStore.loadHomeDock(this);
+        int targetCount = Math.min(dockShortcuts.size(), ShortcutStore.HOME_DOCK_MAX);
+
+        boolean structureMatches = (lastLoadedDockShortcuts != null 
+                && lastLoadedDockShortcuts.size() == dockShortcuts.size()
+                && dockShelf.getChildCount() == targetCount);
+        if (structureMatches) {
+            for (int i = 0; i < targetCount; i++) {
+                Shortcut s1 = lastLoadedDockShortcuts.get(i);
+                Shortcut s2 = dockShortcuts.get(i);
+                if (s1 == null || s2 == null || !s1.equals(s2)) {
+                    structureMatches = false;
+                    break;
+                }
+            }
+        }
+
+        if (structureMatches) {
+            // High-efficiency in-place update: zero XML inflation overhead
+            for (int i = 0; i < targetCount; i++) {
+                Shortcut s = dockShortcuts.get(i);
+                View itemView = dockShelf.getChildAt(i);
+                if (itemView == null) continue;
+                ImageView iconView = itemView.findViewById(R.id.dock_item_icon);
+                TextView badgeView = itemView.findViewById(R.id.dock_item_badge);
+                if (s == null || s.isEmpty()) {
+                    if (iconView != null) {
+                        iconView.setImageResource(R.drawable.slot_empty_target);
+                        iconView.setAlpha(0.35f);
+                    }
+                    if (badgeView != null) badgeView.setVisibility(View.GONE);
+                } else {
+                    if (iconView != null) {
+                        iconView.setAlpha(1.0f);
+                        iconView.setImageBitmap(IconUtil.iconFor(this, s));
+                    }
+                    if (badgeView != null) {
+                        if (s.isApp()) {
+                            LockNotificationListenerService.bindBadgeView(this, badgeView, s.pkg);
+                        } else {
+                            badgeView.setVisibility(View.GONE);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        lastLoadedDockShortcuts = new ArrayList<>(dockShortcuts);
         dockShelf.removeAllViews();
         LayoutInflater inflater = LayoutInflater.from(this);
 

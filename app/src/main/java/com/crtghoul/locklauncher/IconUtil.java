@@ -943,6 +943,14 @@ public class IconUtil {
                         km.requestDismissKeyguard((Activity) ctx, null);
                     } catch (Exception ignored) {}
                 }
+                Bundle opts = null;
+                if (sourceView != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
+                        int w = Math.max(sourceView.getWidth(), 48);
+                        int h = Math.max(sourceView.getHeight(), 48);
+                        opts = ActivityOptions.makeClipRevealAnimation(sourceView, 0, 0, w, h).toBundle();
+                    } catch (Exception ignored) {}
+                }
                 // Cloned / Work profile apps (profileSerial > 0) MUST launch via LauncherApps
                 // on their target UserHandle first; PackageManager.getLaunchIntentForPackage
                 // always resolves to User 0 (the main instance).
@@ -955,7 +963,7 @@ public class IconUtil {
                             if (uh != null) {
                                 List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
                                 if (acts != null && !acts.isEmpty()) {
-                                    la.startMainActivity(acts.get(0).getComponentName(), uh, null, null);
+                                    la.startMainActivity(acts.get(0).getComponentName(), uh, null, opts);
                                     return true;
                                 }
                             }
@@ -969,7 +977,11 @@ public class IconUtil {
                 if (launch != null) {
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
                     try {
-                        ctx.startActivity(launch);
+                        if (opts != null) {
+                            ctx.startActivity(launch, opts);
+                        } else {
+                            ctx.startActivity(launch);
+                        }
                         return true;
                     } catch (Exception e) {
                         try {
@@ -990,7 +1002,7 @@ public class IconUtil {
                         if (uh != null) {
                             List<LauncherActivityInfo> acts = la.getActivityList(s.pkg, uh);
                             if (acts != null && !acts.isEmpty()) {
-                                la.startMainActivity(acts.get(0).getComponentName(), uh, null, null);
+                                la.startMainActivity(acts.get(0).getComponentName(), uh, null, opts);
                                 return true;
                             }
                         }

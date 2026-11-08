@@ -169,4 +169,31 @@ public class Shortcut {
             default: return "app";
         }
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Shortcut shortcut = (Shortcut) o;
+        if (iconColor != shortcut.iconColor) return false;
+        if (profileSerial != shortcut.profileSerial) return false;
+        if (type != null ? !type.equals(shortcut.type) : shortcut.type != null) return false;
+        if (pkg != null ? !pkg.equals(shortcut.pkg) : shortcut.pkg != null) return false;
+        if (url != null ? !url.equals(shortcut.url) : shortcut.url != null) return false;
+        if (data != null ? !data.equals(shortcut.data) : shortcut.data != null) return false;
+        if (label != null ? !label.equals(shortcut.label) : shortcut.label != null) return false;
+        if (iconMode != null ? !iconMode.equals(shortcut.iconMode) : shortcut.iconMode != null) return false;
+        return iconEmoji != null ? iconEmoji.equals(shortcut.iconEmoji) : shortcut.iconEmoji == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = type != null ? type.hashCode() : 0;
+        result = 31 * result + (pkg != null ? pkg.hashCode() : 0);
+        result = 31 * result + (url != null ? url.hashCode() : 0);
+        result = 31 * result + (data != null ? data.hashCode() : 0);
+        result = 31 * result + (label != null ? label.hashCode() : 0);
+        result = 31 * result + (int) (profileSerial ^ (profileSerial >>> 32));
+        return result;
+    }
 }
