@@ -1230,6 +1230,27 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:text="Swipe Up for App Drawer"
+                        android:textColor="@color/text"
+                        android:textSize="15sp" />
+
+                    <Switch
+                        android:id="@+id/switch_swipe_up_drawer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
                         android:text="Double-Tap Wallpaper to Lock Screen"
                         android:textColor="@color/text"
                         android:textSize="15sp" />

@@ -249,6 +249,14 @@ public class MainActivity extends Activity {
             });
         }
 
+        Switch swipeUpDrawerSwitch = findViewById(R.id.switch_swipe_up_drawer);
+        if (swipeUpDrawerSwitch != null) {
+            swipeUpDrawerSwitch.setChecked(ShortcutStore.isSwipeUpDrawer(this));
+            swipeUpDrawerSwitch.setOnCheckedChangeListener((v, on) -> {
+                ShortcutStore.setSwipeUpDrawer(this, on);
+            });
+        }
+
         Switch doubleTapLockSwitch = findViewById(R.id.switch_double_tap_lock);
         if (doubleTapLockSwitch != null) {
             doubleTapLockSwitch.setChecked(ShortcutStore.isDoubleTapLock(this));

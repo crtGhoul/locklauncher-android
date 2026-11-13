@@ -31,6 +31,8 @@
             android:orientation="horizontal">
 
             <Button android:id="@+id/chip_all" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_accent" android:text="All Apps" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_most_used" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="Most Used" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
+            <Button android:id="@+id/chip_new" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="Newly Downloaded" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
             <Button android:id="@+id/chip_recent" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="Recent" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
             <Button android:id="@+id/chip_notifications" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="Notifications" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
             <Button android:id="@+id/chip_clones" android:layout_width="wrap_content" android:layout_height="32dp" android:background="@drawable/btn_ghost" android:text="Cloned Apps" android:textSize="11sp" android:textColor="#FFFFFF" android:paddingStart="12dp" android:paddingEnd="12dp" android:layout_marginEnd="5dp" />
@@ -43,26 +45,96 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <!-- Recent / Frequently Used Apps Strip -->
+    <!-- Most Used Apps Strip -->
+    <LinearLayout
+        android:id="@+id/most_used_apps_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/most_used_apps_header"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⭐ MOST USED"
+            android:textSize="11sp"
+            android:textColor="#9EFFFFFF"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="4dp"
+            android:paddingBottom="4dp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:id="@+id/most_used_apps_list"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <!-- Newly Downloaded Apps Strip -->
+    <LinearLayout
+        android:id="@+id/new_apps_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/new_apps_header"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✨ NEWLY DOWNLOADED"
+            android:textSize="11sp"
+            android:textColor="#9EFFFFFF"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="4dp"
+            android:paddingBottom="4dp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:id="@+id/new_apps_list"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <!-- Recently Opened Apps Strip -->
     <LinearLayout
         android:id="@+id/recent_apps_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
         android:visibility="gone">
 
         <TextView
             android:id="@+id/recent_apps_header"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="RECENTLY OPENED"
+            android:text="🕒 RECENTLY OPENED"
             android:textSize="11sp"
             android:textColor="#9EFFFFFF"
             android:fontFamily="sans-serif-medium"
             android:paddingStart="4dp"
-            android:paddingBottom="6dp" />
+            android:paddingBottom="4dp" />
 
         <HorizontalScrollView
             android:layout_width="match_parent"

@@ -36,6 +36,7 @@ public class ShortcutStore {
     private static final String KEY_HOME_HIDE_LABELS = "home_hide_labels";
     private static final String KEY_HOME_WIDGETS = "home_widgets_p";
     private static final String KEY_DOUBLE_TAP_LOCK = "home_double_tap_lock";
+    private static final String KEY_SWIPE_UP_DRAWER = "swipe_up_drawer";
     private static final String KEY_MONOCHROME_ICONS = "home_monochrome_icons";
     private static final String KEY_SEARCH_CALCULATOR = "search_calculator";
     private static final String KEY_WIDGET_HEIGHT = "widget_h_";
@@ -298,6 +299,14 @@ public class ShortcutStore {
 
     public static void setDoubleTapLock(Context ctx, boolean enabled) {
         prefs(ctx).edit().putBoolean(KEY_DOUBLE_TAP_LOCK, enabled).apply();
+    }
+
+    public static boolean isSwipeUpDrawer(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_SWIPE_UP_DRAWER, false);
+    }
+
+    public static void setSwipeUpDrawer(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean(KEY_SWIPE_UP_DRAWER, enabled).apply();
     }
 
     public static boolean isMonochromeIcons(Context ctx) {

@@ -272,12 +272,15 @@ public class HomeActivity extends Activity {
                                 toggleCleanModeApps();
                                 return true;
                             }
-                            // Swipe up -> Open searchable app drawer
-                            Intent drawer = new Intent(HomeActivity.this, AppPickerActivity.class);
-                            drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
-                            startActivity(drawer);
-                            overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
-                            return true;
+                            if (ShortcutStore.isSwipeUpDrawer(HomeActivity.this)) {
+                                // Swipe up -> Open searchable app drawer (disabled by default)
+                                Intent drawer = new Intent(HomeActivity.this, AppPickerActivity.class);
+                                drawer.putExtra(AppPickerActivity.EXTRA_DRAWER_MODE, true);
+                                startActivity(drawer);
+                                overridePendingTransition(R.anim.drawer_slide_up, R.anim.launcher_fade_out);
+                                return true;
+                            }
+                            return false;
                         } else {
                             boolean isTopLeftSwipe = e1.getX() < (getResources().getDisplayMetrics().widthPixels * 0.55f);
                             if (ShortcutStore.isHomeCleanMode(HomeActivity.this) && appsRevealedInCleanMode && !isTopLeftSwipe) {
@@ -379,6 +382,9 @@ public class HomeActivity extends Activity {
         performFireShortcut(s, view);
     }
     private void performFireShortcut(Shortcut s, View view) {
+        if (s != null && s.isApp() && s.pkg != null && !s.pkg.isEmpty()) {
+            ShortcutStore.recordAppLaunch(this, s.pkg);
+        }
         boolean ok = IconUtil.fireShortcut(this, s, view);
         if (!ok) {
             Toast.makeText(this, IconUtil.launchFailureReason(this, s), Toast.LENGTH_SHORT).show();

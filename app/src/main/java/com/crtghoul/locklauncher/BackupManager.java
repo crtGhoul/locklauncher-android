@@ -134,6 +134,7 @@ public class BackupManager {
             settings.put("home_grid_columns", ShortcutStore.homeGridColumns(ctx));
             settings.put("home_hide_labels", ShortcutStore.isHomeHideLabels(ctx));
             settings.put("home_double_tap_lock", ShortcutStore.isDoubleTapLock(ctx));
+            settings.put("swipe_up_drawer", ShortcutStore.isSwipeUpDrawer(ctx));
             settings.put("home_monochrome_icons", ShortcutStore.isMonochromeIcons(ctx));
             settings.put("search_calculator", ShortcutStore.isSearchCalculator(ctx));
 
@@ -253,6 +254,9 @@ public class BackupManager {
                 }
                 if (settings.has("home_double_tap_lock")) {
                     ShortcutStore.setDoubleTapLock(ctx, settings.optBoolean("home_double_tap_lock", false));
+                }
+                if (settings.has("swipe_up_drawer")) {
+                    ShortcutStore.setSwipeUpDrawer(ctx, settings.optBoolean("swipe_up_drawer", false));
                 }
                 if (settings.has("home_monochrome_icons")) {
                     ShortcutStore.setMonochromeIcons(ctx, settings.optBoolean("home_monochrome_icons", false));

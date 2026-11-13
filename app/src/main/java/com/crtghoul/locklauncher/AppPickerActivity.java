@@ -86,7 +86,7 @@ public class AppPickerActivity extends Activity {
     private Button addButton;
     private View scrollSearchActions;
     private Button btnGoogle, btnYoutube, btnPlay, btnWeb;
-    private Button chipAll, chipRecent, chipNotifications, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault;
+    private Button chipAll, chipMostUsed, chipNew, chipRecent, chipNotifications, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault;
     private String currentCategory = "all";
     private GestureDetector drawerGestureDetector;
     private boolean isDrawerMode = false;
@@ -252,6 +252,8 @@ public class AppPickerActivity extends Activity {
         btnWeb = findViewById(R.id.btn_search_web);
 
         chipAll = findViewById(R.id.chip_all);
+        chipMostUsed = findViewById(R.id.chip_most_used);
+        chipNew = findViewById(R.id.chip_new);
         chipRecent = findViewById(R.id.chip_recent);
         chipNotifications = findViewById(R.id.chip_notifications);
         chipClones = findViewById(R.id.chip_clones);
@@ -312,6 +314,8 @@ public class AppPickerActivity extends Activity {
 
         View.OnClickListener chipListener = v -> {
             if (v == chipAll) currentCategory = "all";
+            else if (v == chipMostUsed) currentCategory = "most_used";
+            else if (v == chipNew) currentCategory = "new_downloaded";
             else if (v == chipRecent) currentCategory = "recent";
             else if (v == chipNotifications) {
                 if (!LockNotificationListenerService.isPermissionGranted(this)) {
@@ -330,10 +334,13 @@ public class AppPickerActivity extends Activity {
             else if (v == chipSystem) currentCategory = "system";
 
             updateCategoryChipStyles();
+            updateStripsVisibility(adapter != null ? adapter.filterQuery : "");
             adapter.applyFilter();
         };
 
         if (chipAll != null) chipAll.setOnClickListener(chipListener);
+        if (chipMostUsed != null) chipMostUsed.setOnClickListener(chipListener);
+        if (chipNew != null) chipNew.setOnClickListener(chipListener);
         if (chipRecent != null) chipRecent.setOnClickListener(chipListener);
         if (chipNotifications != null) chipNotifications.setOnClickListener(chipListener);
         if (chipClones != null) chipClones.setOnClickListener(chipListener);
@@ -377,150 +384,7 @@ public class AppPickerActivity extends Activity {
             });
             list.setOnItemLongClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
-                boolean isLocked = ShortcutStore.isAppLocked(this, e.pkg);
-                boolean inVault = "vault".equals(currentCategory);
-                String[] opts = {
-                        "🚀 Launch app",
-                        "📌 Pin to Home screen (Main Page)",
-                        "📁 Add to Folder...",
-                        "➕ Add to Lock Launcher Dock",
-                        "🏝️ Add to Dynamic Island",
-                        isLocked ? "🔓 Remove Fingerprint Lock" : "🔒 Lock with Fingerprint",
-                        "✏️ Custom Display Name",
-                        "ℹ️ App Info",
-                        inVault ? "👁️ Unhide from Drawer" : "🚫 Hide from Drawer",
-                        "🗑️ Uninstall"
-                };
-                new AlertDialog.Builder(this)
-                        .setTitle(e.label)
-                        .setItems(opts, (d, which) -> {
-                            switch (which) {
-                                case 0:
-                                    launchApp(e, launcherApps, view);
-                                    break;
-                                case 1:
-                                    // Pin directly to active profile with full clone support
-                                    int p = ShortcutStore.activeProfile(this);
-                                    List<Shortcut> current = ShortcutStore.load(this, p);
-                                    Shortcut newHomeSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
-                                    if (!ShortcutStore.addOrPlaceShortcut(current, newHomeSc)) {
-                                        Toast.makeText(this, "Home screen is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
-                                    } else {
-                                        ShortcutStore.save(this, p, current);
-                                        BaseDockWidget.refreshAll(this);
-                                        DockService.refresh(this);
-                                        Toast.makeText(this, "Pinned " + e.label + " to Home screen", Toast.LENGTH_SHORT).show();
-                                    }
-                                    break;
-                                case 2:
-                                    showAddToFolderDialog(e);
-                                    break;
-                                case 3:
-                                    int curP = ShortcutStore.activeProfile(this);
-                                    List<Shortcut> dockList = ShortcutStore.load(this, curP);
-                                    Shortcut newDockSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
-                                    if (!ShortcutStore.addOrPlaceShortcut(dockList, newDockSc)) {
-                                        Toast.makeText(this, "Dock is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
-                                    } else {
-                                        ShortcutStore.save(this, curP, dockList);
-                                        BaseDockWidget.refreshAll(this);
-                                        DockService.refresh(this);
-                                        Toast.makeText(this, "Added to Lock Launcher", Toast.LENGTH_SHORT).show();
-                                    }
-                                    break;
-                                case 4:
-                                    List<Shortcut> islandList = ShortcutStore.loadIsland(this);
-                                    Shortcut newIslSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
-                                    if (!ShortcutStore.addOrPlaceShortcut(islandList, newIslSc)) {
-                                        Toast.makeText(this, "Dynamic Island is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
-                                    } else {
-                                        ShortcutStore.saveIsland(this, islandList);
-                                        IslandService.refresh(this);
-                                        Toast.makeText(this, "Added " + e.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
-                                    }
-                                    break;
-                                case 5:
-                                    ShortcutStore.setAppLocked(this, e.pkg, !isLocked);
-                                    adapter.notifyDataSetChanged();
-                                    Toast.makeText(this, (!isLocked ? "Locked " : "Unlocked ") + e.label, Toast.LENGTH_SHORT).show();
-                                    break;
-                                case 6:
-                                    EditText input = new EditText(this);
-                                    input.setText(e.label);
-                                    if (e.label != null) input.setSelection(e.label.length());
-                                    new AlertDialog.Builder(this)
-                                            .setTitle("Custom Display Name")
-                                            .setMessage("Rename app in drawer, search, and shortcuts:")
-                                            .setView(input)
-                                            .setPositiveButton("Save", (cd, cw) -> {
-                                                String n = input.getText().toString().trim();
-                                                if (!n.isEmpty()) {
-                                                    e.label = n;
-                                                    ShortcutStore.setCustomAppLabel(AppPickerActivity.this, e.pkg, e.profileSerial, n);
-                                                    Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
-                                                    rebuildSearchIndex();
-                                                    BaseDockWidget.refreshAll(AppPickerActivity.this);
-                                                    DockService.refresh(AppPickerActivity.this);
-                                                    IslandService.refresh(AppPickerActivity.this);
-
-                                                    adapter.applyFilter();
-                                                    Toast.makeText(this, "Renamed to " + n, Toast.LENGTH_SHORT).show();
-                                                }
-                                            })
-                                            .setNeutralButton("Reset Default", (cd, cw) -> {
-                                                String defLbl = e.isClone ? (e.rawLabel + " (Clone)") : e.rawLabel;
-                                                if (defLbl != null && !defLbl.isEmpty()) {
-                                                    e.label = defLbl;
-                                                    String key = getCustomLabelKey(e.pkg, e.profileSerial);
-                                                    prefs.edit().remove(key).apply();
-                                                    getSharedPreferences("dock", MODE_PRIVATE).edit().remove(key).apply();
-                                                    ShortcutStore.setCustomAppLabel(AppPickerActivity.this, e.pkg, e.profileSerial, defLbl);
-                                                    prefs.edit().remove(key).apply();
-                                                    getSharedPreferences("dock", MODE_PRIVATE).edit().remove(key).apply();
-                                                    Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
-                                                    rebuildSearchIndex();
-                                                    adapter.applyFilter();
-                                                    Toast.makeText(this, "Reset to " + defLbl, Toast.LENGTH_SHORT).show();
-                                                }
-                                            })
-                                            .setNegativeButton("Cancel", null)
-                                            .show();
-                                    break;
-                                case 7:
-                                    Intent info = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                                    info.setData(Uri.parse("package:" + e.pkg));
-                                    startActivity(info);
-                                    break;
-                                case 8:
-                                    Set<String> curHidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
-                                    if (inVault) {
-                                        curHidden.remove(e.pkg);
-                                        prefs.edit().putStringSet("hidden_apps", curHidden).apply();
-                                        hiddenList.remove(e);
-                                        all.add(e);
-                                        Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
-                                        adapter.applyFilter();
-                                        if (chipVault != null) chipVault.setText("🔒 Vault (" + hiddenList.size() + ")");
-                                        Toast.makeText(this, "Unhid " + e.label, Toast.LENGTH_SHORT).show();
-                                    } else {
-                                        curHidden.add(e.pkg);
-                                        prefs.edit().putStringSet("hidden_apps", curHidden).apply();
-                                        all.remove(e);
-                                        hiddenList.add(e);
-                                        Collections.sort(hiddenList, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
-                                        adapter.applyFilter();
-                                        if (chipVault != null) chipVault.setText("🔒 Vault (" + hiddenList.size() + ")");
-                                        Toast.makeText(this, e.label + " hidden from drawer", Toast.LENGTH_SHORT).show();
-                                    }
-                                    break;
-                                case 9:
-                                    Intent uninst = new Intent(Intent.ACTION_DELETE);
-                                    uninst.setData(Uri.parse("package:" + e.pkg));
-                                    startActivity(uninst);
-                                    break;
-                            }
-                        })
-                        .show();
+                showAppOptionsDialog(e, launcherApps, view);
                 return true;
             });
         } else {
@@ -576,7 +440,7 @@ public class AppPickerActivity extends Activity {
             root.setBackgroundColor(tc.subtleGlassTint);
         }
         if (isDrawerMode) {
-            setupRecentAppsStrip();
+            setupAppStrips();
         }
         updateCategoryChipStyles();
 
@@ -586,11 +450,7 @@ public class AppPickerActivity extends Activity {
                 String query = s == null ? "" : s.toString().trim();
                 adapter.filterQuery = query;
                 adapter.applyFilter();
-
-                View recentContainer = findViewById(R.id.recent_apps_container);
-                if (recentContainer != null) {
-                    recentContainer.setVisibility(query.isEmpty() && isDrawerMode ? View.VISIBLE : View.GONE);
-                }
+                updateStripsVisibility(query);
 
                 // 1. Live Math Calculation
                 if (ShortcutStore.isSearchCalculator(AppPickerActivity.this)) {
@@ -683,8 +543,101 @@ public class AppPickerActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (getIntent().getBooleanExtra(EXTRA_DRAWER_MODE, false)) {
-            setupRecentAppsStrip();
+            setupAppStrips();
         }
+    }
+
+    private void updateStripsVisibility(String query) {
+        boolean show = (query == null || query.isEmpty())
+                && getIntent().getBooleanExtra(EXTRA_DRAWER_MODE, false)
+                && "all".equals(currentCategory);
+
+        View mostUsed = findViewById(R.id.most_used_apps_container);
+        View newApps = findViewById(R.id.new_apps_container);
+        View recent = findViewById(R.id.recent_apps_container);
+
+        if (mostUsed != null) {
+            LinearLayout l = findViewById(R.id.most_used_apps_list);
+            mostUsed.setVisibility(show && l != null && l.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        }
+        if (newApps != null) {
+            LinearLayout l = findViewById(R.id.new_apps_list);
+            newApps.setVisibility(show && l != null && l.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        }
+        if (recent != null) {
+            LinearLayout l = findViewById(R.id.recent_apps_list);
+            recent.setVisibility(show && l != null && l.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void setupAppStrips() {
+        if (!getIntent().getBooleanExtra(EXTRA_DRAWER_MODE, false)) return;
+        setupMostUsedAppsStrip();
+        setupNewlyDownloadedAppsStrip();
+        setupRecentAppsStrip();
+        updateStripsVisibility(adapter != null ? adapter.filterQuery : "");
+    }
+
+    private void setupMostUsedAppsStrip() {
+        View container = findViewById(R.id.most_used_apps_container);
+        LinearLayout list = findViewById(R.id.most_used_apps_list);
+        if (container == null || list == null) return;
+        list.removeAllViews();
+
+        List<AppEntry> mostUsed = new ArrayList<>(all);
+        Collections.sort(mostUsed, (a, b) -> {
+            int ca = ShortcutStore.getAppLaunchCount(AppPickerActivity.this, a.pkg);
+            int cb = ShortcutStore.getAppLaunchCount(AppPickerActivity.this, b.pkg);
+            if (cb != ca) return Integer.compare(cb, ca);
+            return Long.compare(b.installTime, a.installTime);
+        });
+
+        List<AppEntry> entries = new ArrayList<>();
+        for (AppEntry ae : mostUsed) {
+            if (ShortcutStore.getAppLaunchCount(this, ae.pkg) > 0) {
+                entries.add(ae);
+                if (entries.size() >= 8) break;
+            }
+        }
+
+        if (entries.isEmpty()) {
+            container.setVisibility(View.GONE);
+            return;
+        }
+
+        container.setVisibility(View.VISIBLE);
+        populateAppStrip(list, entries);
+    }
+
+    private void setupNewlyDownloadedAppsStrip() {
+        View container = findViewById(R.id.new_apps_container);
+        LinearLayout list = findViewById(R.id.new_apps_list);
+        if (container == null || list == null) return;
+        list.removeAllViews();
+
+        List<AppEntry> candidates = new ArrayList<>(all);
+        Collections.sort(candidates, (a, b) -> {
+            if (a.isSystem != b.isSystem) {
+                return a.isSystem ? 1 : -1;
+            }
+            return Long.compare(b.installTime, a.installTime);
+        });
+
+        List<AppEntry> entries = new ArrayList<>();
+        for (AppEntry ae : candidates) {
+            if (ae.installTime > 0) {
+                entries.add(ae);
+                if (entries.size() >= 8) break;
+            }
+        }
+
+        if (entries.isEmpty()) {
+            container.setVisibility(View.GONE);
+            return;
+        }
+
+        container.setVisibility(View.VISIBLE);
+        populateAppStrip(list, entries);
     }
 
     private void setupRecentAppsStrip() {
@@ -708,24 +661,20 @@ public class AppPickerActivity extends Activity {
         }
 
         if (recentEntries.isEmpty()) {
-            List<AppEntry> fallback = new ArrayList<>(all);
-            Collections.sort(fallback, (a, b) -> Long.compare(b.installTime, a.installTime));
-            for (int i = 0; i < Math.min(6, fallback.size()); i++) {
-                recentEntries.add(fallback.get(i));
-            }
-        }
-
-        if (recentEntries.isEmpty()) {
             recentContainer.setVisibility(View.GONE);
             return;
         }
 
         recentContainer.setVisibility(View.VISIBLE);
+        populateAppStrip(recentList, recentEntries);
+    }
+
+    private void populateAppStrip(LinearLayout list, List<AppEntry> entries) {
         LauncherApps la = (LauncherApps) getSystemService(Context.LAUNCHER_APPS_SERVICE);
         LayoutInflater inflater = LayoutInflater.from(this);
 
-        for (AppEntry e : recentEntries) {
-            View item = inflater.inflate(R.layout.item_recent_app, recentList, false);
+        for (AppEntry e : entries) {
+            View item = inflater.inflate(R.layout.item_recent_app, list, false);
             ImageView iconView = item.findViewById(R.id.recent_icon);
             TextView labelView = item.findViewById(R.id.recent_label);
 
@@ -747,8 +696,165 @@ public class AppPickerActivity extends Activity {
                 launchApp(e, la, v);
             });
 
-            recentList.addView(item);
+            item.setOnLongClickListener(v -> {
+                showAppOptionsDialog(e, la, v);
+                return true;
+            });
+
+            list.addView(item);
         }
+    }
+
+    private void showAppOptionsDialog(AppEntry e, LauncherApps launcherApps, View view) {
+        if (e == null) return;
+        SharedPreferences prefs = getSharedPreferences("drawer_prefs", MODE_PRIVATE);
+        boolean isLocked = ShortcutStore.isAppLocked(this, e.pkg);
+        boolean inVault = "vault".equals(currentCategory);
+        String[] opts = {
+                "🚀 Launch app",
+                "📌 Pin to Home screen (Main Page)",
+                "📁 Add to Folder...",
+                "➕ Add to Lock Launcher Dock",
+                "🏝️ Add to Dynamic Island",
+                isLocked ? "🔓 Remove Fingerprint Lock" : "🔒 Lock with Fingerprint",
+                "✏️ Custom Display Name",
+                "ℹ️ App Info",
+                inVault ? "👁️ Unhide from Drawer" : "🚫 Hide from Drawer",
+                "🗑️ Uninstall"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle(e.label)
+                .setItems(opts, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            launchApp(e, launcherApps, view);
+                            break;
+                        case 1:
+                            int p = ShortcutStore.activeProfile(this);
+                            List<Shortcut> current = ShortcutStore.load(this, p);
+                            Shortcut newHomeSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                            if (!ShortcutStore.addOrPlaceShortcut(current, newHomeSc)) {
+                                Toast.makeText(this, "Home screen is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
+                            } else {
+                                ShortcutStore.save(this, p, current);
+                                BaseDockWidget.refreshAll(this);
+                                DockService.refresh(this);
+                                Toast.makeText(this, "Pinned " + e.label + " to Home screen", Toast.LENGTH_SHORT).show();
+                            }
+                            break;
+                        case 2:
+                            showAddToFolderDialog(e);
+                            break;
+                        case 3:
+                            int curP = ShortcutStore.activeProfile(this);
+                            List<Shortcut> dockList = ShortcutStore.load(this, curP);
+                            Shortcut newDockSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                            if (!ShortcutStore.addOrPlaceShortcut(dockList, newDockSc)) {
+                                Toast.makeText(this, "Dock is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
+                            } else {
+                                ShortcutStore.save(this, curP, dockList);
+                                BaseDockWidget.refreshAll(this);
+                                DockService.refresh(this);
+                                Toast.makeText(this, "Added to Lock Launcher", Toast.LENGTH_SHORT).show();
+                            }
+                            break;
+                        case 4:
+                            List<Shortcut> islandList = ShortcutStore.loadIsland(this);
+                            Shortcut newIslSc = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                            if (!ShortcutStore.addOrPlaceShortcut(islandList, newIslSc)) {
+                                Toast.makeText(this, "Dynamic Island is full (" + ShortcutStore.MAX + " max)", Toast.LENGTH_SHORT).show();
+                            } else {
+                                ShortcutStore.saveIsland(this, islandList);
+                                IslandService.refresh(this);
+                                Toast.makeText(this, "Added " + e.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
+                            }
+                            break;
+                        case 5:
+                            ShortcutStore.setAppLocked(this, e.pkg, !isLocked);
+                            adapter.notifyDataSetChanged();
+                            Toast.makeText(this, (!isLocked ? "Locked " : "Unlocked ") + e.label, Toast.LENGTH_SHORT).show();
+                            break;
+                        case 6:
+                            EditText input = new EditText(this);
+                            input.setText(e.label);
+                            if (e.label != null) input.setSelection(e.label.length());
+                            new AlertDialog.Builder(this)
+                                    .setTitle("Custom Display Name")
+                                    .setMessage("Rename app in drawer, search, and shortcuts:")
+                                    .setView(input)
+                                    .setPositiveButton("Save", (cd, cw) -> {
+                                        String n = input.getText().toString().trim();
+                                        if (!n.isEmpty()) {
+                                            e.label = n;
+                                            ShortcutStore.setCustomAppLabel(AppPickerActivity.this, e.pkg, e.profileSerial, n);
+                                            Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                            rebuildSearchIndex();
+                                            BaseDockWidget.refreshAll(AppPickerActivity.this);
+                                            DockService.refresh(AppPickerActivity.this);
+                                            IslandService.refresh(AppPickerActivity.this);
+
+                                            adapter.applyFilter();
+                                            setupAppStrips();
+                                            Toast.makeText(this, "Renamed to " + n, Toast.LENGTH_SHORT).show();
+                                        }
+                                    })
+                                    .setNeutralButton("Reset Default", (cd, cw) -> {
+                                        String defLbl = e.isClone ? (e.rawLabel + " (Clone)") : e.rawLabel;
+                                        if (defLbl != null && !defLbl.isEmpty()) {
+                                            e.label = defLbl;
+                                            String key = getCustomLabelKey(e.pkg, e.profileSerial);
+                                            prefs.edit().remove(key).apply();
+                                            getSharedPreferences("dock", MODE_PRIVATE).edit().remove(key).apply();
+                                            ShortcutStore.setCustomAppLabel(AppPickerActivity.this, e.pkg, e.profileSerial, defLbl);
+                                            prefs.edit().remove(key).apply();
+                                            getSharedPreferences("dock", MODE_PRIVATE).edit().remove(key).apply();
+                                            Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                            rebuildSearchIndex();
+                                            adapter.applyFilter();
+                                            setupAppStrips();
+                                            Toast.makeText(this, "Reset to " + defLbl, Toast.LENGTH_SHORT).show();
+                                        }
+                                    })
+                                    .setNegativeButton("Cancel", null)
+                                    .show();
+                            break;
+                        case 7:
+                            Intent info = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                            info.setData(Uri.parse("package:" + e.pkg));
+                            startActivity(info);
+                            break;
+                        case 8:
+                            Set<String> curHidden = new HashSet<>(prefs.getStringSet("hidden_apps", new HashSet<>()));
+                            if (inVault) {
+                                curHidden.remove(e.pkg);
+                                prefs.edit().putStringSet("hidden_apps", curHidden).apply();
+                                hiddenList.remove(e);
+                                all.add(e);
+                                Collections.sort(all, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                adapter.applyFilter();
+                                setupAppStrips();
+                                if (chipVault != null) chipVault.setText("🔒 Vault (" + hiddenList.size() + ")");
+                                Toast.makeText(this, "Unhid " + e.label, Toast.LENGTH_SHORT).show();
+                            } else {
+                                curHidden.add(e.pkg);
+                                prefs.edit().putStringSet("hidden_apps", curHidden).apply();
+                                all.remove(e);
+                                hiddenList.add(e);
+                                Collections.sort(hiddenList, (e1, e2) -> e1.label.compareToIgnoreCase(e2.label));
+                                adapter.applyFilter();
+                                setupAppStrips();
+                                if (chipVault != null) chipVault.setText("🔒 Vault (" + hiddenList.size() + ")");
+                                Toast.makeText(this, e.label + " hidden from drawer", Toast.LENGTH_SHORT).show();
+                            }
+                            break;
+                        case 9:
+                            Intent uninst = new Intent(Intent.ACTION_DELETE);
+                            uninst.setData(Uri.parse("package:" + e.pkg));
+                            startActivity(uninst);
+                            break;
+                    }
+                })
+                .show();
     }
 
     private String classifyApp(String pkg, String label, boolean isSystem, boolean isClone) {
@@ -830,8 +936,8 @@ public class AppPickerActivity extends Activity {
 
     private void updateCategoryChipStyles() {
         DynamicThemeHelper.ThemeColors tc = DynamicThemeHelper.extractTheme(this);
-        Button[] chips = {chipAll, chipRecent, chipNotifications, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault};
-        String[] cats = {"all", "recent", "notifications", "clones", "ai", "media", "tools", "social", "system", "vault"};
+        Button[] chips = {chipAll, chipMostUsed, chipNew, chipRecent, chipNotifications, chipClones, chipAi, chipMedia, chipTools, chipSocial, chipSystem, chipVault};
+        String[] cats = {"all", "most_used", "new_downloaded", "recent", "notifications", "clones", "ai", "media", "tools", "social", "system", "vault"};
         for (int i = 0; i < chips.length; i++) {
             Button b = chips[i];
             if (b == null) continue;
@@ -1046,6 +1152,20 @@ public class AppPickerActivity extends Activity {
                     int sb = scores.containsKey(b) ? scores.get(b) : 0;
                     if (sa != sb) return Integer.compare(sb, sa); // higher score first
                     return a.label.compareToIgnoreCase(b.label);
+                });
+            } else if ("most_used".equals(currentCategory)) {
+                Collections.sort(filtered, (a, b) -> {
+                    int ca = ShortcutStore.getAppLaunchCount(AppPickerActivity.this, a.pkg);
+                    int cb = ShortcutStore.getAppLaunchCount(AppPickerActivity.this, b.pkg);
+                    if (ca != cb) return Integer.compare(cb, ca);
+                    return Long.compare(b.installTime, a.installTime);
+                });
+            } else if ("new_downloaded".equals(currentCategory)) {
+                Collections.sort(filtered, (a, b) -> {
+                    if (a.isSystem != b.isSystem) {
+                        return a.isSystem ? 1 : -1;
+                    }
+                    return Long.compare(b.installTime, a.installTime);
                 });
             } else if ("recent".equals(currentCategory)) {
                 Collections.sort(filtered, (a, b) -> {
