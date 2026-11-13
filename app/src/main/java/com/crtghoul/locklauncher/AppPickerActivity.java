@@ -952,15 +952,30 @@ public class AppPickerActivity extends Activity {
     private void showAddToFolderDialog(AppEntry e) {
         int p = ShortcutStore.activeProfile(this);
         List<Shortcut> list = ShortcutStore.load(this, p);
+        List<Shortcut> dockList = ShortcutStore.loadHomeDock(this);
         List<Shortcut> folders = new ArrayList<>();
+        List<Boolean> isDockFolder = new ArrayList<>();
+
         for (Shortcut s : list) {
-            if (s.isFolder()) folders.add(s);
+            if (s.isFolder()) {
+                folders.add(s);
+                isDockFolder.add(false);
+            }
+        }
+        for (Shortcut s : dockList) {
+            if (s.isFolder()) {
+                folders.add(s);
+                isDockFolder.add(true);
+            }
         }
 
         List<String> options = new ArrayList<>();
-        options.add("➕ Create New Folder");
-        for (Shortcut f : folders) {
-            options.add("📁 " + f.label + " (" + (f.folderItems != null ? f.folderItems.size() : 0) + ")");
+        options.add("➕ Create New Folder on Home");
+        options.add("➕ Create New Folder on Dock");
+        for (int i = 0; i < folders.size(); i++) {
+            Shortcut f = folders.get(i);
+            boolean onDock = isDockFolder.get(i);
+            options.add((onDock ? "📁 [Dock] " : "📁 ") + f.label + " (" + (f.folderItems != null ? f.folderItems.size() : 0) + ")");
         }
 
         new AlertDialog.Builder(this)
@@ -970,7 +985,7 @@ public class AppPickerActivity extends Activity {
                         EditText input = new EditText(this);
                         input.setHint("Folder Name (e.g. Work, Media)");
                         new AlertDialog.Builder(this)
-                                .setTitle("New Folder")
+                                .setTitle("New Home Folder")
                                 .setView(input)
                                 .setPositiveButton("Create", (d, w) -> {
                                     String name = input.getText().toString().trim();
@@ -987,11 +1002,45 @@ public class AppPickerActivity extends Activity {
                                 })
                                 .setNegativeButton("Cancel", null)
                                 .show();
+                    } else if (idx == 1) {
+                        EditText input = new EditText(this);
+                        input.setHint("Folder Name (e.g. Favorites, Social)");
+                        new AlertDialog.Builder(this)
+                                .setTitle("New Dock Folder")
+                                .setView(input)
+                                .setPositiveButton("Create", (d, w) -> {
+                                    String name = input.getText().toString().trim();
+                                    if (name.isEmpty()) name = "Folder";
+                                    Shortcut newFolder = Shortcut.createFolder(name, Collections.singletonList(
+                                            new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial)
+                                    ));
+                                    int emptyIdx = -1;
+                                    for (int s = 0; s < dockList.size(); s++) {
+                                        if (dockList.get(s).isEmpty()) { emptyIdx = s; break; }
+                                    }
+                                    if (emptyIdx >= 0) {
+                                        dockList.set(emptyIdx, newFolder);
+                                    } else if (dockList.size() < ShortcutStore.HOME_DOCK_MAX) {
+                                        dockList.add(newFolder);
+                                    } else {
+                                        Toast.makeText(this, "Dock is full", Toast.LENGTH_SHORT).show();
+                                        return;
+                                    }
+                                    ShortcutStore.saveHomeDock(this, dockList);
+                                    Toast.makeText(this, "Created folder " + name + " on Dock with " + e.label, Toast.LENGTH_SHORT).show();
+                                })
+                                .setNegativeButton("Cancel", null)
+                                .show();
                     } else {
-                        Shortcut target = folders.get(idx - 1);
+                        int fIdx = idx - 2;
+                        Shortcut target = folders.get(fIdx);
                         if (target.folderItems == null) target.folderItems = new ArrayList<>();
                         target.folderItems.add(new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial));
-                        ShortcutStore.save(this, p, list);
+                        if (isDockFolder.get(fIdx)) {
+                            ShortcutStore.saveHomeDock(this, dockList);
+                        } else {
+                            ShortcutStore.save(this, p, list);
+                        }
                         Toast.makeText(this, "Added to " + target.label, Toast.LENGTH_SHORT).show();
                     }
                 })

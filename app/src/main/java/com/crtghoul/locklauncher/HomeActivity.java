@@ -1298,7 +1298,9 @@ public class HomeActivity extends Activity {
                         folderAdapter.notifyDataSetChanged();
                         emptyHintView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
                         ShortcutStore.save(HomeActivity.this, ShortcutStore.activeProfile(HomeActivity.this), shortcuts);
+                        ShortcutStore.saveHomeDock(HomeActivity.this, dockShortcuts);
                         loadShortcuts();
+                        loadDock();
                     })
                     .setNegativeButton("Cancel", null)
                     .show();
@@ -1316,7 +1318,9 @@ public class HomeActivity extends Activity {
                             folder.label = n;
                             titleView.setText(n);
                             ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                            ShortcutStore.saveHomeDock(this, dockShortcuts);
                             loadShortcuts();
+                            loadDock();
                         }
                     })
                     .setNegativeButton("Cancel", null)
@@ -2456,12 +2460,59 @@ public class HomeActivity extends Activity {
                         targetView.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(120).start();
                         SpringAnimator.scalePulse(targetView);
                         int sourcePos = -1;
+                        boolean fromDock = false;
+                        int sourceDockPos = -1;
                         try {
                             ClipData cd = event.getClipData();
                             if (cd != null && cd.getItemCount() > 0) {
-                                sourcePos = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                                CharSequence descLabel = cd.getDescription() != null ? cd.getDescription().getLabel() : null;
+                                String labelStr = descLabel != null ? descLabel.toString() : "";
+                                if ("dock_pos".equals(labelStr)) {
+                                    fromDock = true;
+                                    sourceDockPos = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                                } else {
+                                    sourcePos = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                                }
                             }
                         } catch (Exception ignored) {}
+
+                        if (fromDock && sourceDockPos >= 0 && sourceDockPos < dockShortcuts.size() && itemPos >= 0 && itemPos < shortcuts.size()) {
+                            dragWasDropped = true;
+                            Shortcut source = dockShortcuts.get(sourceDockPos);
+                            Shortcut target = shortcuts.get(itemPos);
+                            if (target.isFolder() && !source.isFolder() && !source.isEmpty()) {
+                                if (target.folderItems == null) target.folderItems = new ArrayList<>();
+                                target.folderItems.add(source);
+                                dockShortcuts.set(sourceDockPos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Added " + source.label + " to " + target.label, Toast.LENGTH_SHORT).show();
+                            } else if (source.isFolder() && !target.isFolder() && !target.isEmpty()) {
+                                if (source.folderItems == null) source.folderItems = new ArrayList<>();
+                                source.folderItems.add(target);
+                                shortcuts.set(itemPos, source);
+                                dockShortcuts.set(sourceDockPos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Added " + target.label + " to " + source.label, Toast.LENGTH_SHORT).show();
+                            } else if (!source.isFolder() && !target.isFolder() && !source.isEmpty() && !target.isEmpty()) {
+                                Shortcut newF = new Shortcut(Shortcut.TYPE_FOLDER, "", "", "Folder");
+                                newF.folderItems = new ArrayList<>();
+                                newF.folderItems.add(target);
+                                newF.folderItems.add(source);
+                                shortcuts.set(itemPos, newF);
+                                dockShortcuts.set(sourceDockPos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Created folder with " + target.label + " & " + source.label, Toast.LENGTH_SHORT).show();
+                            } else {
+                                shortcuts.set(itemPos, source);
+                                dockShortcuts.set(sourceDockPos, target.isEmpty() ? Shortcut.createEmpty() : target);
+                                Toast.makeText(HomeActivity.this, "Moved " + source.label + " to Home", Toast.LENGTH_SHORT).show();
+                            }
+                            ShortcutStore.saveHomeDock(HomeActivity.this, dockShortcuts);
+                            ShortcutStore.save(HomeActivity.this, ShortcutStore.activeProfile(HomeActivity.this), shortcuts);
+                            loadDock();
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(HomeActivity.this);
+                            DockService.refresh(HomeActivity.this);
+                            return true;
+                        }
+
                         if (sourcePos >= 0 && sourcePos < shortcuts.size() && itemPos >= 0 && itemPos < shortcuts.size()) {
                             dragWasDropped = true;
                             activeDraggedPosition = -1;
@@ -2474,6 +2525,20 @@ public class HomeActivity extends Activity {
                                     target.folderItems.add(source);
                                     shortcuts.set(sourcePos, Shortcut.createEmpty());
                                     Toast.makeText(HomeActivity.this, "Added " + source.label + " to " + target.label, Toast.LENGTH_SHORT).show();
+                                } else if (source.isFolder() && !target.isFolder() && !target.isEmpty()) {
+                                    if (source.folderItems == null) source.folderItems = new ArrayList<>();
+                                    source.folderItems.add(target);
+                                    shortcuts.set(itemPos, source);
+                                    shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                    Toast.makeText(HomeActivity.this, "Added " + target.label + " to " + source.label, Toast.LENGTH_SHORT).show();
+                                } else if (!source.isFolder() && !target.isFolder() && !source.isEmpty() && !target.isEmpty()) {
+                                    Shortcut newF = new Shortcut(Shortcut.TYPE_FOLDER, "", "", "Folder");
+                                    newF.folderItems = new ArrayList<>();
+                                    newF.folderItems.add(target);
+                                    newF.folderItems.add(source);
+                                    shortcuts.set(itemPos, newF);
+                                    shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                    Toast.makeText(HomeActivity.this, "Created folder with " + target.label + " & " + source.label, Toast.LENGTH_SHORT).show();
                                 } else if (target.isEmpty()) {
                                     shortcuts.set(itemPos, source);
                                     shortcuts.set(sourcePos, Shortcut.createEmpty());
@@ -2619,7 +2684,7 @@ public class HomeActivity extends Activity {
 
             itemView.setOnClickListener(v -> {
                 if (s == null || s.isEmpty()) {
-                    showAddDockAppDialog(slotIndex);
+                    showAddDockItemDialog(slotIndex);
                 } else {
                     launchOrHandleShortcutDirect(s, v);
                 }
@@ -2627,7 +2692,141 @@ public class HomeActivity extends Activity {
 
             itemView.setOnLongClickListener(v -> {
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                showDockItemMenu(slotIndex);
+                if (s != null && !s.isEmpty()) {
+                    dragWasDropped = false;
+                    activeDraggedPosition = -1;
+                    if (dragActionBar != null) dragActionBar.setVisibility(View.VISIBLE);
+                    ClipData data = ClipData.newPlainText("dock_pos", String.valueOf(slotIndex));
+                    View.DragShadowBuilder shadow = new View.DragShadowBuilder(itemView);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        itemView.startDragAndDrop(data, shadow, itemView, View.DRAG_FLAG_OPAQUE);
+                    } else {
+                        itemView.startDrag(data, shadow, itemView, 0);
+                    }
+                    itemView.animate().scaleX(0.85f).scaleY(0.85f).alpha(0.45f).setDuration(120).start();
+                } else {
+                    showDockItemMenu(slotIndex);
+                }
+                return true;
+            });
+
+            itemView.setOnDragListener((targetView, event) -> {
+                switch (event.getAction()) {
+                    case DragEvent.ACTION_DRAG_STARTED:
+                        if (dragActionBar != null) dragActionBar.setVisibility(View.VISIBLE);
+                        return true;
+                    case DragEvent.ACTION_DRAG_ENTERED:
+                        targetView.animate().scaleX(1.22f).scaleY(1.22f).setDuration(110).start();
+                        return true;
+                    case DragEvent.ACTION_DRAG_EXITED:
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(110).start();
+                        return true;
+                    case DragEvent.ACTION_DROP:
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(120).start();
+                        SpringAnimator.scalePulse(targetView);
+                        int sourcePos = -1;
+                        boolean fromDock = false;
+                        int sourceDockSlot = -1;
+                        try {
+                            ClipData cd = event.getClipData();
+                            if (cd != null && cd.getItemCount() > 0) {
+                                CharSequence descLabel = cd.getDescription() != null ? cd.getDescription().getLabel() : null;
+                                String labelStr = descLabel != null ? descLabel.toString() : "";
+                                if ("dock_pos".equals(labelStr)) {
+                                    fromDock = true;
+                                    sourceDockSlot = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                                } else {
+                                    sourcePos = Integer.parseInt(cd.getItemAt(0).getText().toString());
+                                }
+                            }
+                        } catch (Exception ignored) {}
+
+                        if (fromDock) {
+                            if (sourceDockSlot >= 0 && sourceDockSlot < dockShortcuts.size() && sourceDockSlot != slotIndex) {
+                                dragWasDropped = true;
+                                Shortcut sourceDockItem = dockShortcuts.get(sourceDockSlot);
+                                Shortcut targetDockItem = dockShortcuts.get(slotIndex);
+
+                                if (targetDockItem.isFolder() && !sourceDockItem.isFolder() && !sourceDockItem.isEmpty()) {
+                                    if (targetDockItem.folderItems == null) targetDockItem.folderItems = new ArrayList<>();
+                                    targetDockItem.folderItems.add(sourceDockItem);
+                                    dockShortcuts.set(sourceDockSlot, Shortcut.createEmpty());
+                                    Toast.makeText(HomeActivity.this, "Added " + sourceDockItem.label + " to " + targetDockItem.label + " on Dock", Toast.LENGTH_SHORT).show();
+                                } else if (sourceDockItem.isFolder() && !targetDockItem.isFolder() && !targetDockItem.isEmpty()) {
+                                    if (sourceDockItem.folderItems == null) sourceDockItem.folderItems = new ArrayList<>();
+                                    sourceDockItem.folderItems.add(targetDockItem);
+                                    dockShortcuts.set(slotIndex, sourceDockItem);
+                                    dockShortcuts.set(sourceDockSlot, Shortcut.createEmpty());
+                                    Toast.makeText(HomeActivity.this, "Added " + targetDockItem.label + " to " + sourceDockItem.label + " on Dock", Toast.LENGTH_SHORT).show();
+                                } else if (!sourceDockItem.isFolder() && !targetDockItem.isFolder() && !sourceDockItem.isEmpty() && !targetDockItem.isEmpty()) {
+                                    Shortcut newFolder = new Shortcut(Shortcut.TYPE_FOLDER, "", "", "Folder");
+                                    newFolder.folderItems = new ArrayList<>();
+                                    newFolder.folderItems.add(targetDockItem);
+                                    newFolder.folderItems.add(sourceDockItem);
+                                    dockShortcuts.set(slotIndex, newFolder);
+                                    dockShortcuts.set(sourceDockSlot, Shortcut.createEmpty());
+                                    Toast.makeText(HomeActivity.this, "Created folder with " + targetDockItem.label + " & " + sourceDockItem.label + " on Dock", Toast.LENGTH_SHORT).show();
+                                } else {
+                                    dockShortcuts.set(slotIndex, sourceDockItem);
+                                    dockShortcuts.set(sourceDockSlot, targetDockItem);
+                                }
+                                ShortcutStore.saveHomeDock(HomeActivity.this, dockShortcuts);
+                                loadDock();
+                            }
+                            return true;
+                        }
+
+                        if (sourcePos >= 0 && sourcePos < shortcuts.size()) {
+                            dragWasDropped = true;
+                            Shortcut source = shortcuts.get(sourcePos);
+                            Shortcut target = dockShortcuts.get(slotIndex);
+
+                            if (target == null || target.isEmpty()) {
+                                dockShortcuts.set(slotIndex, source);
+                                shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Moved " + source.label + " to Dock", Toast.LENGTH_SHORT).show();
+                            } else if (target.isFolder() && !source.isFolder()) {
+                                if (target.folderItems == null) target.folderItems = new ArrayList<>();
+                                target.folderItems.add(source);
+                                shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Added " + source.label + " to " + target.label + " on Dock", Toast.LENGTH_SHORT).show();
+                            } else if (source.isFolder() && !target.isFolder()) {
+                                if (source.folderItems == null) source.folderItems = new ArrayList<>();
+                                source.folderItems.add(target);
+                                dockShortcuts.set(slotIndex, source);
+                                shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Added " + target.label + " to " + source.label + " on Dock", Toast.LENGTH_SHORT).show();
+                            } else if (!source.isFolder() && !target.isFolder()) {
+                                Shortcut newFolder = new Shortcut(Shortcut.TYPE_FOLDER, "", "", "Folder");
+                                newFolder.folderItems = new ArrayList<>();
+                                newFolder.folderItems.add(target);
+                                newFolder.folderItems.add(source);
+                                dockShortcuts.set(slotIndex, newFolder);
+                                shortcuts.set(sourcePos, Shortcut.createEmpty());
+                                Toast.makeText(HomeActivity.this, "Created folder with " + target.label + " & " + source.label + " on Dock", Toast.LENGTH_SHORT).show();
+                            } else {
+                                dockShortcuts.set(slotIndex, source);
+                                shortcuts.set(sourcePos, target);
+                                Toast.makeText(HomeActivity.this, "Placed " + source.label + " on Dock", Toast.LENGTH_SHORT).show();
+                            }
+
+                            ShortcutStore.saveHomeDock(HomeActivity.this, dockShortcuts);
+                            ShortcutStore.save(HomeActivity.this, ShortcutStore.activeProfile(HomeActivity.this), shortcuts);
+                            loadDock();
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(HomeActivity.this);
+                            DockService.refresh(HomeActivity.this);
+                            return true;
+                        }
+                        return false;
+                    case DragEvent.ACTION_DRAG_ENDED:
+                        targetView.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(120).start();
+                        if (dragActionBar != null) dragActionBar.setVisibility(View.GONE);
+                        if (!dragWasDropped && s != null && !s.isEmpty()) {
+                            targetView.post(() -> showDockItemMenu(slotIndex));
+                        }
+                        return true;
+                }
                 return true;
             });
 
@@ -2658,6 +2857,99 @@ public class HomeActivity extends Activity {
         performFireShortcut(s, view);
     }
 
+    private void showAddDockItemDialog(int slotIndex) {
+        pendingDockSlotIndex = slotIndex;
+        List<String> opts = new ArrayList<>();
+        List<Runnable> acts = new ArrayList<>();
+
+        opts.add("📱 Add App to Dock Slot " + (slotIndex + 1));
+        acts.add(() -> showAddDockAppDialog(slotIndex));
+
+        opts.add("🌐 Add Web App to Dock Slot " + (slotIndex + 1));
+        acts.add(() -> showAddWebAppDialogForDock(slotIndex));
+
+        opts.add("📁 Create Folder in Dock Slot " + (slotIndex + 1));
+        acts.add(() -> showCreateFolderDialogForDock(slotIndex));
+
+        new AlertDialog.Builder(this)
+                .setTitle("Dock Slot " + (slotIndex + 1))
+                .setItems(opts.toArray(new String[0]), (d, which) -> {
+                    if (which >= 0 && which < acts.size()) acts.get(which).run();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showCreateFolderDialogForDock(int slotIndex) {
+        EditText input = new EditText(this);
+        input.setHint("Folder name (e.g. Favorites, Social)");
+        new AlertDialog.Builder(this)
+                .setTitle("New Folder in Dock Slot " + (slotIndex + 1))
+                .setView(input)
+                .setPositiveButton("Create", (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) name = "Folder";
+                    Shortcut folder = new Shortcut(Shortcut.TYPE_FOLDER, "", "", name);
+                    folder.folderItems = new ArrayList<>();
+                    if (slotIndex >= 0 && slotIndex < dockShortcuts.size()) {
+                        dockShortcuts.set(slotIndex, folder);
+                    } else if (dockShortcuts.size() < ShortcutStore.HOME_DOCK_MAX) {
+                        dockShortcuts.add(folder);
+                    }
+                    ShortcutStore.saveHomeDock(this, dockShortcuts);
+                    loadDock();
+                    Toast.makeText(this, "Created folder: " + name + " on Dock", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showAddWebAppDialogForDock(int slotIndex) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_url, null);
+        EditText editUrl = dialogView.findViewById(R.id.url_value);
+        EditText editName = dialogView.findViewById(R.id.url_name);
+        CheckBox chkPin = dialogView.findViewById(R.id.chk_pin_home);
+        if (chkPin != null) chkPin.setVisibility(View.GONE);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Add Web App to Dock Slot " + (slotIndex + 1))
+                .setView(dialogView)
+                .setPositiveButton("Add", (dialog, which) -> {
+                    String u = editUrl.getText().toString().trim();
+                    if (u.isEmpty()) return;
+                    if (!u.startsWith("http://") && !u.startsWith("https://")) {
+                        u = "https://" + u;
+                    }
+                    String n = editName.getText().toString().trim();
+                    if (n.isEmpty()) {
+                        try {
+                            n = Uri.parse(u).getHost();
+                            if (n != null && n.startsWith("www.")) n = n.substring(4);
+                        } catch (Exception e) {
+                            n = "Web App";
+                        }
+                    }
+                    if (n == null || n.isEmpty()) n = "Web App";
+                    Shortcut sc = new Shortcut(Shortcut.TYPE_URL, "", u, n);
+                    if (slotIndex >= 0 && slotIndex < dockShortcuts.size()) {
+                        dockShortcuts.set(slotIndex, sc);
+                    } else if (dockShortcuts.size() < ShortcutStore.HOME_DOCK_MAX) {
+                        dockShortcuts.add(sc);
+                    }
+                    Bitmap brand = WebLogoHelper.getBuiltinBrandLogo(this, u);
+                    if (brand != null) {
+                        IconUtil.saveCustomIcon(this, sc.id, brand);
+                    } else {
+                        WebLogoHelper.fetchFaviconAsync(this, u, sc.id, (logo) -> loadDock());
+                    }
+                    ShortcutStore.saveHomeDock(this, dockShortcuts);
+                    loadDock();
+                    Toast.makeText(this, "Added " + n + " to Dock", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void showAddDockAppDialog(int slotIndex) {
         pendingDockSlotIndex = slotIndex;
         Intent pickIntent = new Intent(this, AppPickerActivity.class);
@@ -2672,11 +2964,42 @@ public class HomeActivity extends Activity {
         List<Runnable> acts = new ArrayList<>();
 
         if (s != null && !s.isEmpty()) {
-            opts.add("🚀 Launch " + s.label);
-            acts.add(() -> performFireShortcut(s, null));
+            if (s.isFolder()) {
+                opts.add("📂 Open Folder " + s.label);
+                acts.add(() -> showFolderModal(s));
 
-            opts.add("🔄 Replace App in Dock Slot " + (slotIndex + 1));
+                opts.add("✏️ Rename Folder");
+                acts.add(() -> {
+                    EditText input = new EditText(this);
+                    input.setText(s.label);
+                    if (s.label != null) input.setSelection(s.label.length());
+                    new AlertDialog.Builder(this)
+                            .setTitle("Rename Folder")
+                            .setView(input)
+                            .setPositiveButton("Save", (d, w) -> {
+                                String n = input.getText().toString().trim();
+                                if (!n.isEmpty()) {
+                                    s.label = n;
+                                    ShortcutStore.saveHomeDock(this, dockShortcuts);
+                                    loadDock();
+                                }
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show();
+                });
+            } else {
+                opts.add("🚀 Launch " + s.label);
+                acts.add(() -> performFireShortcut(s, null));
+            }
+
+            opts.add("🔄 Replace with App in Dock Slot " + (slotIndex + 1));
             acts.add(() -> showAddDockAppDialog(slotIndex));
+
+            opts.add("🌐 Replace with Web App");
+            acts.add(() -> showAddWebAppDialogForDock(slotIndex));
+
+            opts.add("📁 Replace with Folder");
+            acts.add(() -> showCreateFolderDialogForDock(slotIndex));
 
             if (slotIndex > 0) {
                 opts.add("⬅️ Move Left (to slot " + slotIndex + ")");
@@ -2699,28 +3022,30 @@ public class HomeActivity extends Activity {
                 });
             }
 
-            opts.add("✏️ Custom Display Name");
-            acts.add(() -> {
-                EditText input = new EditText(this);
-                input.setText(s.label);
-                if (s.label != null) input.setSelection(s.label.length());
-                new AlertDialog.Builder(this)
-                        .setTitle("Rename Dock App")
-                        .setView(input)
-                        .setPositiveButton("Save", (d, w) -> {
-                            String n = input.getText().toString().trim();
-                            if (!n.isEmpty()) {
-                                s.label = n;
-                                ShortcutStore.saveHomeDock(this, dockShortcuts);
-                                if (s.isApp() && s.pkg != null) {
-                                    ShortcutStore.setCustomAppLabel(this, s.pkg, s.profileSerial, n);
+            if (!s.isFolder()) {
+                opts.add("✏️ Custom Display Name");
+                acts.add(() -> {
+                    EditText input = new EditText(this);
+                    input.setText(s.label);
+                    if (s.label != null) input.setSelection(s.label.length());
+                    new AlertDialog.Builder(this)
+                            .setTitle("Rename Dock App")
+                            .setView(input)
+                            .setPositiveButton("Save", (d, w) -> {
+                                String n = input.getText().toString().trim();
+                                if (!n.isEmpty()) {
+                                    s.label = n;
+                                    ShortcutStore.saveHomeDock(this, dockShortcuts);
+                                    if (s.isApp() && s.pkg != null) {
+                                        ShortcutStore.setCustomAppLabel(this, s.pkg, s.profileSerial, n);
+                                    }
+                                    loadDock();
                                 }
-                                loadDock();
-                            }
-                        })
-                        .setNegativeButton("Cancel", null)
-                        .show();
-            });
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show();
+                });
+            }
 
             if (s.isApp()) {
                 opts.add("ℹ️ App Info");
@@ -2741,8 +3066,14 @@ public class HomeActivity extends Activity {
                 Toast.makeText(this, "Removed from dock", Toast.LENGTH_SHORT).show();
             });
         } else {
-            opts.add("➕ Pick App for Dock Slot " + (slotIndex + 1));
+            opts.add("📱 Add App to Dock Slot " + (slotIndex + 1));
             acts.add(() -> showAddDockAppDialog(slotIndex));
+
+            opts.add("🌐 Add Web App to Dock Slot " + (slotIndex + 1));
+            acts.add(() -> showAddWebAppDialogForDock(slotIndex));
+
+            opts.add("📁 Create Folder in Dock Slot " + (slotIndex + 1));
+            acts.add(() -> showCreateFolderDialogForDock(slotIndex));
         }
 
         opts.add("⚙️ Dock Settings (Toggle Visibility, Reset Defaults)");
