@@ -39,6 +39,11 @@ public class FolderActivity extends Activity {
 
     private static final int REQUEST_PICK_APP = 3001;
 
+    private static final int SOURCE_PROFILE = 0;
+    private static final int SOURCE_DOCK = 1;
+    private static final int SOURCE_ISLAND = 2;
+    private int folderSource = SOURCE_PROFILE;
+
     private String folderId;
     private String folderName;
     private int profile = 0;
@@ -227,12 +232,40 @@ public class FolderActivity extends Activity {
     }
 
     private void loadFolderData() {
-        // P1-5: only the profile named in the intent is searched, and
-        // only by UUID. Matching by label alone let any caller open a
-        // same-named folder in another profile.
         profile = ShortcutStore.clampProfile(profile);
         allShortcuts = ShortcutStore.load(this, profile);
         folderShortcut = findFolder(allShortcuts);
+        folderSource = SOURCE_PROFILE;
+
+        if (folderShortcut == null) {
+            List<Shortcut> dock = ShortcutStore.loadHomeDock(this);
+            folderShortcut = findFolder(dock);
+            if (folderShortcut != null) {
+                allShortcuts = dock;
+                folderSource = SOURCE_DOCK;
+            }
+        }
+        if (folderShortcut == null) {
+            List<Shortcut> island = ShortcutStore.loadIsland(this);
+            folderShortcut = findFolder(island);
+            if (folderShortcut != null) {
+                allShortcuts = island;
+                folderSource = SOURCE_ISLAND;
+            }
+        }
+        if (folderShortcut == null) {
+            for (int p = 0; p < ShortcutStore.PROFILES; p++) {
+                if (p == profile) continue;
+                List<Shortcut> pShortcuts = ShortcutStore.load(this, p);
+                folderShortcut = findFolder(pShortcuts);
+                if (folderShortcut != null) {
+                    allShortcuts = pShortcuts;
+                    profile = p;
+                    folderSource = SOURCE_PROFILE;
+                    break;
+                }
+            }
+        }
     }
 
     private Shortcut findFolder(List<Shortcut> list) {
@@ -250,9 +283,17 @@ public class FolderActivity extends Activity {
     }
 
     private void saveAndSync() {
-        ShortcutStore.save(this, profile, allShortcuts);
+        if (folderSource == SOURCE_DOCK) {
+            ShortcutStore.saveHomeDock(this, allShortcuts);
+        } else if (folderSource == SOURCE_ISLAND) {
+            ShortcutStore.saveIsland(this, allShortcuts);
+        } else {
+            ShortcutStore.save(this, profile, allShortcuts);
+        }
         BaseDockWidget.refreshAll(this);
         DockService.refresh(this);
+        IslandService.refresh(this);
+        BackupManager.autoSafeguard(this);
     }
 
     @Override

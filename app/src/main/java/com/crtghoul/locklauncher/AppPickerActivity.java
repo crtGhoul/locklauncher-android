@@ -62,6 +62,7 @@ public class AppPickerActivity extends Activity {
     public static final String EXTRA_PACKAGES = "pkgs"; // multi-select
     public static final String EXTRA_LABELS = "labels"; // multi-select
     public static final String EXTRA_PROFILE_SERIALS = "profile_serials"; // multi-select clone serials
+    public static final String EXTRA_FOLDER_JSONS = "folder_jsons"; // multi-select folder JSON strings
     public static final String EXTRA_DRAWER_MODE = "drawer_mode";
     public static final String EXTRA_PICK_FOR_ISLAND = "pick_for_island";
     public static final String EXTRA_ISLAND_SLOT_INDEX = "island_slot_index";
@@ -107,6 +108,10 @@ public class AppPickerActivity extends Activity {
         boolean isSystem;
         long installTime;
         String category; // "ai", "media", "tools", "social", "system"
+        boolean isFolder;
+        Shortcut folderShortcut;
+        String folderSource; // "Home", "Dock", "Island"
+        List<String> folderItemLabels = new ArrayList<>();
     }
 
     private void rebuildSearchIndex() {
@@ -115,6 +120,11 @@ public class AppPickerActivity extends Activity {
             if (e.label != null) pickerLabels.add(e.label);
             if (e.rawLabel != null && !e.rawLabel.equalsIgnoreCase(e.label)) {
                 pickerLabels.add(e.rawLabel);
+            }
+            if (e.isFolder && e.folderItemLabels != null) {
+                for (String childLabel : e.folderItemLabels) {
+                    if (childLabel != null) pickerLabels.add(childLabel);
+                }
             }
         }
         memoizedSearch.setTargets(pickerLabels);
@@ -231,6 +241,59 @@ public class AppPickerActivity extends Activity {
                     all.add(e);
                 }
             }
+        }
+
+        // Index user-created folders (Home, Dock, Island) so they appear in search and picker
+        List<Shortcut> userFolders = new ArrayList<>();
+        Map<String, String> folderSources = new HashMap<>();
+
+        for (Shortcut s : ShortcutStore.load(this)) {
+            if (s != null && s.isFolder() && !folderSources.containsKey(s.id)) {
+                userFolders.add(s);
+                folderSources.put(s.id, "Home");
+            }
+        }
+        for (Shortcut s : ShortcutStore.loadHomeDock(this)) {
+            if (s != null && s.isFolder() && !folderSources.containsKey(s.id)) {
+                userFolders.add(s);
+                folderSources.put(s.id, "Dock");
+            }
+        }
+        for (Shortcut s : ShortcutStore.loadIsland(this)) {
+            if (s != null && s.isFolder() && !folderSources.containsKey(s.id)) {
+                userFolders.add(s);
+                folderSources.put(s.id, "Island");
+            }
+        }
+        for (int p = 0; p < ShortcutStore.PROFILES; p++) {
+            for (Shortcut s : ShortcutStore.load(this, p)) {
+                if (s != null && s.isFolder() && !folderSources.containsKey(s.id)) {
+                    userFolders.add(s);
+                    folderSources.put(s.id, ShortcutStore.profileName(this, p));
+                }
+            }
+        }
+
+        for (Shortcut f : userFolders) {
+            AppEntry fe = new AppEntry();
+            fe.isFolder = true;
+            fe.folderShortcut = f;
+            fe.pkg = "folder://" + f.id;
+            fe.label = (f.label != null && !f.label.isEmpty()) ? f.label : "Folder";
+            fe.rawLabel = fe.label;
+            fe.category = "tools";
+            fe.folderSource = folderSources.get(f.id);
+            if (f.folderItems != null) {
+                for (Shortcut child : f.folderItems) {
+                    if (child != null && child.label != null) {
+                        fe.folderItemLabels.add(child.label);
+                    }
+                }
+            }
+            try {
+                fe.icon = new android.graphics.drawable.BitmapDrawable(getResources(), IconUtil.iconFor(this, f));
+            } catch (Throwable ignored) {}
+            all.add(fe);
         }
 
         Collections.sort(all, (a, c) -> a.label.compareToIgnoreCase(c.label));
@@ -354,12 +417,14 @@ public class AppPickerActivity extends Activity {
         if (isPickForIsland) {
             addButton.setVisibility(View.GONE);
             EditText sView = findViewById(R.id.search);
-            if (sView != null) sView.setHint("Tap app to add to Dynamic Island...");
+            if (sView != null) sView.setHint("Tap app or folder to add to Dynamic Island...");
             list.setOnItemClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
                 if (e == null) return;
                 List<Shortcut> island = ShortcutStore.loadIsland(this);
-                Shortcut s = new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
+                Shortcut s = (e.isFolder && e.folderShortcut != null)
+                        ? e.folderShortcut
+                        : new Shortcut(Shortcut.TYPE_APP, e.pkg, "", e.label, e.profileSerial);
                 int targetSlot = getIntent().getIntExtra(EXTRA_ISLAND_SLOT_INDEX, -1);
                 if (targetSlot >= 0 && targetSlot < island.size()) {
                     island.set(targetSlot, s);
@@ -380,10 +445,22 @@ public class AppPickerActivity extends Activity {
             addButton.setVisibility(View.GONE);
             list.setOnItemClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
+                if (e == null) return;
+                if (e.isFolder && e.folderShortcut != null) {
+                    Intent fi = IconUtil.launchIntent(this, e.folderShortcut);
+                    if (fi != null) startActivity(fi);
+                    finish();
+                    return;
+                }
                 launchApp(e, launcherApps, view);
             });
             list.setOnItemLongClickListener((parent, view, pos, id) -> {
                 AppEntry e = adapter.getItem(pos);
+                if (e == null) return true;
+                if (e.isFolder && e.folderShortcut != null) {
+                    showFolderOptionsDialog(e);
+                    return true;
+                }
                 showAppOptionsDialog(e, launcherApps, view);
                 return true;
             });
@@ -404,16 +481,27 @@ public class AppPickerActivity extends Activity {
                 Intent r = new Intent();
                 ArrayList<String> pkgs = new ArrayList<>();
                 ArrayList<String> labels = new ArrayList<>();
+                ArrayList<String> folderJsons = new ArrayList<>();
                 long[] serials = new long[selected.size()];
                 int idx = 0;
                 for (AppEntry e : selected.values()) {
                     pkgs.add(e.pkg);
                     labels.add(e.label);
                     serials[idx++] = e.profileSerial;
+                    if (e.isFolder && e.folderShortcut != null) {
+                        try {
+                            folderJsons.add(e.folderShortcut.toJson().toString());
+                        } catch (Exception ex) {
+                            folderJsons.add("");
+                        }
+                    } else {
+                        folderJsons.add("");
+                    }
                 }
                 r.putStringArrayListExtra(EXTRA_PACKAGES, pkgs);
                 r.putStringArrayListExtra(EXTRA_LABELS, labels);
                 r.putExtra(EXTRA_PROFILE_SERIALS, serials);
+                r.putStringArrayListExtra(EXTRA_FOLDER_JSONS, folderJsons);
                 setResult(RESULT_OK, r);
                 finish();
             });
@@ -703,6 +791,107 @@ public class AppPickerActivity extends Activity {
 
             list.addView(item);
         }
+    }
+
+    private void showFolderOptionsDialog(AppEntry e) {
+        if (e == null || e.folderShortcut == null) return;
+        Shortcut f = e.folderShortcut;
+        String[] opts = {
+                "📂 Open Folder",
+                "📌 Pin Folder to Home Screen",
+                "➕ Pin Folder to Bottom Dock",
+                "🏝️ Add Folder to Dynamic Island",
+                "✏️ Rename Folder"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("📁 " + f.label + " (" + (f.folderItems != null ? f.folderItems.size() : 0) + " apps)")
+                .setItems(opts, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            Intent fi = IconUtil.launchIntent(this, f);
+                            if (fi != null) startActivity(fi);
+                            finish();
+                            break;
+                        case 1:
+                            int p = ShortcutStore.activeProfile(this);
+                            List<Shortcut> current = ShortcutStore.load(this, p);
+                            if (!ShortcutStore.addOrPlaceShortcut(current, f)) {
+                                Toast.makeText(this, "Home screen is full", Toast.LENGTH_SHORT).show();
+                            } else {
+                                ShortcutStore.save(this, p, current);
+                                BaseDockWidget.refreshAll(this);
+                                DockService.refresh(this);
+                                Toast.makeText(this, "Pinned " + f.label + " to Home screen", Toast.LENGTH_SHORT).show();
+                            }
+                            break;
+                        case 2:
+                            List<Shortcut> dockList = ShortcutStore.loadHomeDock(this);
+                            int emptyIdx = -1;
+                            for (int s = 0; s < dockList.size(); s++) {
+                                if (dockList.get(s).isEmpty()) { emptyIdx = s; break; }
+                            }
+                            if (emptyIdx >= 0) {
+                                dockList.set(emptyIdx, f);
+                            } else if (dockList.size() < ShortcutStore.HOME_DOCK_MAX) {
+                                dockList.add(f);
+                            } else {
+                                Toast.makeText(this, "Dock is full (" + ShortcutStore.HOME_DOCK_MAX + " max)", Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                            ShortcutStore.saveHomeDock(this, dockList);
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            Toast.makeText(this, "Pinned " + f.label + " to Dock", Toast.LENGTH_SHORT).show();
+                            break;
+                        case 3:
+                            List<Shortcut> islandList = ShortcutStore.loadIsland(this);
+                            if (!ShortcutStore.addOrPlaceShortcut(islandList, f)) {
+                                Toast.makeText(this, "Dynamic Island is full", Toast.LENGTH_SHORT).show();
+                            } else {
+                                ShortcutStore.saveIsland(this, islandList);
+                                IslandService.refresh(this);
+                                Toast.makeText(this, "Added " + f.label + " to Dynamic Island", Toast.LENGTH_SHORT).show();
+                            }
+                            break;
+                        case 4:
+                            EditText input = new EditText(this);
+                            input.setText(f.label);
+                            new AlertDialog.Builder(this)
+                                    .setTitle("Rename Folder")
+                                    .setView(input)
+                                    .setPositiveButton("Save", (rd, rw) -> {
+                                        String nn = input.getText().toString().trim();
+                                        if (!nn.isEmpty()) {
+                                            f.label = nn;
+                                            e.label = nn;
+                                            e.rawLabel = nn;
+                                            for (int prof = 0; prof < ShortcutStore.PROFILES; prof++) {
+                                                List<Shortcut> scs = ShortcutStore.load(this, prof);
+                                                boolean mod = false;
+                                                for (Shortcut sc : scs) {
+                                                    if (sc.isFolder() && f.id.equals(sc.id)) { sc.label = nn; mod = true; }
+                                                }
+                                                if (mod) ShortcutStore.save(this, prof, scs);
+                                            }
+                                            List<Shortcut> dock = ShortcutStore.loadHomeDock(this);
+                                            boolean dockMod = false;
+                                            for (Shortcut sc : dock) {
+                                                if (sc.isFolder() && f.id.equals(sc.id)) { sc.label = nn; dockMod = true; }
+                                            }
+                                            if (dockMod) ShortcutStore.saveHomeDock(this, dock);
+                                            rebuildSearchIndex();
+                                            if (adapter != null) adapter.applyFilter();
+                                            BaseDockWidget.refreshAll(this);
+                                            DockService.refresh(this);
+                                            Toast.makeText(this, "Renamed to " + nn, Toast.LENGTH_SHORT).show();
+                                        }
+                                    })
+                                    .setNegativeButton("Cancel", null)
+                                    .show();
+                            break;
+                    }
+                })
+                .show();
     }
 
     private void showAppOptionsDialog(AppEntry e, LauncherApps launcherApps, View view) {
@@ -1158,6 +1347,36 @@ public class AppPickerActivity extends Activity {
 
             List<AppEntry> sourceList = "vault".equals(currentCategory) ? hiddenList : all;
             for (AppEntry e : sourceList) {
+                if (e.isFolder) {
+                    if (!q.isEmpty()) {
+                        boolean folderMatch = false;
+                        int folderScore = -1;
+                        if (e.label != null && e.label.toLowerCase().startsWith(q)) {
+                            folderMatch = true;
+                            folderScore = 130;
+                        } else if (e.label != null && e.label.toLowerCase().contains(q)) {
+                            folderMatch = true;
+                            folderScore = 95;
+                        } else {
+                            folderScore = FuzzyMatcher.matchScore(e.label, q);
+                            if (folderScore >= 0) folderMatch = true;
+                        }
+                        if (!folderMatch && e.folderItemLabels != null) {
+                            for (String child : e.folderItemLabels) {
+                                if (child != null && child.toLowerCase().contains(q)) {
+                                    folderMatch = true;
+                                    folderScore = Math.max(folderScore, 85);
+                                    break;
+                                }
+                            }
+                        }
+                        if (!folderMatch) continue;
+                        scores.put(e, folderScore);
+                    }
+                    filtered.add(e);
+                    continue;
+                }
+
                 if ("recent".equals(currentCategory) && e.installTime <= 0 && ShortcutStore.getAppLastLaunchTime(AppPickerActivity.this, e.pkg) <= 0) continue;
                 if ("notifications".equals(currentCategory) && LockNotificationListenerService.getCount(e.pkg) <= 0) continue;
                 if ("clones".equals(currentCategory) && !e.isClone) continue;
@@ -1281,6 +1500,39 @@ public class AppPickerActivity extends Activity {
             TextView check = v.findViewById(R.id.app_check);
             TextView badge = v.findViewById(R.id.app_badge);
             TextView profileBadge = v.findViewById(R.id.app_badge_profile);
+
+            if (e.isFolder) {
+                if (e.folderShortcut != null) {
+                    icon.setImageBitmap(IconUtil.iconFor(AppPickerActivity.this, e.folderShortcut));
+                } else if (e.icon != null) {
+                    icon.setImageDrawable(e.icon);
+                }
+                name.setText("📁 " + e.label);
+                if (badge != null) badge.setVisibility(View.GONE);
+                if (profileBadge != null) {
+                    String matchedChild = null;
+                    if (filterQuery != null && !filterQuery.isEmpty() && e.folderItemLabels != null) {
+                        for (String c : e.folderItemLabels) {
+                            if (c != null && c.toLowerCase().contains(filterQuery.toLowerCase())) {
+                                matchedChild = c;
+                                break;
+                            }
+                        }
+                    }
+                    int count = e.folderShortcut != null && e.folderShortcut.folderItems != null ? e.folderShortcut.folderItems.size() : 0;
+                    if (matchedChild != null) {
+                        profileBadge.setText("📁 Folder (" + count + ") · Contains " + matchedChild);
+                    } else {
+                        profileBadge.setText("📁 Folder (" + count + " apps) · " + (e.folderSource != null ? e.folderSource : "Home"));
+                    }
+                    profileBadge.setVisibility(View.VISIBLE);
+                }
+                if (check != null) {
+                    boolean sel = selected.containsKey(itemKey(e.pkg, e.profileSerial));
+                    check.setVisibility(sel ? View.VISIBLE : View.GONE);
+                }
+                return v;
+            }
 
             if (ShortcutStore.isMinimalIcons(AppPickerActivity.this)
                     || ShortcutStore.isGlassIconBackgrounds(AppPickerActivity.this)

@@ -61,6 +61,8 @@ public class HomeActivity extends Activity {
     private static final int REQ_PICK_CUSTOM_LOGO = 2006;
     private static final int REQUEST_PICK_APP_FOR_ISLAND = 2007;
     private static final int REQUEST_PICK_APP_FOR_DOCK = 2008;
+    private static final int REQ_EXPORT_BACKUP = 4101;
+    private static final int REQ_IMPORT_BACKUP = 4102;
     private int pendingDockSlotIndex = -1;
     private LinearLayout dockShelf;
     private List<Shortcut> dockShortcuts = new ArrayList<>();
@@ -817,15 +819,14 @@ public class HomeActivity extends Activity {
         });
         opts.add("Create New Folder");
         acts.add(this::createNewFolderDialog);
+        opts.add("📁 Manage User Folders (" + getFoldersCount() + " active)");
+        acts.add(this::showManageFoldersDialog);
+        opts.add("💾 Backup & Safeguard Current Page");
+        acts.add(this::showBackupSafeguardDialog);
         boolean wpBlend = ShortcutStore.isWallpaperBlendIcons(this);
         opts.add(wpBlend
                 ? "Blend Apps into Wallpaper: ON (Chameleon Glass)"
                 : "Blend Apps into Wallpaper: OFF (Tap to Enable)");
-        if (wpBlend) {
-            int curPct = ShortcutStore.getWallpaperBlendIntensity(this);
-            opts.add("Wallpaper Icon Blend Intensity (" + curPct + "%)");
-            acts.add(this::showWallpaperBlendIntensityDialog);
-        }
         acts.add(() -> {
             boolean nextBlend = !wpBlend;
             ShortcutStore.setWallpaperBlendIcons(this, nextBlend);
@@ -836,6 +837,11 @@ public class HomeActivity extends Activity {
                     ? "Apps now blend into your wallpaper (Chameleon Glass)"
                     : "Standard app icon plates restored", Toast.LENGTH_SHORT).show();
         });
+        if (wpBlend) {
+            int curPct = ShortcutStore.getWallpaperBlendIntensity(this);
+            opts.add("Wallpaper Icon Blend Intensity (" + curPct + "%)");
+            acts.add(this::showWallpaperBlendIntensityDialog);
+        }
         boolean hideSearch = ShortcutStore.isHomeHideSearchBar(this);
         opts.add(hideSearch ? "Search Bar: Hidden (Tap to Show)" : "Search Bar: Visible (Tap to Hide)");
         acts.add(() -> {
@@ -1055,11 +1061,21 @@ public class HomeActivity extends Activity {
             ArrayList<String> pkgs = data.getStringArrayListExtra(AppPickerActivity.EXTRA_PACKAGES);
             ArrayList<String> labels = data.getStringArrayListExtra(AppPickerActivity.EXTRA_LABELS);
             long[] serials = data.getLongArrayExtra(AppPickerActivity.EXTRA_PROFILE_SERIALS);
+            ArrayList<String> folderJsons = data.getStringArrayListExtra(AppPickerActivity.EXTRA_FOLDER_JSONS);
             if (pkgs != null && !pkgs.isEmpty()) {
                 String pkg = pkgs.get(0);
                 String label = labels != null && !labels.isEmpty() ? labels.get(0) : pkg;
                 long serial = serials != null && serials.length > 0 ? serials[0] : 0;
-                Shortcut sc = new Shortcut(Shortcut.TYPE_APP, pkg, "", label, serial);
+                String fJson = folderJsons != null && !folderJsons.isEmpty() ? folderJsons.get(0) : "";
+                Shortcut sc = null;
+                if (!fJson.isEmpty()) {
+                    try {
+                        sc = Shortcut.fromJson(new org.json.JSONObject(fJson));
+                    } catch (Exception ignored) {}
+                }
+                if (sc == null) {
+                    sc = new Shortcut(Shortcut.TYPE_APP, pkg, "", label, serial);
+                }
                 shortcuts.set(pendingSlotIndex, sc);
                 int nextSlot = pendingSlotIndex + 1;
                 for (int i = 1; i < pkgs.size(); i++) {
@@ -1070,7 +1086,17 @@ public class HomeActivity extends Activity {
                         String p = pkgs.get(i);
                         String l = i < labels.size() ? labels.get(i) : p;
                         long s = (serials != null && i < serials.length) ? serials[i] : 0;
-                        shortcuts.set(nextSlot, new Shortcut(Shortcut.TYPE_APP, p, "", l, s));
+                        String fj = (folderJsons != null && i < folderJsons.size()) ? folderJsons.get(i) : "";
+                        Shortcut childSc = null;
+                        if (!fj.isEmpty()) {
+                            try {
+                                childSc = Shortcut.fromJson(new org.json.JSONObject(fj));
+                            } catch (Exception ignored) {}
+                        }
+                        if (childSc == null) {
+                            childSc = new Shortcut(Shortcut.TYPE_APP, p, "", l, s);
+                        }
+                        shortcuts.set(nextSlot, childSc);
                         nextSlot++;
                     }
                 }
@@ -1078,6 +1104,7 @@ public class HomeActivity extends Activity {
                 loadShortcuts();
                 BaseDockWidget.refreshAll(this);
                 DockService.refresh(this);
+                BackupManager.autoSafeguard(this);
                 Toast.makeText(this, "Placed in slot " + (pendingSlotIndex + 1), Toast.LENGTH_SHORT).show();
             }
             pendingSlotIndex = -1;
@@ -1085,16 +1112,32 @@ public class HomeActivity extends Activity {
             ArrayList<String> pkgs = data.getStringArrayListExtra(AppPickerActivity.EXTRA_PACKAGES);
             ArrayList<String> labels = data.getStringArrayListExtra(AppPickerActivity.EXTRA_LABELS);
             long[] serials = data.getLongArrayExtra(AppPickerActivity.EXTRA_PROFILE_SERIALS);
+            ArrayList<String> folderJsons = data.getStringArrayListExtra(AppPickerActivity.EXTRA_FOLDER_JSONS);
             if (pkgs != null && !pkgs.isEmpty()) {
                 String pkg = pkgs.get(0);
                 String label = (labels != null && !labels.isEmpty()) ? labels.get(0) : pkg;
                 long serial = (serials != null && serials.length > 0) ? serials[0] : 0;
-                dockShortcuts.set(pendingDockSlotIndex, new Shortcut(Shortcut.TYPE_APP, pkg, "", label, serial));
+                String fJson = folderJsons != null && !folderJsons.isEmpty() ? folderJsons.get(0) : "";
+                Shortcut sc = null;
+                if (!fJson.isEmpty()) {
+                    try {
+                        sc = Shortcut.fromJson(new org.json.JSONObject(fJson));
+                    } catch (Exception ignored) {}
+                }
+                if (sc == null) {
+                    sc = new Shortcut(Shortcut.TYPE_APP, pkg, "", label, serial);
+                }
+                dockShortcuts.set(pendingDockSlotIndex, sc);
                 ShortcutStore.saveHomeDock(this, dockShortcuts);
                 loadDock();
+                BackupManager.autoSafeguard(this);
                 Toast.makeText(this, "Pinned " + label + " to Dock", Toast.LENGTH_SHORT).show();
             }
             pendingDockSlotIndex = -1;
+        } else if (requestCode == REQ_EXPORT_BACKUP && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            exportBackupToUri(data.getData());
+        } else if (requestCode == REQ_IMPORT_BACKUP && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            importBackupFromUri(data.getData());
         } else if (requestCode == REQ_PICK_CUSTOM_LOGO && resultCode == RESULT_OK && data != null && pendingLogoShortcut != null) {
             try {
                 Uri imageUri = data.getData();
@@ -1387,6 +1430,186 @@ public class HomeActivity extends Activity {
         });
         btnClose.setOnClickListener(v -> dialog.dismiss());
         dialog.show();
+    }
+
+    private int getFoldersCount() {
+        int count = 0;
+        int curProfile = ShortcutStore.activeProfile(this);
+        for (Shortcut s : ShortcutStore.load(this, curProfile)) {
+            if (s != null && s.isFolder()) count++;
+        }
+        for (Shortcut s : ShortcutStore.loadHomeDock(this)) {
+            if (s != null && s.isFolder()) count++;
+        }
+        return count;
+    }
+
+    private void showManageFoldersDialog() {
+        int curProfile = ShortcutStore.activeProfile(this);
+        List<Shortcut> homeScs = ShortcutStore.load(this, curProfile);
+        List<Shortcut> dockScs = ShortcutStore.loadHomeDock(this);
+        List<Shortcut> folders = new ArrayList<>();
+        List<String> locations = new ArrayList<>();
+
+        for (int i = 0; i < homeScs.size(); i++) {
+            Shortcut s = homeScs.get(i);
+            if (s != null && s.isFolder()) {
+                folders.add(s);
+                locations.add("Home Slot " + (i + 1));
+            }
+        }
+        for (int i = 0; i < dockScs.size(); i++) {
+            Shortcut s = dockScs.get(i);
+            if (s != null && s.isFolder()) {
+                folders.add(s);
+                locations.add("Dock Slot " + (i + 1));
+            }
+        }
+
+        if (folders.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("User Folders")
+                    .setMessage("No folders created yet.\n\nTap 'Create New Folder' or drag two apps together to create one!")
+                    .setPositiveButton("Create Folder", (d, w) -> createNewFolderDialog())
+                    .setNegativeButton("Close", null)
+                    .show();
+            return;
+        }
+
+        String[] folderItems = new String[folders.size() + 1];
+        folderItems[0] = "➕ Create New Folder";
+        for (int i = 0; i < folders.size(); i++) {
+            Shortcut f = folders.get(i);
+            int count = f.folderItems != null ? f.folderItems.size() : 0;
+            folderItems[i + 1] = "📁 " + f.label + " (" + count + " apps) · " + locations.get(i);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("📁 User Created Folders (" + folders.size() + ")")
+                .setItems(folderItems, (d, which) -> {
+                    if (which == 0) {
+                        createNewFolderDialog();
+                    } else {
+                        Shortcut f = folders.get(which - 1);
+                        showFolderModal(f);
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void showBackupSafeguardDialog() {
+        String[] options = {
+                "📸 Save Snapshot of Current Page (Instant Safeguard)",
+                "⏮️ Restore Previous Page Snapshot...",
+                "📤 Export Backup to File (JSON)",
+                "📥 Import Backup from File (JSON)"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("💾 Backup & Safeguard Current Stage")
+                .setItems(options, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            boolean ok = BackupManager.saveSnapshot(this, "Manual Snapshot");
+                            if (ok) {
+                                Toast.makeText(this, "Safeguarded current page state!", Toast.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(this, "Failed to save snapshot", Toast.LENGTH_SHORT).show();
+                            }
+                            break;
+                        case 1:
+                            showRestoreSnapshotDialog();
+                            break;
+                        case 2:
+                            Intent exp = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                            exp.addCategory(Intent.CATEGORY_OPENABLE);
+                            exp.setType("application/json");
+                            exp.putExtra(Intent.EXTRA_TITLE, "locklauncher_backup.json");
+                            startActivityForResult(exp, REQ_EXPORT_BACKUP);
+                            break;
+                        case 3:
+                            Intent imp = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                            imp.addCategory(Intent.CATEGORY_OPENABLE);
+                            imp.setType("*/*");
+                            startActivityForResult(imp, REQ_IMPORT_BACKUP);
+                            break;
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void showRestoreSnapshotDialog() {
+        List<BackupManager.SnapshotInfo> snaps = BackupManager.getSnapshots(this);
+        if (snaps.isEmpty()) {
+            Toast.makeText(this, "No saved snapshots found", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String[] labels = new String[snaps.size()];
+        for (int i = 0; i < snaps.size(); i++) {
+            labels[i] = (i == 0 ? "⚡ [Latest] " : "🕒 ") + snaps.get(i).label;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Restore Page Snapshot")
+                .setItems(labels, (d, idx) -> {
+                    BackupManager.SnapshotInfo selected = snaps.get(idx);
+                    BackupManager.ImportResult res = BackupManager.restoreSnapshot(this, selected.file);
+                    if (res != null) {
+                        loadShortcuts();
+                        loadDock();
+                        applyDynamicTheming();
+                        BaseDockWidget.refreshAll(this);
+                        DockService.refresh(this);
+                        IslandService.refresh(this);
+                        GlassThemeHelper.refreshAllSurfaces(this);
+                        Toast.makeText(this, "Restored snapshot from " + selected.getFormattedDate(), Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, "Failed to restore snapshot", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void exportBackupToUri(Uri uri) {
+        try (java.io.OutputStream out = getContentResolver().openOutputStream(uri)) {
+            if (out != null && BackupManager.exportTo(this, out)) {
+                Toast.makeText(this, "Backup exported successfully!", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, "Backup export failed", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Backup export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void importBackupFromUri(Uri uri) {
+        new AlertDialog.Builder(this)
+                .setTitle("Restore Backup?")
+                .setMessage("This will restore all profiles, shortcuts, folders, dock items, and visual settings from the backup file.")
+                .setPositiveButton("Restore", (d, w) -> {
+                    try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+                        BackupManager.ImportResult res = in != null ? BackupManager.importFrom(this, in) : null;
+                        if (res == null) {
+                            Toast.makeText(this, "Could not parse backup file", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        loadShortcuts();
+                        loadDock();
+                        applyDynamicTheming();
+                        BaseDockWidget.refreshAll(this);
+                        DockService.refresh(this);
+                        IslandService.refresh(this);
+                        GlassThemeHelper.refreshAllSurfaces(this);
+                        String msg = "Restored " + res.slotsRestored + " items";
+                        if (res.missingApps > 0) msg += " (" + res.missingApps + " apps not installed)";
+                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Restore failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
     // ---- Profile & Shortcut Management ----
     private void loadShortcuts() {
@@ -1978,11 +2201,43 @@ public class HomeActivity extends Activity {
                         shortcuts.set(slotIndex, folder);
                         ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
                         loadShortcuts();
+                        BackupManager.autoSafeguard(this);
                         Toast.makeText(this, "Created folder: " + name, Toast.LENGTH_SHORT).show();
                     })
                     .setNegativeButton("Cancel", null)
                     .show();
         });
+        // 📁 Place / Copy an Existing User Folder Here
+        List<Shortcut> availableFolders = new ArrayList<>();
+        for (Shortcut s : shortcuts) {
+            if (s != null && s.isFolder()) availableFolders.add(s);
+        }
+        for (Shortcut s : ShortcutStore.loadHomeDock(this)) {
+            if (s != null && s.isFolder()) availableFolders.add(s);
+        }
+        if (!availableFolders.isEmpty()) {
+            options.add("📁 Place / Copy Existing Folder to Slot " + (slotIndex + 1));
+            actions.add(() -> {
+                String[] folderNames = new String[availableFolders.size()];
+                for (int fi = 0; fi < availableFolders.size(); fi++) {
+                    Shortcut f = availableFolders.get(fi);
+                    folderNames[fi] = "📁 " + f.label + " (" + (f.folderItems != null ? f.folderItems.size() : 0) + " apps)";
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("Select Folder to Place in Slot " + (slotIndex + 1))
+                        .setItems(folderNames, (d, fSel) -> {
+                            Shortcut chosen = availableFolders.get(fSel);
+                            shortcuts.set(slotIndex, chosen);
+                            ShortcutStore.save(this, ShortcutStore.activeProfile(this), shortcuts);
+                            loadShortcuts();
+                            BaseDockWidget.refreshAll(this);
+                            DockService.refresh(this);
+                            BackupManager.autoSafeguard(this);
+                            Toast.makeText(this, "Placed " + chosen.label + " in slot " + (slotIndex + 1), Toast.LENGTH_SHORT).show();
+                        })
+                        .show();
+            });
+        }
         // 📲 Move an Existing App Here
         List<Integer> existingIndices = new ArrayList<>();
         for (int i = 0; i < shortcuts.size(); i++) {
@@ -3191,7 +3446,7 @@ public class HomeActivity extends Activity {
 
     private void showWallpaperScrimDialog() {
         String[] labels = {
-                "0% Vibrant Clear (100% Wallpaper Brightness)",
+                "0% Vibrant Clear (100% Wallpaper Brightness — Art Pops)",
                 "15% Light Glass Scrim",
                 "30% Frosted Scrim",
                 "50% Dim Scrim",
@@ -3204,7 +3459,9 @@ public class HomeActivity extends Activity {
                 .setItems(labels, (d, w) -> {
                     ShortcutStore.setWallpaperScrim(this, vals[w]);
                     applyWallpaperScrim();
-                    Toast.makeText(this, "Wallpaper scrim: " + vals[w] + "%", Toast.LENGTH_SHORT).show();
+                    GlassThemeHelper.refreshAllSurfaces(this);
+                    BackupManager.autoSafeguard(this);
+                    Toast.makeText(this, "Wallpaper scrim: " + vals[w] + "%" + (vals[w] == 0 ? " (Wallpaper stands out vibrant & clean)" : ""), Toast.LENGTH_SHORT).show();
                 })
                 .show();
     }

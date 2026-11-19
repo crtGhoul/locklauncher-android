@@ -181,6 +181,37 @@ public class BackupManager {
             }
             settings.put("custom_labels", customLabels);
 
+            // Home Dock shortcuts & visibility
+            JSONArray dockArr = new JSONArray();
+            for (Shortcut s : ShortcutStore.loadHomeDock(ctx)) {
+                dockArr.put(s.toJson());
+            }
+            root.put("home_dock", dockArr);
+            settings.put("home_dock_visible", ShortcutStore.isHomeDockVisible(ctx));
+
+            // Dynamic Island shortcuts & settings
+            JSONArray islandArr = new JSONArray();
+            for (Shortcut s : ShortcutStore.loadIsland(ctx)) {
+                islandArr.put(s.toJson());
+            }
+            root.put("island_shortcuts", islandArr);
+            settings.put("island_separate_apps", ShortcutStore.isIslandSeparate(ctx));
+
+            // Wallpaper, Scrim, Chameleon, and UI customizations
+            settings.put("wallpaper_blend_icons", ShortcutStore.isWallpaperBlendIcons(ctx));
+            settings.put("wallpaper_blend_intensity_pct", ShortcutStore.getWallpaperBlendIntensity(ctx));
+            settings.put("home_clean_mode", ShortcutStore.isHomeCleanMode(ctx));
+            settings.put("home_align_bottom", ShortcutStore.isHomeAlignBottom(ctx));
+            settings.put("home_icon_size", ShortcutStore.homeIconSize(ctx));
+            settings.put("drawer_auto_keyboard", ShortcutStore.isDrawerAutoKeyboard(ctx));
+            settings.put("home_show_empty_slots", ShortcutStore.isShowEmptyGridSlots(ctx));
+
+            JSONArray lockedAppsArr = new JSONArray();
+            for (String pkg : ShortcutStore.getLockedApps(ctx)) {
+                lockedAppsArr.put(pkg);
+            }
+            settings.put("locked_apps", lockedAppsArr);
+
             root.put("settings", settings);
 
             JSONArray profiles = new JSONArray();
@@ -339,6 +370,42 @@ public class BackupManager {
                 if (settings.has("edge_sidebar_on")) {
                     ShortcutStore.setEdgeSidebarOn(ctx, settings.optBoolean("edge_sidebar_on", false));
                 }
+                if (settings.has("home_dock_visible")) {
+                    ShortcutStore.setHomeDockVisible(ctx, settings.optBoolean("home_dock_visible", true));
+                }
+                if (settings.has("island_separate_apps")) {
+                    ShortcutStore.setIslandSeparate(ctx, settings.optBoolean("island_separate_apps", true));
+                }
+                if (settings.has("wallpaper_blend_icons")) {
+                    ShortcutStore.setWallpaperBlendIcons(ctx, settings.optBoolean("wallpaper_blend_icons", true));
+                }
+                if (settings.has("wallpaper_blend_intensity_pct")) {
+                    ShortcutStore.setWallpaperBlendIntensity(ctx, settings.optInt("wallpaper_blend_intensity_pct", 65));
+                }
+                if (settings.has("home_clean_mode")) {
+                    ShortcutStore.setHomeCleanMode(ctx, settings.optBoolean("home_clean_mode", false));
+                }
+                if (settings.has("home_align_bottom")) {
+                    ShortcutStore.setHomeAlignBottom(ctx, settings.optBoolean("home_align_bottom", false));
+                }
+                if (settings.has("home_icon_size")) {
+                    ShortcutStore.setHomeIconSize(ctx, settings.optInt("home_icon_size", 56));
+                }
+                if (settings.has("drawer_auto_keyboard")) {
+                    ShortcutStore.setDrawerAutoKeyboard(ctx, settings.optBoolean("drawer_auto_keyboard", true));
+                }
+                if (settings.has("home_show_empty_slots")) {
+                    ShortcutStore.setShowEmptyGridSlots(ctx, settings.optBoolean("home_show_empty_slots", false));
+                }
+                if (settings.has("locked_apps")) {
+                    JSONArray la = settings.optJSONArray("locked_apps");
+                    if (la != null) {
+                        for (int i = 0; i < la.length(); i++) {
+                            String pkg = la.optString(i, "");
+                            if (!pkg.isEmpty()) ShortcutStore.setAppLocked(ctx, pkg, true);
+                        }
+                    }
+                }
 
                 SharedPreferences drawerPrefs = ctx.getSharedPreferences("drawer_prefs", Context.MODE_PRIVATE);
                 SharedPreferences.Editor dEdit = drawerPrefs.edit();
@@ -398,6 +465,41 @@ public class BackupManager {
                 ShortcutStore.save(ctx, p, validated.get(p));
             }
 
+            // Restore Home Dock shortcuts
+            JSONArray dockArr = root.optJSONArray("home_dock");
+            if (dockArr != null) {
+                List<Shortcut> dockList = new ArrayList<>();
+                for (int i = 0; i < dockArr.length() && i < ShortcutStore.HOME_DOCK_MAX; i++) {
+                    Shortcut s = Shortcut.fromJson(dockArr.getJSONObject(i));
+                    String why = validateShortcut(ctx, s, res);
+                    if (why != null) {
+                        dockList.add(Shortcut.createEmpty());
+                    } else {
+                        dockList.add(s);
+                        res.slotsRestored++;
+                    }
+                }
+                while (dockList.size() < ShortcutStore.HOME_DOCK_MAX) {
+                    dockList.add(Shortcut.createEmpty());
+                }
+                ShortcutStore.saveHomeDock(ctx, dockList);
+            }
+
+            // Restore Dynamic Island shortcuts
+            JSONArray islandArr = root.optJSONArray("island_shortcuts");
+            if (islandArr != null) {
+                List<Shortcut> islandList = new ArrayList<>();
+                for (int i = 0; i < islandArr.length() && i < ShortcutStore.MAX; i++) {
+                    Shortcut s = Shortcut.fromJson(islandArr.getJSONObject(i));
+                    String why = validateShortcut(ctx, s, res);
+                    if (why == null) {
+                        islandList.add(s);
+                        res.slotsRestored++;
+                    }
+                }
+                ShortcutStore.saveIsland(ctx, islandList);
+            }
+
             JSONObject icons = root.optJSONObject("icons");
             if (icons != null) {
                 Iterator<String> keys = icons.keys();
@@ -441,5 +543,122 @@ public class BackupManager {
         int n;
         while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
         return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+    }
+
+    // --- On-Device Stage / Page Snapshot Safeguard API ---
+    public static class SnapshotInfo {
+        public File file;
+        public String label;
+        public long timestamp;
+        public int shortcutCount;
+
+        public String getFormattedDate() {
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("MMM dd, HH:mm:ss", java.util.Locale.getDefault());
+            return sdf.format(new java.util.Date(timestamp));
+        }
+    }
+
+    private static File getSnapshotsDir(Context ctx) {
+        File dir = new File(ctx.getFilesDir(), "snapshots");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+
+    private static long sLastAutoSafeguard = 0;
+
+    public static synchronized void autoSafeguard(Context ctx) {
+        if (ctx == null) return;
+        long now = System.currentTimeMillis();
+        if (now - sLastAutoSafeguard < 10000) return; // throttle
+        sLastAutoSafeguard = now;
+        new Thread(() -> {
+            try {
+                saveSnapshot(ctx, "Auto Safeguard");
+            } catch (Throwable ignored) {}
+        }).start();
+    }
+
+    public static synchronized boolean saveSnapshot(Context ctx, String reason) {
+        if (ctx == null) return false;
+        try {
+            File dir = getSnapshotsDir(ctx);
+            long now = System.currentTimeMillis();
+            File snapFile = new File(dir, "snap_" + now + ".json");
+            try (FileOutputStream fos = new FileOutputStream(snapFile)) {
+                if (!exportTo(ctx, fos)) {
+                    snapFile.delete();
+                    return false;
+                }
+            }
+            // Keep last 15 snapshots, delete older
+            File[] files = dir.listFiles((d, name) -> name.startsWith("snap_") && name.endsWith(".json"));
+            if (files != null && files.length > 15) {
+                java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                for (int i = 15; i < files.length; i++) {
+                    files[i].delete();
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static List<SnapshotInfo> getSnapshots(Context ctx) {
+        List<SnapshotInfo> list = new ArrayList<>();
+        if (ctx == null) return list;
+        File dir = getSnapshotsDir(ctx);
+        File[] files = dir.listFiles((d, name) -> name.startsWith("snap_") && name.endsWith(".json"));
+        if (files == null || files.length == 0) return list;
+        java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+
+        for (File f : files) {
+            SnapshotInfo info = new SnapshotInfo();
+            info.file = f;
+            info.timestamp = f.lastModified();
+            try {
+                String json = readAll(new FileInputStream(f));
+                JSONObject root = new JSONObject(json);
+                int count = 0;
+                JSONArray profs = root.optJSONArray("profiles");
+                if (profs != null) {
+                    for (int p = 0; p < profs.length(); p++) {
+                        JSONArray slots = profs.getJSONObject(p).optJSONArray("slots");
+                        if (slots != null) {
+                            for (int s = 0; s < slots.length(); s++) {
+                                if (!"empty".equals(slots.getJSONObject(s).optString("t"))) count++;
+                            }
+                        }
+                    }
+                }
+                JSONArray dock = root.optJSONArray("home_dock");
+                if (dock != null) {
+                    for (int s = 0; s < dock.length(); s++) {
+                        if (!"empty".equals(dock.getJSONObject(s).optString("t"))) count++;
+                    }
+                }
+                info.shortcutCount = count;
+                info.label = info.getFormattedDate() + " (" + count + " items)";
+            } catch (Exception e) {
+                info.label = info.getFormattedDate();
+            }
+            list.add(info);
+        }
+        return list;
+    }
+
+    public static ImportResult restoreSnapshot(Context ctx, File f) {
+        if (ctx == null || f == null || !f.exists()) return null;
+        try (FileInputStream fis = new FileInputStream(f)) {
+            return importFrom(ctx, fis);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static ImportResult restoreLatestSnapshot(Context ctx) {
+        List<SnapshotInfo> snaps = getSnapshots(ctx);
+        if (snaps.isEmpty()) return null;
+        return restoreSnapshot(ctx, snaps.get(0).file);
     }
 }
