@@ -59,4 +59,18 @@ public class DisplayHelper {
         } catch (Exception ignored) {
         }
     }
+
+    public static void enforceOverlayHighRefreshRate(WindowManager.LayoutParams lp) {
+        if (lp == null) return;
+        lp.flags |= WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            lp.preferredRefreshRate = 120.0f;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                lp.getClass().getField("preferredMinDisplayRefreshRate").setFloat(lp, 120.0f);
+                lp.getClass().getField("preferredMaxDisplayRefreshRate").setFloat(lp, 120.0f);
+            } catch (Throwable ignored) {}
+        }
+    }
 }

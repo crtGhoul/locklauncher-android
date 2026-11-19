@@ -521,7 +521,8 @@ public class MainActivity extends Activity {
         findViewById(R.id.btn_backup_import).setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
-            i.setType("application/json");
+            i.setType("*/*");
+            i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/plain", "application/octet-stream", "*/*"});
             try {
                 startActivityForResult(i, REQ_IMPORT);
             } catch (Exception e) {
@@ -1921,6 +1922,9 @@ public class MainActivity extends Activity {
                         refreshPreview();
                         refreshProfileTabs();
                         persist();
+                        DockService.refresh(this);
+                        IslandService.refresh(this);
+                        GlassThemeHelper.refreshAllSurfaces(this);
                         String msg = "Restored " + r.slotsRestored + " shortcuts";
                         if (r.missingApps > 0) {
                             msg += " (" + r.missingApps + " apps not installed)";

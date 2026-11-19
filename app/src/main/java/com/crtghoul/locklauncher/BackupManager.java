@@ -135,6 +135,8 @@ public class BackupManager {
             settings.put("home_hide_labels", ShortcutStore.isHomeHideLabels(ctx));
             settings.put("home_double_tap_lock", ShortcutStore.isDoubleTapLock(ctx));
             settings.put("swipe_up_drawer", ShortcutStore.isSwipeUpDrawer(ctx));
+            settings.put("home_hide_search_bar", ShortcutStore.isHomeHideSearchBar(ctx));
+            settings.put("wallpaper_scrim_pct", ShortcutStore.wallpaperScrim(ctx));
             settings.put("home_monochrome_icons", ShortcutStore.isMonochromeIcons(ctx));
             settings.put("search_calculator", ShortcutStore.isSearchCalculator(ctx));
 
@@ -257,6 +259,12 @@ public class BackupManager {
                 }
                 if (settings.has("swipe_up_drawer")) {
                     ShortcutStore.setSwipeUpDrawer(ctx, settings.optBoolean("swipe_up_drawer", false));
+                }
+                if (settings.has("home_hide_search_bar")) {
+                    ShortcutStore.setHomeHideSearchBar(ctx, settings.optBoolean("home_hide_search_bar", false));
+                }
+                if (settings.has("wallpaper_scrim_pct")) {
+                    ShortcutStore.setWallpaperScrim(ctx, settings.optInt("wallpaper_scrim_pct", 0));
                 }
                 if (settings.has("home_monochrome_icons")) {
                     ShortcutStore.setMonochromeIcons(ctx, settings.optBoolean("home_monochrome_icons", false));

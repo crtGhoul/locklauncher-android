@@ -43,6 +43,8 @@ public class ShortcutStore {
     private static final String KEY_ISLAND_SEPARATE_APPS = "island_separate_apps";
     private static final String KEY_ISLAND_SHORTCUTS = "island_shortcuts";
     private static final String KEY_HOME_CLEAN_MODE = "home_clean_mode";
+    private static final String KEY_HOME_HIDE_SEARCH_BAR = "home_hide_search_bar";
+    private static final String KEY_WALLPAPER_SCRIM = "wallpaper_scrim_pct";
     private static final String KEY_HOME_ALIGN_BOTTOM = "home_align_bottom";
     private static final String KEY_HOME_ICON_SIZE = "home_icon_size";
     private static final String KEY_DRAWER_AUTO_KEYBOARD = "drawer_auto_keyboard";
@@ -302,7 +304,7 @@ public class ShortcutStore {
     }
 
     public static boolean isSwipeUpDrawer(Context ctx) {
-        return prefs(ctx).getBoolean(KEY_SWIPE_UP_DRAWER, false);
+        return prefs(ctx).getBoolean(KEY_SWIPE_UP_DRAWER, true);
     }
 
     public static void setSwipeUpDrawer(Context ctx, boolean enabled) {
@@ -383,6 +385,22 @@ public class ShortcutStore {
 
     public static void setHomeCleanMode(Context ctx, boolean clean) {
         prefs(ctx).edit().putBoolean(KEY_HOME_CLEAN_MODE, clean).apply();
+    }
+
+    public static boolean isHomeHideSearchBar(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_HOME_HIDE_SEARCH_BAR, false);
+    }
+
+    public static void setHomeHideSearchBar(Context ctx, boolean hide) {
+        prefs(ctx).edit().putBoolean(KEY_HOME_HIDE_SEARCH_BAR, hide).apply();
+    }
+
+    public static int wallpaperScrim(Context ctx) {
+        return prefs(ctx).getInt(KEY_WALLPAPER_SCRIM, 0);
+    }
+
+    public static void setWallpaperScrim(Context ctx, int pct) {
+        prefs(ctx).edit().putInt(KEY_WALLPAPER_SCRIM, Math.max(0, Math.min(100, pct))).apply();
     }
 
     public static boolean isHomeAlignBottom(Context ctx) {

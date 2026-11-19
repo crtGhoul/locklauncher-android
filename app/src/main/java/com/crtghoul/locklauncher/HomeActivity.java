@@ -31,6 +31,7 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -105,6 +106,11 @@ public class HomeActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         DisplayHelper.enforceHighRefreshRate(this);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        }
         setContentView(R.layout.activity_home);
         // AppWidgetHost Initialization
         appWidgetManager = AppWidgetManager.getInstance(this);
@@ -417,10 +423,25 @@ public class HomeActivity extends Activity {
         DockService.refresh(this);
         Toast.makeText(this, "Pushed icons to bottom for one-hand reach", Toast.LENGTH_SHORT).show();
     }
+    private void applyWallpaperScrim() {
+        View root = findViewById(R.id.home_root);
+        if (root != null) {
+            int pct = ShortcutStore.wallpaperScrim(this);
+            if (pct <= 0) {
+                root.setBackground(null);
+            } else {
+                int alpha = (int) (255 * (pct / 100f));
+                root.setBackgroundColor(Color.argb(alpha, 0, 0, 0));
+            }
+        }
+    }
+
     private void applyDynamicTheming() {
         try {
+            applyWallpaperScrim();
             View searchBar = findViewById(R.id.home_search_bar);
             if (searchBar != null) {
+                searchBar.setVisibility(ShortcutStore.isHomeHideSearchBar(this) ? View.GONE : View.VISIBLE);
                 GlassThemeHelper.applyToView(this, searchBar, 24f);
             }
             View dockShelfView = findViewById(R.id.home_dock_shelf);
@@ -453,6 +474,14 @@ public class HomeActivity extends Activity {
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (gestureDetector != null) {
             gestureDetector.onTouchEvent(ev);
+        }
+        if (ev.getActionMasked() == MotionEvent.ACTION_UP) {
+            try {
+                android.app.WallpaperManager.getInstance(this).sendWallpaperCommand(
+                        getWindow().getDecorView().getWindowToken(),
+                        android.app.WallpaperManager.COMMAND_TAP,
+                        (int) ev.getX(), (int) ev.getY(), 0, null);
+            } catch (Throwable ignored) {}
         }
         return super.dispatchTouchEvent(ev);
     }
@@ -803,6 +832,18 @@ public class HomeActivity extends Activity {
                     ? "Apps now blend into your wallpaper (Chameleon Glass)"
                     : "Standard app icon plates restored", Toast.LENGTH_SHORT).show();
         });
+        boolean hideSearch = ShortcutStore.isHomeHideSearchBar(this);
+        opts.add(hideSearch ? "Search Bar: Hidden (Tap to Show)" : "Search Bar: Visible (Tap to Hide)");
+        acts.add(() -> {
+            boolean nextHide = !hideSearch;
+            ShortcutStore.setHomeHideSearchBar(this, nextHide);
+            View sb = findViewById(R.id.home_search_bar);
+            if (sb != null) sb.setVisibility(nextHide ? View.GONE : View.VISIBLE);
+            Toast.makeText(this, nextHide ? "Search bar hidden" : "Search bar visible", Toast.LENGTH_SHORT).show();
+        });
+        int scrimPct = ShortcutStore.wallpaperScrim(this);
+        opts.add("Wallpaper Scrim / Dim (" + scrimPct + "%" + (scrimPct == 0 ? " Vibrant Clear" : "") + ")");
+        acts.add(this::showWallpaperScrimDialog);
         opts.add("Change Wallpaper");
         acts.add(() -> {
             try {
@@ -3133,6 +3174,26 @@ public class HomeActivity extends Activity {
                     loadDock();
                     GlassThemeHelper.refreshAllSurfaces(this);
                     Toast.makeText(this, "Wallpaper blend set to " + vals[w] + "%", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
+    private void showWallpaperScrimDialog() {
+        String[] labels = {
+                "0% Vibrant Clear (100% Wallpaper Brightness)",
+                "15% Light Glass Scrim",
+                "30% Frosted Scrim",
+                "50% Dim Scrim",
+                "75% Obsidian",
+                "100% AMOLED True Black"
+        };
+        int[] vals = {0, 15, 30, 50, 75, 100};
+        new AlertDialog.Builder(this)
+                .setTitle("Wallpaper Background Scrim")
+                .setItems(labels, (d, w) -> {
+                    ShortcutStore.setWallpaperScrim(this, vals[w]);
+                    applyWallpaperScrim();
+                    Toast.makeText(this, "Wallpaper scrim: " + vals[w] + "%", Toast.LENGTH_SHORT).show();
                 })
                 .show();
     }

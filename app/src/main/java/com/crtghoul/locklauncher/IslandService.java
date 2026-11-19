@@ -277,6 +277,7 @@ public class IslandService extends Service {
                 PixelFormat.TRANSLUCENT);
         p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         p.y = statusBarHeight() + dp(8);
+        DisplayHelper.enforceOverlayHighRefreshRate(p);
         GlassThemeHelper.applyWindowBlurIfSupported(this, p);
         return p;
     }
@@ -516,18 +517,33 @@ public class IslandService extends Service {
                         moved[0] = true;
                         handler.removeCallbacks(longPress);
                     }
-                    if (moved[0]) {
-                        params.x = clampX(drag[0] + dx);
-                        params.y = clampY(drag[1] + dy);
-                        try {
-                            wm.updateViewLayout(islandView, params);
-                        } catch (Exception ignored) {
-                        }
+                    if (moved[0] && islandView != null) {
+                        islandView.setTranslationX(dx);
+                        islandView.setTranslationY(dy);
                     }
                     return true;
                 }
                 case MotionEvent.ACTION_UP:
                     handler.removeCallbacks(longPress);
+                    if (moved[0]) {
+                        if (islandView != null) {
+                            islandView.setTranslationX(0f);
+                            islandView.setTranslationY(0f);
+                        }
+                        int finalDx = (int) e.getRawX() - drag[2];
+                        int finalDy = (int) e.getRawY() - drag[3];
+                        params.x = clampX(drag[0] + finalDx);
+                        params.y = clampY(drag[1] + finalDy);
+                        try {
+                            wm.updateViewLayout(islandView, params);
+                        } catch (Exception ignored) {
+                        }
+                        iprefs.edit()
+                                .putInt("island_x", params.x)
+                                .putInt("island_y", params.y)
+                                .apply();
+                        return true;
+                    }
                     float swipeDeltaX = e.getRawX() - startTouchX[0];
                     if (Math.abs(swipeDeltaX) > dp(60)) {
                         // Swipe dismisses media mode or switches to dock
@@ -536,18 +552,15 @@ public class IslandService extends Service {
                         return true;
                     }
 
-                    if (!moved[0]) {
-                        v.performClick();
-                        showExpanded();
-                    } else {
-                        iprefs.edit()
-                                .putInt("island_x", params.x)
-                                .putInt("island_y", params.y)
-                                .apply();
-                    }
+                    v.performClick();
+                    showExpanded();
                     return true;
                 case MotionEvent.ACTION_CANCEL:
                     handler.removeCallbacks(longPress);
+                    if (moved[0] && islandView != null) {
+                        islandView.setTranslationX(0f);
+                        islandView.setTranslationY(0f);
+                    }
                     return true;
             }
             return false;
@@ -1008,6 +1021,7 @@ public class IslandService extends Service {
                 PixelFormat.TRANSLUCENT);
         sidebarParams.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
         sidebarParams.y = getSharedPreferences("dock", MODE_PRIVATE).getInt("sidebar_y", 0);
+        DisplayHelper.enforceOverlayHighRefreshRate(sidebarParams);
 
         final int[] startY = new int[2];
         final boolean[] dragged = new boolean[1];
@@ -1020,18 +1034,28 @@ public class IslandService extends Service {
                     return true;
                 case MotionEvent.ACTION_MOVE:
                     int dy = (int) e.getRawY() - startY[1];
-                    if (Math.abs(dy) > dp(10)) {
+                    if (!dragged[0] && Math.abs(dy) > dp(10)) {
                         dragged[0] = true;
-                        sidebarParams.y = startY[0] + dy;
-                        try { wm.updateViewLayout(sidebarView, sidebarParams); } catch (Exception ignored) {}
+                    }
+                    if (dragged[0] && sidebarView != null) {
+                        sidebarView.setTranslationY(dy);
                     }
                     return true;
                 case MotionEvent.ACTION_UP:
-                    if (!dragged[0]) {
+                    if (dragged[0]) {
+                        if (sidebarView != null) sidebarView.setTranslationY(0f);
+                        int finalDy = (int) e.getRawY() - startY[1];
+                        sidebarParams.y = startY[0] + finalDy;
+                        try { wm.updateViewLayout(sidebarView, sidebarParams); } catch (Exception ignored) {}
+                        getSharedPreferences("dock", MODE_PRIVATE).edit().putInt("sidebar_y", sidebarParams.y).apply();
+                    } else {
                         sidebarExpanded = true;
                         showOrUpdateSidebar();
-                    } else {
-                        getSharedPreferences("dock", MODE_PRIVATE).edit().putInt("sidebar_y", sidebarParams.y).apply();
+                    }
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    if (dragged[0] && sidebarView != null) {
+                        sidebarView.setTranslationY(0f);
                     }
                     return true;
             }
@@ -1132,6 +1156,7 @@ public class IslandService extends Service {
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
+        DisplayHelper.enforceOverlayHighRefreshRate(sidebarParams);
         GlassThemeHelper.applyWindowBlurIfSupported(this, sidebarParams);
         sidebarView = backdrop;
         try {
