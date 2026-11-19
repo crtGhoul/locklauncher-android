@@ -151,6 +151,7 @@ public final class IslandGlowHelper {
      */
     public static ValueAnimator startChargingRipple(final View pill) {
         if (pill == null) return null;
+        pill.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
         animator.setDuration(1200);
         animator.setRepeatCount(ValueAnimator.INFINITE);
@@ -164,6 +165,14 @@ public final class IslandGlowHelper {
                 pill.setAlpha(1f - 0.15f * t);
             }
         });
+        animator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator animation) {
+                pill.setScaleX(1f);
+                pill.setScaleY(1f);
+                pill.setAlpha(1f);
+                pill.setLayerType(View.LAYER_TYPE_NONE, null);
+            }
+        });
         animator.start();
         return animator;
     }
@@ -171,26 +180,26 @@ public final class IslandGlowHelper {
     /**
      * Music indicator bars. Creates 4 bars in {@code container} and
      * animates their heights with phase offsets while {@code playing}
-     * is true. Heights are synthetic (a phase animation), NOT audio
-     * amplitudes. When playing is false, bars sit at a neutral height
-     * and no animator runs. The caller must pass the real playback
-     * state (MediaController PlaybackState.STATE_PLAYING) — this
-     * helper does not query media sessions itself.
+     * is true. Uses GPU hardware RenderNode scaleY instead of requestLayout.
+     * When playing is false, bars sit at a neutral height.
      */
     public static ValueAnimator startMusicWave(LinearLayout container,
             boolean playing) {
         if (container == null) return null;
         container.removeAllViews();
+        final int barWidth = dp(container.getContext(), 3);
+        final int barHeight = dp(container.getContext(), 14);
         final View[] bars = new View[4];
         for (int i = 0; i < bars.length; i++) {
             View bar = new View(container.getContext());
             bar.setBackgroundColor(0xFFFFFFFF);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    dp(container.getContext(), 3),
-                    dp(container.getContext(), 12));
+                    barWidth, barHeight);
             lp.setMargins(dp(container.getContext(), 1), 0,
                     dp(container.getContext(), 1), 0);
             bar.setLayoutParams(lp);
+            bar.setPivotY(barHeight);
+            bar.setScaleY(0.35f);
             container.addView(bar);
             bars[i] = bar;
         }
@@ -204,12 +213,16 @@ public final class IslandGlowHelper {
                 for (int i = 0; i < bars.length; i++) {
                     float phase = t * (float) (Math.PI * 2)
                             + i * (float) (Math.PI / 2);
-                    float heightFrac = 0.45f + 0.55f
+                    float heightFrac = 0.35f + 0.65f
                             * (0.5f + 0.5f * (float) Math.sin(phase));
-                    ViewGroup.LayoutParams lp = bars[i].getLayoutParams();
-                    lp.height = (int) (dp(container.getContext(), 4)
-                            + heightFrac * dp(container.getContext(), 10));
-                    bars[i].setLayoutParams(lp);
+                    bars[i].setScaleY(heightFrac);
+                }
+            }
+        });
+        animator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator animation) {
+                for (View bar : bars) {
+                    if (bar != null) bar.setScaleY(0.35f);
                 }
             }
         });

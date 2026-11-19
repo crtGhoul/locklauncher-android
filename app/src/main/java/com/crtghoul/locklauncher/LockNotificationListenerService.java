@@ -217,10 +217,13 @@ public class LockNotificationListenerService extends NotificationListenerService
         badgeView.setVisibility(android.view.View.VISIBLE);
     }
 
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable recalculateRunnable = this::recalculateCountsImmediate;
+
     @Override
     public void onListenerConnected() {
         sIsConnected = true;
-        recalculateCounts();
+        recalculateCountsImmediate();
     }
 
     @Override
@@ -243,6 +246,15 @@ public class LockNotificationListenerService extends NotificationListenerService
     }
 
     private void recalculateCounts() {
+        if (handler != null) {
+            handler.removeCallbacks(recalculateRunnable);
+            handler.postDelayed(recalculateRunnable, 60);
+        } else {
+            recalculateCountsImmediate();
+        }
+    }
+
+    private void recalculateCountsImmediate() {
         try {
             StatusBarNotification[] active = getActiveNotifications();
             Map<String, Integer> counts = new ConcurrentHashMap<>();

@@ -31,51 +31,86 @@ public class DockService extends Service {
     private static final String OLD_CHANNEL = "dock";
     private static final int NOTIF_ID = 1;
 
+    private static long lastRefreshCallMs = 0L;
+    private android.os.Handler handler;
+    private final Runnable refreshRunnable = this::postDockNotification;
+
     public static void start(Context ctx) {
-        Intent i = new Intent(ctx, DockService.class);
-        ctx.startForegroundService(i);
+        try {
+            Intent i = new Intent(ctx, DockService.class);
+            ctx.startForegroundService(i);
+        } catch (Exception ignored) {}
     }
 
     public static void stop(Context ctx) {
-        ctx.stopService(new Intent(ctx, DockService.class));
+        try {
+            ctx.stopService(new Intent(ctx, DockService.class));
+        } catch (Exception ignored) {}
     }
 
-    public static void refresh(Context ctx) {
-        Intent i = new Intent(ctx, DockService.class);
-        i.setAction(ACTION_REFRESH);
-        ctx.startForegroundService(i);
+    public static synchronized void refresh(Context ctx) {
+        long now = System.currentTimeMillis();
+        if (now - lastRefreshCallMs < 200L) {
+            return;
+        }
+        lastRefreshCallMs = now;
+        try {
+            Intent i = new Intent(ctx, DockService.class);
+            i.setAction(ACTION_REFRESH);
+            ctx.startForegroundService(i);
+        } catch (Exception ignored) {}
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
+        handler = new android.os.Handler(android.os.Looper.getMainLooper());
         NotificationManager nm = getSystemService(NotificationManager.class);
-        nm.deleteNotificationChannel(OLD_CHANNEL);
-        NotificationChannel ch = new NotificationChannel(
-                CHANNEL, "Launcher dock", NotificationManager.IMPORTANCE_DEFAULT);
-        ch.setDescription("Persistent app launcher dock");
-        ch.setShowBadge(false);
-        ch.setSound(null, null);
-        ch.enableVibration(false);
-        nm.createNotificationChannel(ch);
+        if (nm != null) {
+            nm.deleteNotificationChannel(OLD_CHANNEL);
+            NotificationChannel ch = new NotificationChannel(
+                    CHANNEL, "Launcher dock", NotificationManager.IMPORTANCE_DEFAULT);
+            ch.setDescription("Persistent app launcher dock");
+            ch.setShowBadge(false);
+            ch.setSound(null, null);
+            ch.enableVibration(false);
+            nm.createNotificationChannel(ch);
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (handler == null) {
+            handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        }
+        handler.removeCallbacks(refreshRunnable);
+        handler.postDelayed(refreshRunnable, 60);
+        return START_STICKY;
+    }
+
+    private void postDockNotification() {
         List<Shortcut> shortcuts = ShortcutStore.load(this);
         if (shortcuts.isEmpty()) {
             stopSelf();
-            return START_NOT_STICKY;
+            return;
         }
-        // Android 14+ requires a declared foreground service type, otherwise
-        // startForeground() throws and the dock notification never appears.
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, buildNotification(shortcuts),
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-        } else {
-            startForeground(NOTIF_ID, buildNotification(shortcuts));
+        try {
+            Notification n = buildNotification(shortcuts);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, n,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            } else {
+                startForeground(NOTIF_ID, n);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @Override
+    public void onDestroy() {
+        if (handler != null) {
+            handler.removeCallbacks(refreshRunnable);
         }
-        return START_STICKY;
+        super.onDestroy();
     }
 
     private Notification buildNotification(List<Shortcut> shortcuts) {

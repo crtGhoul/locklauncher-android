@@ -430,11 +430,23 @@ public final class GlassThemeHelper {
         }
     }
 
+    private static Bitmap sCachedCardBitmap = null;
+    private static String sCachedCardBitmapKey = "";
+
     /**
      * Renders the current Glass Theme into a Bitmap for RemoteViews
      * (`DockService` lock-screen notification dock and `BaseDockWidget` home widgets).
+     * Caches in-memory to prevent GC churn and repeated Binder allocations.
      */
-    public static Bitmap buildRemoteViewsCardBitmap(Context ctx, int widthDp, int heightDp, int cornerRadiusDp) {
+    public static synchronized Bitmap buildRemoteViewsCardBitmap(Context ctx, int widthDp, int heightDp, int cornerRadiusDp) {
+        if (ctx == null) return null;
+        String key = widthDp + "x" + heightDp + "r" + cornerRadiusDp + "_"
+                + getMode(ctx) + "_" + getSubTheme(ctx) + "_"
+                + getBlurRadius(ctx) + "_" + getSurfaceOpacityPct(ctx) + "_"
+                + getDarknessPct(ctx) + "_" + resolveAccentColor(ctx);
+        if (sCachedCardBitmap != null && key.equals(sCachedCardBitmapKey) && !sCachedCardBitmap.isRecycled()) {
+            return sCachedCardBitmap;
+        }
         int w = Math.max(64, dp(ctx, widthDp));
         int h = Math.max(36, dp(ctx, heightDp));
         int r = dp(ctx, cornerRadiusDp);
@@ -452,6 +464,8 @@ public final class GlassThemeHelper {
             rim.setColor(0x40FFFFFF);
             canvas.drawRoundRect(new RectF(1, 1, w - 1, h - 1), r, r, rim);
         }
+        sCachedCardBitmap = bmp;
+        sCachedCardBitmapKey = key;
         return bmp;
     }
 

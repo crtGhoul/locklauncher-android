@@ -52,6 +52,22 @@ public class IslandService extends Service {
 
     private static boolean running = false;
 
+    private static final int PILL_NONE = 0;
+    private static final int PILL_CHARGING = 1;
+    private static final int PILL_MEDIA = 2;
+    private static final int PILL_DOCK = 3;
+    private int currentPillMode = PILL_NONE;
+
+    private TextView dockPillLabel;
+    private View dockPillSilentDot;
+    private TextView dockPillGlyph;
+
+    private TextView mediaPillTextInfo;
+    private TextView mediaPillBtnPlayPause;
+    private LinearLayout mediaPillWaveContainer;
+
+    private final Runnable rebuildRunnable = this::rebuildImmediate;
+
     private WindowManager wm;
     private View islandView;
     private View pendingPillToRemove;
@@ -264,6 +280,13 @@ public class IslandService extends Service {
         }
         islandView = null;
         expanded = false;
+        currentPillMode = PILL_NONE;
+        dockPillLabel = null;
+        dockPillSilentDot = null;
+        dockPillGlyph = null;
+        mediaPillTextInfo = null;
+        mediaPillBtnPlayPause = null;
+        mediaPillWaveContainer = null;
     }
 
     private WindowManager.LayoutParams baseParams(int w, int h) {
@@ -277,8 +300,10 @@ public class IslandService extends Service {
                 PixelFormat.TRANSLUCENT);
         p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         p.y = statusBarHeight() + dp(8);
-        DisplayHelper.enforceOverlayHighRefreshRate(p);
-        GlassThemeHelper.applyWindowBlurIfSupported(this, p);
+        DisplayHelper.enforceOverlayHighRefreshRate(this, p);
+        // Note: Collapsed capsule overlays do not request FLAG_BLUR_BEHIND to avoid
+        // costly continuous full-screen SurfaceFlinger blur passes at 120Hz.
+        // Fullscreen modals (showExpanded, showExpandedSidebar) apply blur behind when open.
         return p;
     }
 
@@ -313,13 +338,20 @@ public class IslandService extends Service {
     }
 
     private void showCollapsed() {
-        removeView();
-        if (!isIslandOn(this)) return;
-        wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        if (!isIslandOn(this)) {
+            removeView();
+            return;
+        }
 
         // Check 1: Charging Pulse State
         if (lastChargingMsg != null) {
+            if (currentPillMode == PILL_CHARGING && islandView != null && !expanded) {
+                return;
+            }
+            removeView();
+            wm = (WindowManager) getSystemService(WINDOW_SERVICE);
             showChargingPill(lastChargingMsg);
+            currentPillMode = PILL_CHARGING;
             return;
         }
 
@@ -328,13 +360,79 @@ public class IslandService extends Service {
             NowPlayingHelper.MediaState npState = NowPlayingHelper.getActiveState(this);
             MediaController media = getActiveMediaController();
             if (npState != null || media != null) {
+                if (currentPillMode == PILL_MEDIA && islandView != null && !expanded && mediaPillTextInfo != null) {
+                    updateMediaPillInPlace(npState, media);
+                    return;
+                }
+                removeView();
+                wm = (WindowManager) getSystemService(WINDOW_SERVICE);
                 showMediaPill(npState, media);
+                currentPillMode = PILL_MEDIA;
                 return;
             }
         }
 
         // Default State: Clean Minimalist Island Capsule
+        if (currentPillMode == PILL_DOCK && islandView != null && !expanded && dockPillLabel != null) {
+            updateDockPillInPlace();
+            return;
+        }
+        removeView();
+        wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         showDockPill();
+        currentPillMode = PILL_DOCK;
+    }
+
+    private void updateDockPillInPlace() {
+        if (dockPillLabel != null) {
+            if (ShortcutStore.isIslandBattery(this)) {
+                dockPillLabel.setText(IconUtil.getLiveBatteryInfo(this));
+                dockPillLabel.setTextColor(0xFF00E676);
+            } else {
+                dockPillLabel.setText("Island");
+                dockPillLabel.setTextColor(0xEEFFFFFF);
+            }
+        }
+        if (dockPillSilentDot != null) {
+            IslandGlowHelper.applySilentDot(dockPillSilentDot, this);
+        }
+        if (dockPillGlyph != null) {
+            dockPillGlyph.setTextColor(GlassThemeHelper.resolveAccentColor(this));
+        }
+    }
+
+    private void updateMediaPillInPlace(NowPlayingHelper.MediaState npState, MediaController mc) {
+        String title = "Now Playing";
+        String artist = "";
+        boolean isPlaying = true;
+        if (npState != null && npState.title != null && !npState.title.isEmpty()) {
+            title = npState.title;
+            if (npState.artist != null && !npState.artist.isEmpty()) {
+                artist = " · " + npState.artist;
+            }
+            isPlaying = npState.isPlaying;
+        } else if (mc != null) {
+            MediaMetadata meta = mc.getMetadata();
+            if (meta != null) {
+                String t = meta.getString(MediaMetadata.METADATA_KEY_TITLE);
+                if (t != null && !t.isEmpty()) title = t;
+                String a = meta.getString(MediaMetadata.METADATA_KEY_ARTIST);
+                if (a != null && !a.isEmpty()) artist = " · " + a;
+            }
+        }
+        if (mediaPillTextInfo != null) {
+            mediaPillTextInfo.setText(" " + title + artist);
+        }
+        if (mediaPillBtnPlayPause != null) {
+            mediaPillBtnPlayPause.setText(isPlaying ? "⏸ " : "▶ ");
+        }
+        if (musicWaveAnimator != null) {
+            try { musicWaveAnimator.cancel(); } catch (Exception ignored) {}
+            musicWaveAnimator = null;
+        }
+        if (mediaPillWaveContainer != null) {
+            musicWaveAnimator = IslandGlowHelper.startMusicWave(mediaPillWaveContainer, isPlaying);
+        }
     }
 
     private void showChargingPill(String msg) {
@@ -428,6 +526,10 @@ public class IslandService extends Service {
         });
         pill.addView(btnNext);
 
+        mediaPillTextInfo = textInfo;
+        mediaPillBtnPlayPause = btnPlayPause;
+        mediaPillWaveContainer = waveContainer;
+
         attachPillView(pill);
         musicWaveAnimator = IslandGlowHelper.startMusicWave(waveContainer, isPlaying);
     }
@@ -460,6 +562,7 @@ public class IslandService extends Service {
         silentDot.setLayoutParams(new android.widget.LinearLayout.LayoutParams(dp(8), dp(8)));
         pill.addView(silentDot);
         IslandGlowHelper.applySilentDot(silentDot, this);
+        dockPillSilentDot = silentDot;
         
         TextView glyph = new TextView(this);
         glyph.setText("● ");
@@ -467,6 +570,7 @@ public class IslandService extends Service {
         glyph.setTextSize(9);
         glyph.setPadding(0, 0, dp(5), 0);
         pill.addView(glyph);
+        dockPillGlyph = glyph;
 
         TextView label = new TextView(this);
         if (ShortcutStore.isIslandBattery(this)) {
@@ -479,6 +583,7 @@ public class IslandService extends Service {
         label.setTextSize(12);
         label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         pill.addView(label);
+        dockPillLabel = label;
 
         attachPillView(pill);
     }
@@ -502,6 +607,7 @@ public class IslandService extends Service {
         pill.setOnTouchListener((v, e) -> {
             switch (e.getAction()) {
                 case MotionEvent.ACTION_DOWN:
+                    v.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                     drag[0] = params.x;
                     drag[1] = params.y;
                     drag[2] = (int) e.getRawX();
@@ -525,6 +631,7 @@ public class IslandService extends Service {
                 }
                 case MotionEvent.ACTION_UP:
                     handler.removeCallbacks(longPress);
+                    v.setLayerType(View.LAYER_TYPE_NONE, null);
                     if (moved[0]) {
                         if (islandView != null) {
                             islandView.setTranslationX(0f);
@@ -557,6 +664,7 @@ public class IslandService extends Service {
                     return true;
                 case MotionEvent.ACTION_CANCEL:
                     handler.removeCallbacks(longPress);
+                    v.setLayerType(View.LAYER_TYPE_NONE, null);
                     if (moved[0] && islandView != null) {
                         islandView.setTranslationX(0f);
                         islandView.setTranslationY(0f);
@@ -947,6 +1055,7 @@ public class IslandService extends Service {
                 | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                 | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
+        DisplayHelper.enforceOverlayHighRefreshRate(this, params);
         GlassThemeHelper.applyWindowBlurIfSupported(this, params);
         islandView = root;
         expanded = true;
@@ -990,8 +1099,15 @@ public class IslandService extends Service {
     }
 
     private void showOrUpdateSidebar() {
+        if (!ShortcutStore.isEdgeSidebarOn(this) || !canShow(this)) {
+            removeSidebar();
+            return;
+        }
+        if (sidebarView != null && !sidebarExpanded) {
+            // Already showing collapsed handle smoothly, nothing to tear down or rebuild
+            return;
+        }
         removeSidebar();
-        if (!ShortcutStore.isEdgeSidebarOn(this) || !canShow(this)) return;
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         if (sidebarExpanded) {
             showExpandedSidebar();
@@ -1021,13 +1137,14 @@ public class IslandService extends Service {
                 PixelFormat.TRANSLUCENT);
         sidebarParams.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
         sidebarParams.y = getSharedPreferences("dock", MODE_PRIVATE).getInt("sidebar_y", 0);
-        DisplayHelper.enforceOverlayHighRefreshRate(sidebarParams);
+        DisplayHelper.enforceOverlayHighRefreshRate(this, sidebarParams);
 
         final int[] startY = new int[2];
         final boolean[] dragged = new boolean[1];
         handleWrap.setOnTouchListener((v, e) -> {
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    v.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                     startY[0] = sidebarParams.y;
                     startY[1] = (int) e.getRawY();
                     dragged[0] = false;
@@ -1042,6 +1159,7 @@ public class IslandService extends Service {
                     }
                     return true;
                 case MotionEvent.ACTION_UP:
+                    v.setLayerType(View.LAYER_TYPE_NONE, null);
                     if (dragged[0]) {
                         if (sidebarView != null) sidebarView.setTranslationY(0f);
                         int finalDy = (int) e.getRawY() - startY[1];
@@ -1054,6 +1172,7 @@ public class IslandService extends Service {
                     }
                     return true;
                 case MotionEvent.ACTION_CANCEL:
+                    v.setLayerType(View.LAYER_TYPE_NONE, null);
                     if (dragged[0] && sidebarView != null) {
                         sidebarView.setTranslationY(0f);
                     }
@@ -1156,7 +1275,7 @@ public class IslandService extends Service {
                         | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT);
-        DisplayHelper.enforceOverlayHighRefreshRate(sidebarParams);
+        DisplayHelper.enforceOverlayHighRefreshRate(this, sidebarParams);
         GlassThemeHelper.applyWindowBlurIfSupported(this, sidebarParams);
         sidebarView = backdrop;
         try {
@@ -1308,6 +1427,15 @@ public class IslandService extends Service {
     }
 
     private void rebuild() {
+        if (mainHandler != null) {
+            mainHandler.removeCallbacks(rebuildRunnable);
+            mainHandler.postDelayed(rebuildRunnable, 80);
+        } else {
+            rebuildImmediate();
+        }
+    }
+
+    private void rebuildImmediate() {
         if (isIslandOn(this)) {
             if (expanded) showExpanded();
             else showCollapsed();

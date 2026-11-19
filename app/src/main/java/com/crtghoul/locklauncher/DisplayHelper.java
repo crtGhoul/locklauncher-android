@@ -61,10 +61,46 @@ public class DisplayHelper {
     }
 
     public static void enforceOverlayHighRefreshRate(WindowManager.LayoutParams lp) {
+        enforceOverlayHighRefreshRate(null, lp);
+    }
+
+    public static void enforceOverlayHighRefreshRate(android.content.Context ctx, WindowManager.LayoutParams lp) {
         if (lp == null) return;
         lp.flags |= WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             lp.preferredRefreshRate = 120.0f;
+            if (ctx != null) {
+                try {
+                    WindowManager wm = (WindowManager) ctx.getSystemService(android.content.Context.WINDOW_SERVICE);
+                    Display display = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try {
+                            display = ctx.getDisplay();
+                        } catch (Throwable ignored) {}
+                    }
+                    if (display == null && wm != null) {
+                        display = wm.getDefaultDisplay();
+                    }
+                    if (display != null) {
+                        Display.Mode currentMode = display.getMode();
+                        Display.Mode[] modes = display.getSupportedModes();
+                        Display.Mode bestMode = null;
+                        float maxHz = 0f;
+                        for (Display.Mode m : modes) {
+                            if (currentMode != null
+                                    && m.getPhysicalWidth() == currentMode.getPhysicalWidth()
+                                    && m.getPhysicalHeight() == currentMode.getPhysicalHeight()
+                                    && m.getRefreshRate() > maxHz) {
+                                maxHz = m.getRefreshRate();
+                                bestMode = m;
+                            }
+                        }
+                        if (bestMode != null) {
+                            lp.preferredDisplayModeId = bestMode.getModeId();
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
