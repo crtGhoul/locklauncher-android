@@ -254,6 +254,10 @@ public class HomeActivity extends Activity {
             private static final int SWIPE_THRESHOLD = 120;
             private static final int SWIPE_VELOCITY = 120;
             @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+            @Override
             public boolean onDoubleTap(MotionEvent e) {
                 if (ShortcutStore.isDoubleTapLock(HomeActivity.this)) {
                     if (LockScreenService.isServiceRunning()) {
@@ -840,6 +844,13 @@ public class HomeActivity extends Activity {
             View sb = findViewById(R.id.home_search_bar);
             if (sb != null) sb.setVisibility(nextHide ? View.GONE : View.VISIBLE);
             Toast.makeText(this, nextHide ? "Search bar hidden" : "Search bar visible", Toast.LENGTH_SHORT).show();
+        });
+        boolean swipeUp = ShortcutStore.isSwipeUpDrawer(this);
+        opts.add(swipeUp ? "Swipe Up for App Drawer: ON (Tap to Disable)" : "Swipe Up for App Drawer: OFF (Tap to Enable)");
+        acts.add(() -> {
+            boolean next = !swipeUp;
+            ShortcutStore.setSwipeUpDrawer(this, next);
+            Toast.makeText(this, next ? "Swipe up for app drawer enabled" : "Swipe up drawer disabled", Toast.LENGTH_SHORT).show();
         });
         int scrimPct = ShortcutStore.wallpaperScrim(this);
         opts.add("Wallpaper Scrim / Dim (" + scrimPct + "%" + (scrimPct == 0 ? " Vibrant Clear" : "") + ")");
